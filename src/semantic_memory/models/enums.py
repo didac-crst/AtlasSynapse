@@ -86,6 +86,12 @@ class ProposalType(StrEnum):
     CLASS_PARENT = "class_parent"
 
 
+class EmbeddingObjectType(StrEnum):
+    CLASS = "class"
+    PREDICATE = "predicate"
+    ENTITY = "entity"
+
+
 class OperationStatus(StrEnum):
     STARTED = "started"
     SUCCESS = "success"

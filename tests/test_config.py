@@ -37,6 +37,9 @@ def test_mcp_placeholder() -> None:
     assert "get_predicate" in placeholder.tools
     assert "search_ontology" in placeholder.tools
     assert "get_ontology_context" in placeholder.tools
+    assert "propose_class" in placeholder.tools
+    assert "get_proposal" in placeholder.tools
+    assert "apply_proposal" not in placeholder.tools
     assert placeholder.transport in {"stdio", "http"}
 
 

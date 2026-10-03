@@ -38,6 +38,10 @@ class Settings(BaseSettings):
         default="disabled",
         alias="SEMANTIC_REVIEW_MODE",
     )
+    embedding_mode: Literal["disabled", "mock"] = Field(
+        default="disabled",
+        alias="EMBEDDING_MODE",
+    )
     mcp_transport: Literal["stdio", "http"] = Field(default="stdio", alias="MCP_TRANSPORT")
     http_host: str = Field(default="0.0.0.0", alias="HTTP_HOST")
     http_port: int = Field(default=8000, alias="HTTP_PORT", ge=1, le=65535)

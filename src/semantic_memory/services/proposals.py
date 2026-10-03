@@ -50,6 +50,8 @@ from semantic_memory.schemas.proposals import (
     ProposeResponse,
 )
 from semantic_memory.services.actors import ActorService
+from semantic_memory.services.embedding_providers import EmbeddingProvider
+from semantic_memory.services.embeddings import EmbeddingService
 from semantic_memory.services.gates import DeterministicGatePipeline
 from semantic_memory.services.mutations import MutationRunner
 from semantic_memory.services.review import (
@@ -66,6 +68,7 @@ class ProposalService:
         *,
         settings: Settings | None = None,
         reviewer: SemanticReviewer | None = None,
+        embedding_provider: EmbeddingProvider | None = None,
     ) -> None:
         self._session = session
         self._settings = settings or get_settings()
@@ -78,6 +81,13 @@ class ProposalService:
             self._reviewer = build_semantic_reviewer(self._settings)
         else:
             self._reviewer = reviewer
+        self._embeddings = EmbeddingService(
+            session,
+            settings=self._settings,
+            provider=embedding_provider,
+        )
+        # Gate order: … → similarity → semantic review → final_deterministic.
+        self._gates.register_extra_gate(self._embeddings.make_similarity_gate())
         self._gates.register_extra_gate(make_semantic_review_gate(self._reviewer))
 
     @property
