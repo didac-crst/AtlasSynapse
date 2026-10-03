@@ -34,7 +34,7 @@ Mutation operation logs distinguish started, success, rejected, and failed. Idem
 
 ## LLM observability
 
-`llm_call_log` is an append-only provider-call audit table, separate from `operation_log`. It records correlation IDs, provider/model/purpose, status/outcome, token usage, duration, cost with pricing snapshot/version, and redacted metadata. Raw prompts and responses are not stored by default.
+`llm_call_log` is a durable provider-call audit table, separate from `operation_log`. Each call is one row: created when the call starts (`started`) and updated in place on completion with final status, outcome, tokens, duration, and cost. Rows are retained (not hard-deleted in normal operation); this is not a multi-event append stream that keeps a separate immutable start snapshot. Records include correlation IDs, provider/model/purpose, pricing snapshot/version, and redacted metadata. Raw prompts and responses are not stored by default.
 
 ## Reasoning and derived data
 

@@ -1,4 +1,7 @@
-"""Append-only LLM call observability, separate from operation_log."""
+"""LLM call observability rows, separate from operation_log.
+
+Each call is one retained row created at start and completed in place.
+"""
 
 from __future__ import annotations
 
@@ -25,7 +28,7 @@ from semantic_memory.models.enums import LlmCallStatus, LlmCostStatus
 
 
 class LlmCallLog(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
-    """Provider-neutral durable record of an LLM/provider call."""
+    """Provider-neutral durable record of one LLM/provider call (begin/complete)."""
 
     __tablename__ = "llm_call_log"
     __table_args__ = (

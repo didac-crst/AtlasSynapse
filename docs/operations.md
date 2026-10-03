@@ -38,7 +38,7 @@ Every mutation creates an operation record. Deterministic refusal is `rejected`;
 
 The semantic reviewer is a replaceable protocol. Disabled or unavailable review returns `manual_review` for ontology proposals and does not affect knowledge-plane readiness. Reviewers cannot write to the database, invoke DDL, or bypass deterministic gates.
 
-Every semantic-review invocation is recorded in `llm_call_log` (not `operation_log`) with request/trace/operation correlation when available. Statuses include `started`, `succeeded`, `failed`, `unavailable`, and `manual_review`. Cost is estimated as `input_tokens * input_rate + output_tokens * output_rate` with a persisted pricing snapshot/version, or stored as provider-reported. Unknown cost remains NULL/`unknown` rather than a fabricated zero. Raw prompts and completions are not persisted by default; metadata follows the payload-retention policy.
+Every semantic-review invocation is recorded in `llm_call_log` (not `operation_log`) with request/trace/operation correlation when available. Logging uses a begin/complete lifecycle on a single row per call (start insert, completion update)—not a separate immutable start-event row. Statuses include `started`, `succeeded`, `failed`, `unavailable`, and `manual_review`. Cost is estimated as `input_tokens * input_rate + output_tokens * output_rate` with a persisted pricing snapshot/version, or stored as provider-reported. Unknown cost remains NULL/`unknown` rather than a fabricated zero. Raw prompts and completions are not persisted by default; metadata follows the payload-retention policy.
 
 ## Retrieval behavior
 

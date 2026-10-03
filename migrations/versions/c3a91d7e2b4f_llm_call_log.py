@@ -4,7 +4,8 @@ Revision ID: c3a91d7e2b4f
 Revises: b2e8f1a94c0d
 Create Date: 2026-10-03 22:45:00.000000
 
-Append-only LLM call observability table. Separate from operation_log.
+Durable LLM call observability table (begin/complete per row). Separate from
+operation_log.
 """
 
 from __future__ import annotations

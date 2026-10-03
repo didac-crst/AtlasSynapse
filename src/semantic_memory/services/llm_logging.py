@@ -1,6 +1,7 @@
 """Provider-neutral LLM call logging interface.
 
 Persists durable call telemetry in ``llm_call_log``, separate from ``operation_log``.
+Each call is one row: inserted at begin and updated in place on complete.
 Raw prompts/responses are not stored by default; metadata is redacted via the
 existing payload-retention policy.
 """

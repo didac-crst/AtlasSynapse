@@ -96,7 +96,7 @@ Add optional embeddings with a provider interface and JSONB vector storage. `pgv
 
 Status: Done.
 
-Implement database-backed retrieval with transparent ranking signals, and append-only `llm_call_log` observability for provider calls (separate from `operation_log`). Retrieval must work without an LLM or vector provider. Every semantic-review call must be measurable.
+Implement database-backed retrieval with transparent ranking signals, and durable `llm_call_log` observability for provider calls (separate from `operation_log`; one begin/complete row per call). Retrieval must work without an LLM or vector provider. Every semantic-review call must be measurable.
 
 ## Phase 14+ — Ingestion policy, administration, and advanced semantic capabilities
 

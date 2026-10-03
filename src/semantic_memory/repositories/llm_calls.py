@@ -1,4 +1,4 @@
-"""Persistence for append-only LLM call logs."""
+"""Persistence for LLM call logs (insert on begin, update on complete)."""
 
 from __future__ import annotations
 
