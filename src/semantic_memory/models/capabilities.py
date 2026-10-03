@@ -1,0 +1,20 @@
+"""Actor capability constants."""
+
+from enum import StrEnum
+
+
+class Capability(StrEnum):
+    KNOWLEDGE_READ = "knowledge.read"
+    KNOWLEDGE_WRITE = "knowledge.write"
+    ONTOLOGY_READ = "ontology.read"
+    ONTOLOGY_PROPOSE = "ontology.propose"
+    ONTOLOGY_APPLY = "ontology.apply"
+    ADMIN = "admin"
+
+
+DEFAULT_AGENT_CAPABILITIES: tuple[Capability, ...] = (
+    Capability.KNOWLEDGE_READ,
+    Capability.KNOWLEDGE_WRITE,
+    Capability.ONTOLOGY_READ,
+    Capability.ONTOLOGY_PROPOSE,
+)
