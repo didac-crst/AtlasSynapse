@@ -8,13 +8,16 @@ from sqlalchemy.orm import Session
 
 from semantic_memory.exceptions import (
     DuplicateEntityError,
+    InvalidStateTransitionError,
     UnknownClassError,
     UnknownEntityError,
+    ValidationFailedError,
 )
 from semantic_memory.models import Entity, EntityStatus
 from semantic_memory.models.capabilities import Capability
 from semantic_memory.repositories.entities import EntityRepository
 from semantic_memory.repositories.ontology import OntologyRepository
+from semantic_memory.schemas.conflicts import MergeEntityRequest, MergeEntityResponse
 from semantic_memory.schemas.entities import (
     CreateEntityRequest,
     CreateEntityResponse,
@@ -57,6 +60,59 @@ class EntityService:
             response_model=CreateEntityResponse,
             constraint_name="entity_write",
             execute=lambda: self._create_entity_body(request=request, actor_id=actor.id),
+        )
+
+    def merge_entity(self, request: MergeEntityRequest) -> MergeEntityResponse:
+        actor = self._actors.require_active_actor(request.actor_key)
+        self._actors.require_capability(actor, Capability.KNOWLEDGE_WRITE)
+        return self._mutations.run(
+            actor=actor,
+            operation_name="merge_entity",
+            request=request,
+            response_model=MergeEntityResponse,
+            constraint_name="entity_merge",
+            execute=lambda: self._merge_entity_body(request=request),
+        )
+
+    def _merge_entity_body(self, *, request: MergeEntityRequest) -> MergeEntityResponse:
+        if request.source_entity_id == request.target_entity_id:
+            raise ValidationFailedError(
+                "source_entity_id and target_entity_id must differ",
+                details={
+                    "source_entity_id": str(request.source_entity_id),
+                    "target_entity_id": str(request.target_entity_id),
+                },
+                request_id=str(request.request_id),
+            )
+        source = self._entities.get(request.source_entity_id)
+        if source is None:
+            raise UnknownEntityError(
+                f"Source entity {request.source_entity_id} was not found",
+                details={"source_entity_id": str(request.source_entity_id)},
+                request_id=str(request.request_id),
+            )
+        target = self._entities.get(request.target_entity_id)
+        if target is None or target.status != EntityStatus.ACTIVE.value:
+            raise UnknownEntityError(
+                f"Target entity {request.target_entity_id} was not found or is inactive",
+                details={"target_entity_id": str(request.target_entity_id)},
+                request_id=str(request.request_id),
+            )
+        if source.status != EntityStatus.ACTIVE.value:
+            raise InvalidStateTransitionError(
+                f"Source entity {request.source_entity_id} is not active",
+                details={
+                    "source_entity_id": str(request.source_entity_id),
+                    "status": source.status,
+                },
+                request_id=str(request.request_id),
+            )
+        self._entities.acquire_merge_lock(source_entity_id=source.id)
+        merged = self._entities.mark_merged(source, target_entity_id=target.id)
+        return MergeEntityResponse(
+            source=self._to_entity_response(merged),
+            target=self._to_entity_response(target),
+            request_id=request.request_id,
         )
 
     def _create_entity_body(
@@ -211,6 +267,7 @@ class EntityService:
             id=entity.id,
             canonical_name=entity.canonical_name,
             status=EntityStatus(entity.status),
+            merged_into_entity_id=entity.merged_into_entity_id,
             types=types,
             aliases=aliases,
             external_references=refs,

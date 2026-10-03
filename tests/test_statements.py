@@ -14,7 +14,6 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from semantic_memory.exceptions import (
-    CardinalityViolationError,
     DomainViolationError,
     IdempotencyKeyReusedError,
     InvalidLiteralTypeError,
@@ -22,7 +21,7 @@ from semantic_memory.exceptions import (
     UnknownPredicateError,
     ValidationFailedError,
 )
-from semantic_memory.models import ActorType, Statement
+from semantic_memory.models import ActorType, Conflict, Statement
 from semantic_memory.schemas.actors import ActorEnsureRequest
 from semantic_memory.schemas.entities import CreateEntityRequest
 from semantic_memory.schemas.statements import AssertionOutcome, AssertStatementRequest
@@ -247,7 +246,7 @@ def test_naive_datetime_rejected(db_session: Session) -> None:
     assert "timezone-aware" in exc.value.message
 
 
-def test_cardinality_one_violation(db_session: Session) -> None:
+def test_cardinality_one_records_conflict_without_rejecting(db_session: Session) -> None:
     _ensure_writer(db_session)
     doc_id = _create_entity(db_session, name="Doc", class_key="Document")
     service = StatementService(db_session)
@@ -258,15 +257,15 @@ def test_cardinality_one_violation(db_session: Session) -> None:
             object_string="First",
         )
     )
-    with pytest.raises(CardinalityViolationError) as exc:
-        service.assert_statement(
-            _assert_request(
-                subject_entity_id=doc_id,
-                predicate_key="name",
-                object_string="Second",
-            )
+    second = service.assert_statement(
+        _assert_request(
+            subject_entity_id=doc_id,
+            predicate_key="name",
+            object_string="Second",
         )
-    assert exc.value.error_code == "CARDINALITY_VIOLATION"
+    )
+    assert second.outcome == AssertionOutcome.CREATE
+    assert second.conflict_ids
 
 
 def test_idempotent_retry_and_key_reuse(db_session: Session) -> None:
@@ -373,7 +372,7 @@ def test_parallel_assert_only_one_statement(engine: Engine) -> None:
         verify.close()
 
 
-def test_parallel_cardinality_one_allows_single_winner(engine: Engine) -> None:
+def test_parallel_cardinality_one_allows_coexistence(engine: Engine) -> None:
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
     setup = SessionLocal()
     try:
@@ -404,24 +403,19 @@ def test_parallel_cardinality_one_allows_single_winner(engine: Engine) -> None:
         session = SessionLocal()
         try:
             barrier.wait(timeout=10)
-            try:
-                result = StatementService(session).assert_statement(
-                    AssertStatementRequest(
-                        actor_key="card-writer",
-                        request_id=uuid.uuid4(),
-                        idempotency_key=str(uuid.uuid4()),
-                        subject_entity_id=subject_id,
-                        predicate_key="name",
-                        object_string=f"Name-{index}-{uuid.uuid4()}",
-                    )
+            result = StatementService(session).assert_statement(
+                AssertStatementRequest(
+                    actor_key="card-writer",
+                    request_id=uuid.uuid4(),
+                    idempotency_key=str(uuid.uuid4()),
+                    subject_entity_id=subject_id,
+                    predicate_key="name",
+                    object_string=f"Name-{index}-{uuid.uuid4()}",
                 )
-                session.commit()
-                with lock:
-                    results.append(result.outcome.value)
-            except CardinalityViolationError:
-                session.rollback()
-                with lock:
-                    results.append("CARDINALITY_VIOLATION")
+            )
+            session.commit()
+            with lock:
+                results.append(result.outcome.value)
         finally:
             session.close()
 
@@ -430,8 +424,7 @@ def test_parallel_cardinality_one_allows_single_winner(engine: Engine) -> None:
         for future in as_completed(futures):
             future.result()
 
-    assert results.count("CREATE") == 1
-    assert results.count("CARDINALITY_VIOLATION") == 7
+    assert results.count("CREATE") == 8
 
     verify = SessionLocal()
     try:
@@ -443,6 +436,8 @@ def test_parallel_cardinality_one_allows_single_winner(engine: Engine) -> None:
                 Statement.status == "asserted",
             )
         )
-        assert count == 1
+        assert count == 8
+        conflicts = verify.scalar(select(func.count()).select_from(Conflict))
+        assert conflicts is not None and conflicts >= 1
     finally:
         verify.close()

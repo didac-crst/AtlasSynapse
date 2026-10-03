@@ -6,6 +6,7 @@ from fastapi import FastAPI
 
 from semantic_memory import __version__
 from semantic_memory.api.actors import router as actors_router
+from semantic_memory.api.conflicts import router as conflicts_router
 from semantic_memory.api.entities import router as entities_router
 from semantic_memory.api.errors import register_exception_handlers
 from semantic_memory.api.health import router as health_router
@@ -35,6 +36,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(entities_router)
     app.include_router(statements_router)
     app.include_router(provenance_router)
+    app.include_router(conflicts_router)
     return app
 
 

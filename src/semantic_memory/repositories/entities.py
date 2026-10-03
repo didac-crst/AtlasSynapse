@@ -209,6 +209,27 @@ class EntityRepository:
         )
         return other is not None
 
+    def mark_merged(
+        self,
+        entity: Entity,
+        *,
+        target_entity_id: uuid.UUID,
+    ) -> Entity:
+        entity.status = EntityStatus.MERGED.value
+        entity.merged_into_entity_id = target_entity_id
+        self._session.flush()
+        return entity
+
+    def acquire_merge_lock(self, *, source_entity_id: uuid.UUID) -> None:
+        """Serialize explicit merges for a source entity."""
+        material = f"merge:{source_entity_id}".encode()
+        digest = hashlib.sha256(material).digest()[:8]
+        lock_key = int.from_bytes(digest, byteorder="big", signed=False) % (2**63)
+        self._session.execute(
+            text("SELECT pg_advisory_xact_lock(:lock_key)"),
+            {"lock_key": lock_key},
+        )
+
     def acquire_identity_lock(self, *, class_id: uuid.UUID, canonical_name: str) -> None:
         """Serialize CREATE/resolution for a normalized class+name identity key."""
         material = f"{class_id}:{normalize_text(canonical_name)}".encode()

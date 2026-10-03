@@ -8,7 +8,6 @@ from datetime import UTC, datetime
 from sqlalchemy.orm import Session
 
 from semantic_memory.exceptions import (
-    CardinalityViolationError,
     DomainViolationError,
     InvalidLiteralTypeError,
     InvalidStateTransitionError,
@@ -37,6 +36,7 @@ from semantic_memory.schemas.statements import (
     TimelineResponse,
 )
 from semantic_memory.services.actors import ActorService
+from semantic_memory.services.conflicts import ConflictService
 from semantic_memory.services.mutations import MutationRunner
 from semantic_memory.validation.literals import (
     normalize_confidence,
@@ -54,6 +54,7 @@ class StatementService:
         self._ontology = OntologyRepository(session)
         self._statements = StatementRepository(session)
         self._mutations = MutationRunner(session)
+        self._conflicts = ConflictService(session)
 
     def get(self, statement_id: uuid.UUID) -> StatementResponse:
         statement = self._statements.get(statement_id)
@@ -277,21 +278,12 @@ class StatementService:
                 reused=True,
             )
 
+        others: list[Statement] = []
         if revision.cardinality == Cardinality.ONE.value:
             others = self._statements.find_asserted_for_predicate(
                 subject_entity_id=subject.id,
                 predicate_id=predicate.id,
             )
-            if others:
-                raise CardinalityViolationError(
-                    f"Predicate '{request.predicate_key}' allows at most one asserted value",
-                    details={
-                        "predicate_key": request.predicate_key,
-                        "subject_entity_id": str(subject.id),
-                        "existing_statement_ids": [str(item.id) for item in others],
-                    },
-                    request_id=str(request.request_id),
-                )
 
         statement = self._statements.create(
             subject_entity_id=subject.id,
@@ -310,11 +302,20 @@ class StatementService:
             valid_to=request.valid_to,
             confidence=confidence,
         )
+        conflict_ids: list[uuid.UUID] = []
+        if others:
+            recorded = self._conflicts.record_cardinality_conflicts(
+                new_statement=statement,
+                existing=others,
+                predicate_key=request.predicate_key,
+            )
+            conflict_ids = [item.id for item in recorded]
         return AssertStatementResponse(
             outcome=AssertionOutcome.CREATE,
             statement=self._to_response(statement),
             request_id=request.request_id,
             reused=False,
+            conflict_ids=conflict_ids,
         )
 
     def _normalize_request_datetimes(
