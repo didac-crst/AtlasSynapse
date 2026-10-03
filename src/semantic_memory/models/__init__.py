@@ -1,6 +1,7 @@
 """ORM models and shared enums."""
 
 from semantic_memory.models.base import Base
+from semantic_memory.models.embeddings import Embedding
 from semantic_memory.models.enums import (
     ActorStatus,
     ActorType,
@@ -9,11 +10,13 @@ from semantic_memory.models.enums import (
     Cardinality,
     ConflictStatus,
     ConstraintType,
+    EmbeddingObjectType,
     EntityStatus,
     GateDecision,
     OntologyChangeObjectType,
     OperationStatus,
     ProposalStatus,
+    ProposalType,
     StatementStatus,
     ValueKind,
 )
@@ -56,6 +59,8 @@ __all__ = [
     "Conflict",
     "ConflictStatus",
     "ConstraintType",
+    "Embedding",
+    "EmbeddingObjectType",
     "Entity",
     "EntityAlias",
     "EntityStatus",
@@ -81,6 +86,7 @@ __all__ = [
     "OperationLog",
     "OperationStatus",
     "ProposalStatus",
+    "ProposalType",
     "Source",
     "Statement",
     "StatementEvidence",

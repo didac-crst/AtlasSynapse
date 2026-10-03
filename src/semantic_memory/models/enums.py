@@ -78,6 +78,20 @@ class OntologyChangeObjectType(StrEnum):
     CLASS_PARENT = "class_parent"
 
 
+class ProposalType(StrEnum):
+    CLASS = "class"
+    PREDICATE = "predicate"
+    CONSTRAINT = "constraint"
+    ALIAS = "alias"
+    CLASS_PARENT = "class_parent"
+
+
+class EmbeddingObjectType(StrEnum):
+    CLASS = "class"
+    PREDICATE = "predicate"
+    ENTITY = "entity"
+
+
 class OperationStatus(StrEnum):
     STARTED = "started"
     SUCCESS = "success"

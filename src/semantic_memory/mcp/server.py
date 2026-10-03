@@ -15,7 +15,7 @@ class MCPPlaceholder:
     ready: bool = True
     message: str = (
         "Exposes entity, statement, provenance, conflict, merge, "
-        "supersession, retraction, and timeline tools."
+        "supersession, retraction, timeline, ontology read, and proposal tools."
     )
     tools: tuple[str, ...] = field(
         default_factory=lambda: (
@@ -35,6 +35,12 @@ class MCPPlaceholder:
             "get_predicate",
             "search_ontology",
             "get_ontology_context",
+            "get_proposal",
+            "propose_class",
+            "propose_predicate",
+            "propose_constraint",
+            "propose_alias",
+            "propose_class_parent",
         )
     )
 

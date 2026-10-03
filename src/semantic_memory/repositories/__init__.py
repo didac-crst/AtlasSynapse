@@ -3,7 +3,9 @@
 from semantic_memory.repositories.actors import ActorRepository
 from semantic_memory.repositories.batches import BatchRepository
 from semantic_memory.repositories.conflicts import ConflictRepository
+from semantic_memory.repositories.embeddings import EmbeddingRepository
 from semantic_memory.repositories.entities import EntityRepository
+from semantic_memory.repositories.governance import GovernanceRepository
 from semantic_memory.repositories.idempotency import IdempotencyRepository
 from semantic_memory.repositories.ontology import OntologyRepository
 from semantic_memory.repositories.operations import OperationLogRepository
@@ -14,7 +16,9 @@ __all__ = [
     "ActorRepository",
     "BatchRepository",
     "ConflictRepository",
+    "EmbeddingRepository",
     "EntityRepository",
+    "GovernanceRepository",
     "IdempotencyRepository",
     "OntologyRepository",
     "OperationLogRepository",

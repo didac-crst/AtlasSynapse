@@ -76,17 +76,21 @@ Phases 6–9 were delivered together as Milestone B: semantic graph memory.
 
 ## Phase 10 — Governed ontology proposals
 
-Status: Next.
+Status: Done.
 
 Implement proposals, deterministic gates, gate results, changes, revision control, and proposal tools.
 
 ## Phase 11 — Semantic review adapter
 
+Status: Done.
+
 Add provider-neutral semantic review interfaces with mock and disabled implementations. The reviewer never mutates the database or bypasses deterministic validation.
 
 ## Phase 12 — Optional semantic similarity
 
-Add optional `pgvector` and embeddings only after canonical correctness works without them.
+Status: Done.
+
+Add optional embeddings with a provider interface and JSONB vector storage. `pgvector` is not required. Embeddings never determine truth, identity, or acceptance.
 
 ## Phase 13+ — Retrieval, ingestion policy, administration, and advanced semantic capabilities
 
@@ -95,8 +99,8 @@ Improve retrieval quality, decide what becomes durable memory, add inspection UI
 ## Milestones
 
 - Milestone A: phases 0–5, usable deterministic memory. — Done.
-- Milestone B: phases 6–9, semantic graph memory. — Done (pending merge of the Milestone B PR).
-- Milestone C: phases 10–12, governed self-evolving ontology. — Next starts at phase 10.
+- Milestone B: phases 6–9, semantic graph memory. — Done.
+- Milestone C: phases 10–12, governed self-evolving ontology. — Done (pending merge of the Milestone C PR).
 - Milestone D: phases 13+, mature personal knowledge substrate.
 
 ## Stop conditions
