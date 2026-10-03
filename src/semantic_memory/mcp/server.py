@@ -31,6 +31,10 @@ class MCPPlaceholder:
             "get_timeline",
             "find_conflicts",
             "assert_batch",
+            "get_class",
+            "get_predicate",
+            "search_ontology",
+            "get_ontology_context",
         )
     )
 

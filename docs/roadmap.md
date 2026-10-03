@@ -46,23 +46,37 @@ Phases 3–5 were delivered together as one milestone: auditable, temporal, retr
 
 ## Phase 6 — Conflicts and ambiguity
 
-Status: Next.
+Status: Done.
 
 Implement conservative conflict detection, ambiguity results, explicit entity merging, and conflict retrieval.
 
+Overlapping cardinality-one statements coexist with recorded conflict metadata. `find_conflicts`, resolve/dismiss, and explicit `merge_entity` preserve history without automatic retraction or merging.
+
 ## Phase 7 — Rich events and relationship contexts
+
+Status: Done.
 
 Prove that Employment, Residence, MoveEvent, ProjectParticipation, ExperimentRun, Decision, and Observation can be represented as entities and statements without domain-specific SQL tables.
 
 ## Phase 8 — Batch ingestion
 
+Status: Done.
+
 Implement `ingestion_batch`, `assert_batch`, preloading, bounded query behavior, and atomic batch handling.
+
+`assert_batch` returns created, reused, ambiguous, rejected, and ontology-required results explicitly.
 
 ## Phase 9 — Ontology read plane
 
+Status: Done.
+
 Implement ontology lookup, search, context, aliases, and inheritance traversal.
 
+Phases 6–9 were delivered together as Milestone B: semantic graph memory.
+
 ## Phase 10 — Governed ontology proposals
+
+Status: Next.
 
 Implement proposals, deterministic gates, gate results, changes, revision control, and proposal tools.
 
@@ -80,9 +94,9 @@ Improve retrieval quality, decide what becomes durable memory, add inspection UI
 
 ## Milestones
 
-- Milestone A: phases 0–5, usable deterministic memory. — Done (pending merge of the phases 3–5 PR).
-- Milestone B: phases 6–9, semantic graph memory. — Next starts at phase 6.
-- Milestone C: phases 10–12, governed self-evolving ontology.
+- Milestone A: phases 0–5, usable deterministic memory. — Done.
+- Milestone B: phases 6–9, semantic graph memory. — Done (pending merge of the Milestone B PR).
+- Milestone C: phases 10–12, governed self-evolving ontology. — Next starts at phase 10.
 - Milestone D: phases 13+, mature personal knowledge substrate.
 
 ## Stop conditions
