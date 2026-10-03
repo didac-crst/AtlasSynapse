@@ -32,6 +32,7 @@ def test_mcp_placeholder() -> None:
     assert "get_timeline" in placeholder.tools
     assert "find_conflicts" in placeholder.tools
     assert "merge_entity" in placeholder.tools
+    assert "assert_batch" in placeholder.tools
     assert placeholder.transport in {"stdio", "http"}
 
 

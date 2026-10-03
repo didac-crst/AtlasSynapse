@@ -30,6 +30,7 @@ class MCPPlaceholder:
             "retract_statement",
             "get_timeline",
             "find_conflicts",
+            "assert_batch",
         )
     )
 

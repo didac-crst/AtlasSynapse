@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from semantic_memory.exceptions import DomainError, ValidationFailedError
 from semantic_memory.models.enums import ConflictStatus
+from semantic_memory.schemas.batches import AssertBatchRequest
 from semantic_memory.schemas.conflicts import (
     DismissConflictRequest,
     FindConflictsResponse,
@@ -27,6 +28,7 @@ from semantic_memory.schemas.statements import (
     SupersedeStatementRequest,
     TimelineResponse,
 )
+from semantic_memory.services.batches import BatchService
 from semantic_memory.services.conflicts import ConflictService
 from semantic_memory.services.entities import EntityService
 from semantic_memory.services.provenance import ProvenanceService
@@ -223,5 +225,13 @@ class StatementMCPTools:
             self._session,
             lambda: self._conflicts.dismiss_conflict(
                 DismissConflictRequest.model_validate(payload)
+            ),
+        )
+
+    def assert_batch(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return _run_mutation(
+            self._session,
+            lambda: BatchService(self._session).assert_batch(
+                AssertBatchRequest.model_validate(payload)
             ),
         )
