@@ -1,0 +1,90 @@
+"""ORM models and shared enums."""
+
+from semantic_memory.models.base import Base
+from semantic_memory.models.enums import (
+    ActorStatus,
+    ActorType,
+    AliasTargetType,
+    BatchStatus,
+    Cardinality,
+    ConflictStatus,
+    ConstraintType,
+    EntityStatus,
+    GateDecision,
+    OntologyChangeObjectType,
+    OperationStatus,
+    ProposalStatus,
+    StatementStatus,
+    ValueKind,
+)
+from semantic_memory.models.governance import (
+    OntologyChange,
+    OntologyGateResult,
+    OntologyProposal,
+)
+from semantic_memory.models.knowledge import (
+    Entity,
+    EntityAlias,
+    EntityType,
+    Statement,
+    StatementQualifier,
+)
+from semantic_memory.models.ontology import (
+    OntologyAlias,
+    OntologyClass,
+    OntologyClassParent,
+    OntologyClassRevision,
+    OntologyConstraint,
+    OntologyNamespace,
+    OntologyPredicate,
+    OntologyPredicateDomain,
+    OntologyPredicateRange,
+    OntologyPredicateRevision,
+)
+from semantic_memory.models.operations import Actor, IdempotencyRecord, IngestionBatch, OperationLog
+from semantic_memory.models.provenance import ExternalReference, Source, StatementEvidence
+from semantic_memory.models.reasoning import Conflict
+
+__all__ = [
+    "Actor",
+    "ActorStatus",
+    "ActorType",
+    "AliasTargetType",
+    "Base",
+    "BatchStatus",
+    "Cardinality",
+    "Conflict",
+    "ConflictStatus",
+    "ConstraintType",
+    "Entity",
+    "EntityAlias",
+    "EntityStatus",
+    "EntityType",
+    "ExternalReference",
+    "GateDecision",
+    "IdempotencyRecord",
+    "IngestionBatch",
+    "OntologyAlias",
+    "OntologyChange",
+    "OntologyChangeObjectType",
+    "OntologyClass",
+    "OntologyClassParent",
+    "OntologyClassRevision",
+    "OntologyConstraint",
+    "OntologyGateResult",
+    "OntologyNamespace",
+    "OntologyPredicate",
+    "OntologyPredicateDomain",
+    "OntologyPredicateRange",
+    "OntologyPredicateRevision",
+    "OntologyProposal",
+    "OperationLog",
+    "OperationStatus",
+    "ProposalStatus",
+    "Source",
+    "Statement",
+    "StatementEvidence",
+    "StatementQualifier",
+    "StatementStatus",
+    "ValueKind",
+]

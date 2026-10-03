@@ -1,0 +1,37 @@
+# AtlasSynapse brand tokens
+# Source: product logo mark + presentation wordmark typography.
+
+name: AtlasSynapse
+
+colors:
+  charcoal: "#303030"
+  coral: "#E8705C"
+  # Primary face color sampled from the 3D logo mark.
+  coral_logo: "#FC6450"
+  background: "#FFFFFF"
+
+typography:
+  family: "Inter, Helvetica Neue, Arial, sans-serif"
+  wordmark:
+    # Rendered as one compound name with no space: AtlasSynapse
+    atlas:
+      text: Atlas
+      weight: 200 # thin / light
+      color: charcoal
+    synapse:
+      text: Synapse
+      weight: 700 # bold
+      color: coral
+
+assets:
+  logo: assets/logo.png
+  wordmark: assets/wordmark.svg
+  logo_variants:
+    - assets/logo/logo-512.png
+    - assets/logo/logo-256.png
+    - assets/logo/logo-128.png
+    - assets/logo/logo-64.png
+    - assets/logo/logo-48.png
+    - assets/logo/logo-32.png
+  # Palette-compressed square icon for ChatGPT MCP connector uploads (< 10KB).
+  logo_mcp: assets/logo/logo-mcp.png

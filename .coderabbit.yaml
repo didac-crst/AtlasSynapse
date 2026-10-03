@@ -1,0 +1,7 @@
+# https://docs.coderabbit.ai/configuration/auto-review
+# CodeRabbit always includes the repo default branch (main) in auto-review
+# targets, so disabling auto_review is required to skip PRs into main.
+# Request a review manually with: @coderabbitai review
+reviews:
+  auto_review:
+    enabled: false

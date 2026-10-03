@@ -6,7 +6,29 @@ build-backend = "setuptools.build_meta"
 name = "atlas-synapse"
 version = "0.1.0.dev0"
 description = "Semantic memory and evolving knowledge graph for AI agents"
+readme = "README.md"
 requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.14",
+    "fastapi>=0.115",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "psycopg[binary]>=3.2",
+    "sqlalchemy>=2.0.36",
+    "uvicorn[standard]>=0.34",
+]
+
+[project.optional-dependencies]
+dev = [
+    "httpx>=0.28",
+    "mypy>=1.14",
+    "pytest>=8.3",
+    "ruff>=0.9",
+    "types-setuptools>=75",
+]
+
+[project.scripts]
+semantic-memory = "semantic_memory.api.app:run"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -16,6 +38,25 @@ where = ["src"]
 
 [tool.ruff]
 line-length = 100
+target-version = "py312"
+src = ["src", "tests", "migrations"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+"migrations/versions/*.py" = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "src"
+packages = ["semantic_memory"]
+warn_unused_configs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
+filterwarnings = ["ignore::DeprecationWarning"]

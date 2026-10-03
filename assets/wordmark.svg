@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 586 96" role="img" aria-label="AtlasSynapse">
+  <title>AtlasSynapse</title>
+  <style>
+    .wordmark {
+      font-family: Inter, "Helvetica Neue", Helvetica, Arial, sans-serif;
+      font-size: 84px;
+      dominant-baseline: alphabetic;
+    }
+    .atlas {
+      fill: #303030;
+      font-weight: 200;
+    }
+    .synapse {
+      fill: #E8705C;
+      font-weight: 700;
+    }
+  </style>
+  <text class="wordmark" x="36" y="76">
+    <tspan class="atlas">Atlas</tspan><tspan class="synapse">Synapse</tspan>
+  </text>
+</svg>
