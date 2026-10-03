@@ -92,6 +92,20 @@ class EmbeddingObjectType(StrEnum):
     ENTITY = "entity"
 
 
+class LlmCallStatus(StrEnum):
+    STARTED = "started"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    UNAVAILABLE = "unavailable"
+    MANUAL_REVIEW = "manual_review"
+
+
+class LlmCostStatus(StrEnum):
+    ESTIMATED = "estimated"
+    PROVIDER_REPORTED = "provider_reported"
+    UNKNOWN = "unknown"
+
+
 class OperationStatus(StrEnum):
     STARTED = "started"
     SUCCESS = "success"

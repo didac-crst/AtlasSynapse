@@ -38,6 +38,12 @@ Every mutation creates an operation record. Deterministic refusal is `rejected`;
 
 The semantic reviewer is a replaceable protocol. Disabled or unavailable review returns `manual_review` for ontology proposals and does not affect knowledge-plane readiness. Reviewers cannot write to the database, invoke DDL, or bypass deterministic gates.
 
+Every semantic-review invocation is recorded in `llm_call_log` (not `operation_log`) with request/trace/operation correlation when available. Statuses include `started`, `succeeded`, `failed`, `unavailable`, and `manual_review`. Cost is estimated as `input_tokens * input_rate + output_tokens * output_rate` with a persisted pricing snapshot/version, or stored as provider-reported. Unknown cost remains NULL/`unknown` rather than a fabricated zero. Raw prompts and completions are not persisted by default; metadata follows the payload-retention policy.
+
+## Retrieval behavior
+
+Retrieval (`search_entities`, `search_statements`, `search_semantic_memory`, `get_relevant_context`, neighborhood/timeline/explain/conflicts) is database-backed and must succeed without an LLM or embedding provider. Ranking exposes transparent signals (lexical, temporal, recency, evidence, reliability, proximity, ontology specificity) and must not collapse into an unexplained truth score. Vector search remains optional.
+
 ## Health behavior
 
 `/health/live` reports process liveness. `/health/ready` verifies database connectivity and migration compatibility. The readiness check must not require an external LLM or embedding provider.

@@ -15,15 +15,18 @@ class MCPPlaceholder:
     ready: bool = True
     message: str = (
         "Exposes entity, statement, provenance, conflict, merge, "
-        "supersession, retraction, timeline, ontology read, and proposal tools."
+        "supersession, retraction, timeline, retrieval, ontology read, and proposal tools."
     )
     tools: tuple[str, ...] = field(
         default_factory=lambda: (
             "create_entity",
             "get_entity",
+            "search_entities",
+            "get_entity_neighborhood",
             "merge_entity",
             "assert_statement",
             "get_statement",
+            "search_statements",
             "explain_statement",
             "add_evidence",
             "supersede_statement",
@@ -31,6 +34,8 @@ class MCPPlaceholder:
             "get_timeline",
             "find_conflicts",
             "assert_batch",
+            "search_semantic_memory",
+            "get_relevant_context",
             "get_class",
             "get_predicate",
             "search_ontology",

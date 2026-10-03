@@ -40,6 +40,11 @@ def test_mcp_placeholder() -> None:
     assert "propose_class" in placeholder.tools
     assert "get_proposal" in placeholder.tools
     assert "apply_proposal" not in placeholder.tools
+    assert "search_entities" in placeholder.tools
+    assert "search_statements" in placeholder.tools
+    assert "search_semantic_memory" in placeholder.tools
+    assert "get_relevant_context" in placeholder.tools
+    assert "get_entity_neighborhood" in placeholder.tools
     assert placeholder.transport in {"stdio", "http"}
 
 

@@ -35,6 +35,12 @@ from semantic_memory.schemas.proposals import (
     ProposePredicateRequest,
 )
 from semantic_memory.schemas.provenance import AddEvidenceRequest, ExplainStatementResponse
+from semantic_memory.schemas.retrieval import (
+    RelevantContextRequest,
+    SearchEntitiesRequest,
+    SearchSemanticMemoryRequest,
+    SearchStatementsRequest,
+)
 from semantic_memory.schemas.statements import (
     AssertStatementRequest,
     RetractStatementRequest,
@@ -48,6 +54,7 @@ from semantic_memory.services.entities import EntityService
 from semantic_memory.services.ontology import OntologyService
 from semantic_memory.services.proposals import ProposalService
 from semantic_memory.services.provenance import ProvenanceService
+from semantic_memory.services.retrieval import RetrievalService
 from semantic_memory.services.statements import StatementService
 
 
@@ -80,6 +87,79 @@ def _run_mutation[T: BaseModel](session: Session, operation: Callable[[], T]) ->
     except Exception:
         session.rollback()
         raise
+
+
+class RetrievalMCPTools:
+    """Translate MCP tool calls into retrieval service operations."""
+
+    def __init__(self, session: Session) -> None:
+        self._retrieval = RetrievalService(session)
+
+    def search_entities(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            result = self._retrieval.search_entities(SearchEntitiesRequest.model_validate(payload))
+            return result.model_dump(mode="json")
+        except (DomainError, ValidationError, ValueError) as exc:
+            if isinstance(exc, DomainError):
+                return _error(exc)
+            return _error(
+                ValidationFailedError("Invalid entity search", details={"error": str(exc)})
+            )
+
+    def search_statements(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            result = self._retrieval.search_statements(
+                SearchStatementsRequest.model_validate(payload)
+            )
+            return result.model_dump(mode="json")
+        except (DomainError, ValidationError, ValueError) as exc:
+            if isinstance(exc, DomainError):
+                return _error(exc)
+            return _error(
+                ValidationFailedError("Invalid statement search", details={"error": str(exc)})
+            )
+
+    def get_entity_neighborhood(self, entity_id: str, *, limit: int = 50) -> dict[str, Any]:
+        try:
+            result = self._retrieval.get_entity_neighborhood(uuid.UUID(entity_id), limit=limit)
+            return result.model_dump(mode="json")
+        except (DomainError, ValueError) as exc:
+            if isinstance(exc, DomainError):
+                return _error(exc)
+            return _error(
+                ValidationFailedError(
+                    "Invalid neighborhood lookup",
+                    details={"entity_id": entity_id, "error": str(exc)},
+                )
+            )
+
+    def search_semantic_memory(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            result = self._retrieval.search_semantic_memory(
+                SearchSemanticMemoryRequest.model_validate(payload)
+            )
+            return result.model_dump(mode="json")
+        except (DomainError, ValidationError, ValueError) as exc:
+            if isinstance(exc, DomainError):
+                return _error(exc)
+            return _error(
+                ValidationFailedError("Invalid semantic memory search", details={"error": str(exc)})
+            )
+
+    def get_relevant_context(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            result = self._retrieval.get_relevant_context(
+                RelevantContextRequest.model_validate(payload)
+            )
+            return result.model_dump(mode="json")
+        except (DomainError, ValidationError, ValueError) as exc:
+            if isinstance(exc, DomainError):
+                return _error(exc)
+            return _error(
+                ValidationFailedError(
+                    "Invalid relevant context request", details={"error": str(exc)}
+                )
+            )
 
 
 class EntityMCPTools:

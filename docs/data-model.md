@@ -32,6 +32,10 @@ Proposal status and gate decisions are auditable. Accepted changes record the af
 
 Mutation operation logs distinguish started, success, rejected, and failed. Idempotency records are unique by actor and key and retain a request hash.
 
+## LLM observability
+
+`llm_call_log` is an append-only provider-call audit table, separate from `operation_log`. It records correlation IDs, provider/model/purpose, status/outcome, token usage, duration, cost with pricing snapshot/version, and redacted metadata. Raw prompts and responses are not stored by default.
+
 ## Reasoning and derived data
 
 `conflict` is authoritative reasoning metadata. `embedding` is optional derived data and may be deferred until after the base migration. It must not be required for startup or correctness.
