@@ -1,3 +1,11 @@
-# Migrations placeholder
+# Migrations
 
-The implementation phase will add `env.py` and a reversible `001_initial_schema.py` migration here. The initial migration must create all mandatory v1 tables, constraints, indexes, and deterministic core ontology seed data without remote calls or LLM dependencies.
+Alembic migrations for the AtlasSynapse PostgreSQL schema.
+
+- `env.py` loads metadata from `semantic_memory.models`
+- `versions/ca1ee463c33b_initial_schema.py` creates the v1 tables, constraints, indexes, and deterministic core ontology seed
+
+```bash
+make migrate
+make migrate-down
+```
