@@ -1,5 +1,7 @@
-"""Semantic service layer.
+"""Semantic service layer."""
 
-Services are intentionally empty in Phase 0/1. Business logic begins in later
-roadmap phases.
-"""
+from semantic_memory.services.actors import ActorService
+from semantic_memory.services.entities import EntityService
+from semantic_memory.services.identity import IdentityService
+
+__all__ = ["ActorService", "EntityService", "IdentityService"]
