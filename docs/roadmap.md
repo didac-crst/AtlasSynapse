@@ -100,7 +100,7 @@ Improve retrieval quality, decide what becomes durable memory, add inspection UI
 
 - Milestone A: phases 0–5, usable deterministic memory. — Done.
 - Milestone B: phases 6–9, semantic graph memory. — Done.
-- Milestone C: phases 10–12, governed self-evolving ontology. — Done (pending merge of the Milestone C PR).
+- Milestone C: phases 10–12, governed self-evolving ontology. — Done.
 - Milestone D: phases 13+, mature personal knowledge substrate.
 
 ## Stop conditions
