@@ -14,6 +14,7 @@ from semantic_memory.models.enums import (
     OntologyChangeObjectType,
     OperationStatus,
     ProposalStatus,
+    ProposalType,
     StatementStatus,
     ValueKind,
 )
@@ -81,6 +82,7 @@ __all__ = [
     "OperationLog",
     "OperationStatus",
     "ProposalStatus",
+    "ProposalType",
     "Source",
     "Statement",
     "StatementEvidence",

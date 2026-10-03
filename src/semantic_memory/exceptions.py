@@ -76,6 +76,26 @@ class UnknownConflictError(DomainError):
     error_code = "UNKNOWN_CONFLICT"
 
 
+class OntologyCycleError(DomainError):
+    error_code = "ONTOLOGY_CYCLE"
+
+
+class RevisionConflictError(DomainError):
+    error_code = "REVISION_CONFLICT"
+
+
+class OntologyProposalRejectedError(DomainError):
+    error_code = "ONTOLOGY_PROPOSAL_REJECTED"
+
+
+class OntologyReuseRecommendedError(DomainError):
+    error_code = "ONTOLOGY_REUSE_RECOMMENDED"
+
+
+class UnknownProposalError(DomainError):
+    error_code = "UNKNOWN_PROPOSAL"
+
+
 class InvalidLiteralTypeError(DomainError):
     error_code = "INVALID_LITERAL_TYPE"
 

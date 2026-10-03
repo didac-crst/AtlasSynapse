@@ -26,6 +26,14 @@ from semantic_memory.schemas.ontology import (
     OntologyPredicateResponse,
     OntologySearchResponse,
 )
+from semantic_memory.schemas.proposals import (
+    ProposalResponse,
+    ProposeAliasRequest,
+    ProposeClassParentRequest,
+    ProposeClassRequest,
+    ProposeConstraintRequest,
+    ProposePredicateRequest,
+)
 from semantic_memory.schemas.provenance import AddEvidenceRequest, ExplainStatementResponse
 from semantic_memory.schemas.statements import (
     AssertStatementRequest,
@@ -38,6 +46,7 @@ from semantic_memory.services.batches import BatchService
 from semantic_memory.services.conflicts import ConflictService
 from semantic_memory.services.entities import EntityService
 from semantic_memory.services.ontology import OntologyService
+from semantic_memory.services.proposals import ProposalService
 from semantic_memory.services.provenance import ProvenanceService
 from semantic_memory.services.statements import StatementService
 
@@ -245,10 +254,12 @@ class StatementMCPTools:
 
 
 class OntologyMCPTools:
-    """Translate MCP tool calls into ontology read operations."""
+    """Translate MCP tool calls into ontology read and proposal operations."""
 
     def __init__(self, session: Session) -> None:
+        self._session = session
         self._ontology = OntologyService(session)
+        self._proposals = ProposalService(session)
 
     def get_class(
         self,
@@ -337,3 +348,53 @@ class OntologyMCPTools:
                     "Invalid ontology context lookup", details={"error": str(exc)}
                 )
             )
+
+    def get_proposal(self, proposal_id: str) -> dict[str, Any]:
+        try:
+            result: ProposalResponse = self._proposals.get_proposal(uuid.UUID(proposal_id))
+            return result.model_dump(mode="json")
+        except (DomainError, ValueError) as exc:
+            if isinstance(exc, DomainError):
+                return _error(exc)
+            return _error(
+                ValidationFailedError(
+                    "Invalid proposal id",
+                    details={"proposal_id": proposal_id, "error": str(exc)},
+                )
+            )
+
+    def propose_class(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return _run_mutation(
+            self._session,
+            lambda: self._proposals.propose_class(ProposeClassRequest.model_validate(payload)),
+        )
+
+    def propose_predicate(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return _run_mutation(
+            self._session,
+            lambda: self._proposals.propose_predicate(
+                ProposePredicateRequest.model_validate(payload)
+            ),
+        )
+
+    def propose_constraint(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return _run_mutation(
+            self._session,
+            lambda: self._proposals.propose_constraint(
+                ProposeConstraintRequest.model_validate(payload)
+            ),
+        )
+
+    def propose_alias(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return _run_mutation(
+            self._session,
+            lambda: self._proposals.propose_alias(ProposeAliasRequest.model_validate(payload)),
+        )
+
+    def propose_class_parent(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return _run_mutation(
+            self._session,
+            lambda: self._proposals.propose_class_parent(
+                ProposeClassParentRequest.model_validate(payload)
+            ),
+        )
