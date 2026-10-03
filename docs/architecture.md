@@ -6,6 +6,12 @@ AtlasSynapse is a self-hosted semantic memory service for AI agents. It stores e
 
 The database is a stable physical substrate. Semantic concepts are data in the ontology tables; new concepts must not create SQL tables or execute DDL through MCP.
 
+## Technology baseline
+
+The implementation baseline is Python 3.12 or newer with PostgreSQL, SQLAlchemy, Alembic, Pydantic, and FastAPI-style service boundaries. The MCP adapter remains thin and typed. LLM/provider integrations are replaceable dependencies, and `pgvector` is optional because core correctness and operation do not depend on embeddings.
+
+This choice is deliberate: Python provides strong MCP and provider integration, PostgreSQL provides mature transactional and JSONB support, Pydantic provides strict request/response schemas, and SQLAlchemy/Alembic provide explicit persistence and migration boundaries.
+
 ## Logical planes
 
 ### Knowledge plane
