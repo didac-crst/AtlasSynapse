@@ -1,20 +1,17 @@
-"""Statement assertion application service."""
+"""Statement assertion, supersession, retraction, and timeline services."""
 
 from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from semantic_memory.exceptions import (
     CardinalityViolationError,
-    DbConstraintError,
     DomainViolationError,
-    IdempotencyKeyReusedError,
-    InternalError,
     InvalidLiteralTypeError,
+    InvalidStateTransitionError,
     RangeViolationError,
     UnknownEntityError,
     UnknownPredicateError,
@@ -25,16 +22,22 @@ from semantic_memory.models import EntityStatus, Statement
 from semantic_memory.models.capabilities import Capability
 from semantic_memory.models.enums import Cardinality, StatementStatus, ValueKind
 from semantic_memory.repositories.entities import EntityRepository
-from semantic_memory.repositories.idempotency import IdempotencyRepository, hash_request_payload
 from semantic_memory.repositories.ontology import OntologyRepository
 from semantic_memory.repositories.statements import StatementRepository
 from semantic_memory.schemas.statements import (
     AssertionOutcome,
     AssertStatementRequest,
     AssertStatementResponse,
+    RetractStatementRequest,
+    RetractStatementResponse,
     StatementResponse,
+    SupersedeStatementRequest,
+    SupersedeStatementResponse,
+    TimelineEntry,
+    TimelineResponse,
 )
 from semantic_memory.services.actors import ActorService
+from semantic_memory.services.mutations import MutationRunner
 from semantic_memory.validation.literals import (
     normalize_confidence,
     normalize_object_identity,
@@ -50,7 +53,7 @@ class StatementService:
         self._entities = EntityRepository(session)
         self._ontology = OntologyRepository(session)
         self._statements = StatementRepository(session)
-        self._idempotency = IdempotencyRepository(session)
+        self._mutations = MutationRunner(session)
 
     def get(self, statement_id: uuid.UUID) -> StatementResponse:
         statement = self._statements.get(statement_id)
@@ -64,61 +67,120 @@ class StatementService:
     def assert_statement(self, request: AssertStatementRequest) -> AssertStatementResponse:
         actor = self._actors.require_active_actor(request.actor_key)
         self._actors.require_capability(actor, Capability.KNOWLEDGE_WRITE)
-
-        payload = request.model_dump(
-            mode="json",
-            exclude={"request_id", "trace_id", "idempotency_key"},
-        )
-        request_hash = hash_request_payload(payload)
-
-        try:
-            with self._session.begin_nested():
-                return self._assert_body(
-                    request=request,
-                    actor_id=actor.id,
-                    request_hash=request_hash,
-                )
-        except IntegrityError as exc:
-            raise DbConstraintError(
-                "Statement persistence violated a database constraint",
-                details={"constraint": "statement_write"},
-                request_id=str(request.request_id),
-            ) from exc
-
-    def _assert_body(
-        self,
-        *,
-        request: AssertStatementRequest,
-        actor_id: uuid.UUID,
-        request_hash: str,
-    ) -> AssertStatementResponse:
-        reservation, created = self._idempotency.reserve_or_get(
-            actor_id=actor_id,
-            idempotency_key=request.idempotency_key,
-            request_hash=request_hash,
+        return self._mutations.run(
+            actor=actor,
             operation_name="assert_statement",
+            request=request,
+            response_model=AssertStatementResponse,
+            constraint_name="statement_write",
+            execute=lambda: self._assert_new(request=request, actor_id=actor.id),
         )
-        if reservation.request_hash != request_hash:
-            raise IdempotencyKeyReusedError(
-                "Idempotency key was reused with a different payload",
+
+    def supersede_statement(self, request: SupersedeStatementRequest) -> SupersedeStatementResponse:
+        actor = self._actors.require_active_actor(request.actor_key)
+        self._actors.require_capability(actor, Capability.KNOWLEDGE_WRITE)
+        return self._mutations.run(
+            actor=actor,
+            operation_name="supersede_statement",
+            request=request,
+            response_model=SupersedeStatementResponse,
+            constraint_name="statement_supersede",
+            execute=lambda: self._supersede_body(request=request, actor_id=actor.id),
+        )
+
+    def retract_statement(self, request: RetractStatementRequest) -> RetractStatementResponse:
+        actor = self._actors.require_active_actor(request.actor_key)
+        self._actors.require_capability(actor, Capability.KNOWLEDGE_WRITE)
+        return self._mutations.run(
+            actor=actor,
+            operation_name="retract_statement",
+            request=request,
+            response_model=RetractStatementResponse,
+            constraint_name="statement_retract",
+            execute=lambda: self._retract_body(request=request),
+        )
+
+    def get_timeline(self, entity_id: uuid.UUID) -> TimelineResponse:
+        entity = self._entities.get(entity_id)
+        if entity is None:
+            raise UnknownEntityError(
+                f"Entity {entity_id} was not found",
+                details={"entity_id": str(entity_id)},
+            )
+        entries: list[TimelineEntry] = []
+        for statement in self._statements.list_for_entity_timeline(entity_id):
+            response = self._to_response(statement)
+            sort_time = response.valid_from or response.asserted_at
+            entries.append(TimelineEntry(statement=response, sort_time=sort_time))
+        return TimelineResponse(entity_id=entity_id, entries=entries)
+
+    def _supersede_body(
+        self, *, request: SupersedeStatementRequest, actor_id: uuid.UUID
+    ) -> SupersedeStatementResponse:
+        previous = self._statements.get(request.previous_statement_id)
+        if previous is None:
+            raise UnknownStatementError(
+                f"Statement {request.previous_statement_id} was not found",
+                details={"statement_id": str(request.previous_statement_id)},
+                request_id=str(request.request_id),
+            )
+        if previous.status != StatementStatus.ASSERTED.value:
+            raise InvalidStateTransitionError(
+                "Only asserted statements can be superseded",
                 details={
-                    "idempotency_key": request.idempotency_key,
-                    "actor_key": request.actor_key,
+                    "statement_id": str(previous.id),
+                    "status": previous.status,
                 },
                 request_id=str(request.request_id),
             )
-        if reservation.response_payload is not None:
-            return AssertStatementResponse.model_validate(reservation.response_payload)
-        if not created:
-            raise InternalError(
-                "Idempotency key is reserved by an in-flight request",
-                details={"idempotency_key": request.idempotency_key},
+
+        # Clear the asserted slot before creating the replacement so cardinality-one
+        # predicates can accept the new statement while history is preserved.
+        previous.status = StatementStatus.SUPERSEDED.value
+        self._session.flush()
+
+        created = self._assert_new(request=request, actor_id=actor_id)
+        if created.outcome != AssertionOutcome.CREATE:
+            raise InvalidStateTransitionError(
+                "Supersession requires creating a replacement statement",
+                details={"previous_statement_id": str(previous.id)},
                 request_id=str(request.request_id),
             )
+        previous.superseded_by_statement_id = created.statement.id
+        self._session.flush()
+        return SupersedeStatementResponse(
+            previous_statement=self._to_response(previous),
+            statement=created.statement,
+            request_id=request.request_id,
+        )
 
-        response = self._assert_new(request=request, actor_id=actor_id)
-        self._idempotency.store_response(reservation, response.model_dump(mode="json"))
-        return response
+    def _retract_body(self, *, request: RetractStatementRequest) -> RetractStatementResponse:
+        statement = self._statements.get(request.statement_id)
+        if statement is None:
+            raise UnknownStatementError(
+                f"Statement {request.statement_id} was not found",
+                details={"statement_id": str(request.statement_id)},
+                request_id=str(request.request_id),
+            )
+        if statement.status == StatementStatus.RETRACTED.value:
+            return RetractStatementResponse(
+                statement=self._to_response(statement),
+                request_id=request.request_id,
+            )
+        if statement.status != StatementStatus.ASSERTED.value:
+            raise InvalidStateTransitionError(
+                "Only asserted statements can be retracted",
+                details={
+                    "statement_id": str(statement.id),
+                    "status": statement.status,
+                },
+                request_id=str(request.request_id),
+            )
+        self._statements.mark_retracted(statement)
+        return RetractStatementResponse(
+            statement=self._to_response(statement),
+            request_id=request.request_id,
+        )
 
     def _assert_new(
         self, *, request: AssertStatementRequest, actor_id: uuid.UUID
@@ -186,8 +248,6 @@ class StatementService:
                 request_id=str(request.request_id),
             ) from exc
 
-        # Cardinality-one needs subject+predicate serialization; otherwise lock the
-        # semantic identity (with UTC-normalized validity bounds).
         if revision.cardinality == Cardinality.ONE.value:
             self._statements.acquire_predicate_lock(
                 subject_entity_id=subject.id,
@@ -416,5 +476,7 @@ class StatementService:
             confidence=statement.confidence,
             actor_id=statement.actor_id,
             normalized_object=statement.normalized_object,
+            superseded_by_statement_id=statement.superseded_by_statement_id,
+            retracts_statement_id=statement.retracts_statement_id,
             created_at=statement.created_at,
         )

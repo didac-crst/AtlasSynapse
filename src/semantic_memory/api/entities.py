@@ -8,6 +8,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from semantic_memory.api.transactions import run_audited_mutation
 from semantic_memory.db import get_db_session
 from semantic_memory.schemas.entities import (
     CreateEntityRequest,
@@ -22,13 +23,7 @@ DbSession = Annotated[Session, Depends(get_db_session)]
 
 @router.post("/entities", response_model=CreateEntityResponse)
 def create_entity(request: CreateEntityRequest, session: DbSession) -> CreateEntityResponse:
-    try:
-        result = EntityService(session).create_entity(request)
-        session.commit()
-        return result
-    except Exception:
-        session.rollback()
-        raise
+    return run_audited_mutation(session, lambda: EntityService(session).create_entity(request))
 
 
 @router.get("/entities/{entity_id}", response_model=EntityResponse)

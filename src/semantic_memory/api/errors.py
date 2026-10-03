@@ -25,6 +25,7 @@ from semantic_memory.exceptions import (
     UnknownClassError,
     UnknownEntityError,
     UnknownPredicateError,
+    UnknownSourceError,
     UnknownStatementError,
     ValidationFailedError,
 )
@@ -36,6 +37,7 @@ _STATUS_BY_ERROR: dict[type[DomainError], int] = {
     UnknownClassError: 404,
     UnknownPredicateError: 404,
     UnknownEntityError: 404,
+    UnknownSourceError: 404,
     UnknownStatementError: 404,
     AmbiguousEntityError: 409,
     DuplicateEntityError: 409,

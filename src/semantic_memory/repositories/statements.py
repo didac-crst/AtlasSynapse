@@ -8,7 +8,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import select, text
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.orm import Session
 
 from semantic_memory.models import Statement, StatementStatus
@@ -62,6 +62,33 @@ class StatementRepository:
                 )
             ).all()
         )
+
+    def list_for_entity_timeline(self, entity_id: uuid.UUID) -> list[Statement]:
+        """Return statements involving an entity, ordered by validity then assertion."""
+        sort_time = func.coalesce(Statement.valid_from, Statement.asserted_at)
+        return list(
+            self._session.scalars(
+                select(Statement)
+                .where(
+                    or_(
+                        Statement.subject_entity_id == entity_id,
+                        Statement.object_entity_id == entity_id,
+                    )
+                )
+                .order_by(sort_time.asc(), Statement.asserted_at.asc(), Statement.created_at.asc())
+            ).all()
+        )
+
+    def mark_superseded(self, statement: Statement, *, replacement_id: uuid.UUID) -> Statement:
+        statement.status = StatementStatus.SUPERSEDED.value
+        statement.superseded_by_statement_id = replacement_id
+        self._session.flush()
+        return statement
+
+    def mark_retracted(self, statement: Statement) -> Statement:
+        statement.status = StatementStatus.RETRACTED.value
+        self._session.flush()
+        return statement
 
     def create(
         self,
