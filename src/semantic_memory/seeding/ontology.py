@@ -27,6 +27,9 @@ from semantic_memory.models import (
 CORE_NAMESPACE_KEY = "core"
 SYSTEM_ACTOR_NAME = "system"
 
+# Keep in sync with the initial Alembic migration seed helpers.
+SEED_NAMESPACE = uuid.UUID("00000000-0000-4000-8000-000000000001")
+
 CORE_CLASSES: tuple[str, ...] = (
     "Thing",
     "Agent",
@@ -83,12 +86,17 @@ CORE_PREDICATES: tuple[
 )
 
 
+def stable_seed_id(*parts: str) -> uuid.UUID:
+    """Return a stable UUID for a seed row identity."""
+    return uuid.uuid5(SEED_NAMESPACE, ":".join(parts))
+
+
 def _get_or_create_system_actor(session: Session) -> Actor:
     existing = session.scalar(select(Actor).where(Actor.name == SYSTEM_ACTOR_NAME))
     if existing is not None:
         return existing
     actor = Actor(
-        id=uuid.uuid4(),
+        id=stable_seed_id("actor", "system"),
         name=SYSTEM_ACTOR_NAME,
         actor_type=ActorType.SYSTEM.value,
         status=ActorStatus.ACTIVE.value,
@@ -127,7 +135,7 @@ def seed_core_ontology(session: Session) -> dict[str, Any]:
 
     actor = _get_or_create_system_actor(session)
     namespace = OntologyNamespace(
-        id=uuid.uuid4(),
+        id=stable_seed_id("namespace", CORE_NAMESPACE_KEY),
         key=CORE_NAMESPACE_KEY,
         label="Core",
         description="Bootstrap ontology namespace for AtlasSynapse.",
@@ -138,14 +146,14 @@ def seed_core_ontology(session: Session) -> dict[str, Any]:
     classes: dict[str, OntologyClass] = {}
     for key in CORE_CLASSES:
         ontology_class = OntologyClass(
-            id=uuid.uuid4(),
+            id=stable_seed_id("class", CORE_NAMESPACE_KEY, key),
             namespace_id=namespace.id,
             key=key,
         )
         session.add(ontology_class)
         session.flush()
         class_revision = OntologyClassRevision(
-            id=uuid.uuid4(),
+            id=stable_seed_id("class_revision", CORE_NAMESPACE_KEY, key, "1"),
             class_id=ontology_class.id,
             revision_number=1,
             label=key,
@@ -161,7 +169,7 @@ def seed_core_ontology(session: Session) -> dict[str, Any]:
     for child_key, parent_key in CORE_INHERITANCE:
         session.add(
             OntologyClassParent(
-                id=uuid.uuid4(),
+                id=stable_seed_id("class_parent", CORE_NAMESPACE_KEY, child_key, parent_key),
                 child_class_id=classes[child_key].id,
                 parent_class_id=classes[parent_key].id,
             )
@@ -169,14 +177,14 @@ def seed_core_ontology(session: Session) -> dict[str, Any]:
 
     for key, value_kind, cardinality, domain_keys, range_keys in CORE_PREDICATES:
         predicate = OntologyPredicate(
-            id=uuid.uuid4(),
+            id=stable_seed_id("predicate", CORE_NAMESPACE_KEY, key),
             namespace_id=namespace.id,
             key=key,
         )
         session.add(predicate)
         session.flush()
         predicate_revision = OntologyPredicateRevision(
-            id=uuid.uuid4(),
+            id=stable_seed_id("predicate_revision", CORE_NAMESPACE_KEY, key, "1"),
             predicate_id=predicate.id,
             revision_number=1,
             label=key,
@@ -195,7 +203,7 @@ def seed_core_ontology(session: Session) -> dict[str, Any]:
         for domain_key in domain_keys:
             session.add(
                 OntologyPredicateDomain(
-                    id=uuid.uuid4(),
+                    id=stable_seed_id("predicate_domain", CORE_NAMESPACE_KEY, key, domain_key),
                     predicate_revision_id=predicate_revision.id,
                     class_id=classes[domain_key].id,
                 )
@@ -203,7 +211,7 @@ def seed_core_ontology(session: Session) -> dict[str, Any]:
         for range_key in range_keys:
             session.add(
                 OntologyPredicateRange(
-                    id=uuid.uuid4(),
+                    id=stable_seed_id("predicate_range", CORE_NAMESPACE_KEY, key, range_key),
                     predicate_revision_id=predicate_revision.id,
                     class_id=classes[range_key].id,
                 )

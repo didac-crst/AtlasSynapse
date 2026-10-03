@@ -13,6 +13,7 @@ from semantic_memory.seeding.ontology import (
     CORE_NAMESPACE_KEY,
     CORE_PREDICATES,
     seed_core_ontology,
+    stable_seed_id,
 )
 
 
@@ -66,6 +67,14 @@ def test_fresh_database_migrates_from_zero(alembic_cfg: Config) -> None:
             {"key": CORE_NAMESPACE_KEY},
         ).scalar_one()
         assert class_count == len(CORE_CLASSES)
+
+        namespace_id = conn.execute(
+            text("SELECT id FROM ontology_namespace WHERE key = :key"),
+            {"key": CORE_NAMESPACE_KEY},
+        ).scalar_one()
+        actor_id = conn.execute(text("SELECT id FROM actor WHERE name = 'system'")).scalar_one()
+        assert namespace_id == stable_seed_id("namespace", CORE_NAMESPACE_KEY)
+        assert actor_id == stable_seed_id("actor", "system")
     engine.dispose()
 
 

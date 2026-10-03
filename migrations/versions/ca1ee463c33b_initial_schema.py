@@ -7,20 +7,208 @@ Create Date: 2026-10-03 13:16:46.455203
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
-from sqlalchemy.orm import Session
-
-from semantic_memory.seeding import seed_core_ontology
 
 # revision identifiers, used by Alembic.
 revision: str = "ca1ee463c33b"
 down_revision: str | Sequence[str] | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
+
+# Stable seed namespace. Keep in sync with semantic_memory.seeding.ontology.
+_SEED_NS = uuid.UUID("00000000-0000-4000-8000-000000000001")
+
+_CORE_CLASSES: tuple[str, ...] = (
+    "Thing",
+    "Agent",
+    "Person",
+    "Organization",
+    "Place",
+    "Event",
+    "Activity",
+    "Project",
+    "Document",
+    "Observation",
+    "Decision",
+    "RelationshipContext",
+)
+
+_CORE_INHERITANCE: tuple[tuple[str, str], ...] = (
+    ("Person", "Agent"),
+    ("Organization", "Agent"),
+    ("Event", "Thing"),
+    ("Activity", "Thing"),
+    ("Project", "Activity"),
+    ("Document", "Thing"),
+    ("Observation", "Event"),
+    ("Decision", "Event"),
+    ("RelationshipContext", "Thing"),
+)
+
+# key, value_kind, cardinality, domain_keys, range_keys
+_CORE_PREDICATES: tuple[tuple[str, str, str, tuple[str, ...], tuple[str, ...]], ...] = (
+    ("name", "string", "one", ("Thing",), ()),
+    ("description", "string", "one", ("Thing",), ()),
+    ("actor", "entity", "many", ("Event", "Activity", "Decision"), ("Agent",)),
+    (
+        "hasParticipant",
+        "entity",
+        "many",
+        ("Event", "Activity", "Project", "RelationshipContext"),
+        ("Agent",),
+    ),
+    ("occurredAt", "datetime", "one", ("Event", "Observation", "Decision"), ()),
+    ("startedAt", "datetime", "one", ("Event", "Activity", "Project"), ()),
+    ("endedAt", "datetime", "one", ("Event", "Activity", "Project"), ()),
+    (
+        "locatedAt",
+        "entity",
+        "many",
+        ("Event", "Activity", "Place", "Organization"),
+        ("Place",),
+    ),
+    ("relatedTo", "entity", "many", ("Thing",), ("Thing",)),
+    ("source", "entity", "many", ("Thing",), ("Document",)),
+)
+
+
+def _sid(*parts: str) -> uuid.UUID:
+    return uuid.uuid5(_SEED_NS, ":".join(parts))
+
+
+def _sql_uuid(value: uuid.UUID) -> str:
+    return f"'{value}'::uuid"
+
+
+def _sql_str(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _sql_null_or_str(value: str | None) -> str:
+    return "NULL" if value is None else _sql_str(value)
+
+
+def _seed_core_ontology() -> None:
+    """Insert deterministic core ontology rows without importing application code.
+
+    Uses literal SQL so the migration remains valid in offline ``--sql`` mode,
+    including JSONB values that Alembic cannot render from Python lists/dicts.
+    """
+    actor_id = _sid("actor", "system")
+    namespace_id = _sid("namespace", "core")
+    class_ids = {key: _sid("class", "core", key) for key in _CORE_CLASSES}
+    class_revision_ids = {key: _sid("class_revision", "core", key, "1") for key in _CORE_CLASSES}
+    predicate_ids = {key: _sid("predicate", "core", key) for key, *_ in _CORE_PREDICATES}
+    predicate_revision_ids = {
+        key: _sid("predicate_revision", "core", key, "1") for key, *_ in _CORE_PREDICATES
+    }
+
+    op.execute(
+        sa.text(
+            "INSERT INTO actor (id, name, actor_type, status, capabilities) VALUES ("
+            f"{_sql_uuid(actor_id)}, {_sql_str('system')}, {_sql_str('system')}, "
+            f"{_sql_str('active')}, '[\"admin\"]'::jsonb)"
+        )
+    )
+    op.execute(
+        sa.text(
+            "INSERT INTO ontology_namespace (id, key, label, description) VALUES ("
+            f"{_sql_uuid(namespace_id)}, {_sql_str('core')}, {_sql_str('Core')}, "
+            f"{_sql_str('Bootstrap ontology namespace for AtlasSynapse.')})"
+        )
+    )
+
+    for key in _CORE_CLASSES:
+        op.execute(
+            sa.text(
+                "INSERT INTO ontology_class "
+                "(id, namespace_id, key, current_revision_id, is_deprecated) VALUES ("
+                f"{_sql_uuid(class_ids[key])}, {_sql_uuid(namespace_id)}, {_sql_str(key)}, "
+                "NULL, false)"
+            )
+        )
+    for key in _CORE_CLASSES:
+        op.execute(
+            sa.text(
+                "INSERT INTO ontology_class_revision "
+                "(id, class_id, revision_number, label, description, metadata, "
+                "created_by_actor_id) VALUES ("
+                f"{_sql_uuid(class_revision_ids[key])}, {_sql_uuid(class_ids[key])}, 1, "
+                f"{_sql_str(key)}, {_sql_str(f'Core ontology class {key}.')}, "
+                f"'{{}}'::jsonb, {_sql_uuid(actor_id)})"
+            )
+        )
+        op.execute(
+            sa.text(
+                "UPDATE ontology_class SET current_revision_id = "
+                f"{_sql_uuid(class_revision_ids[key])} WHERE id = {_sql_uuid(class_ids[key])}"
+            )
+        )
+
+    for child, parent in _CORE_INHERITANCE:
+        op.execute(
+            sa.text(
+                "INSERT INTO ontology_class_parent "
+                "(id, child_class_id, parent_class_id) VALUES ("
+                f"{_sql_uuid(_sid('class_parent', 'core', child, parent))}, "
+                f"{_sql_uuid(class_ids[child])}, {_sql_uuid(class_ids[parent])})"
+            )
+        )
+
+    for key, value_kind, cardinality, domain_keys, range_keys in _CORE_PREDICATES:
+        op.execute(
+            sa.text(
+                "INSERT INTO ontology_predicate "
+                "(id, namespace_id, key, current_revision_id, is_deprecated) VALUES ("
+                f"{_sql_uuid(predicate_ids[key])}, {_sql_uuid(namespace_id)}, {_sql_str(key)}, "
+                "NULL, false)"
+            )
+        )
+        datatype = "xsd:string" if value_kind == "string" else None
+        is_symmetric = "true" if key == "relatedTo" else "false"
+        op.execute(
+            sa.text(
+                "INSERT INTO ontology_predicate_revision "
+                "(id, predicate_id, revision_number, label, description, value_kind, datatype, "
+                "cardinality, is_symmetric, is_transitive, metadata, created_by_actor_id) VALUES ("
+                f"{_sql_uuid(predicate_revision_ids[key])}, {_sql_uuid(predicate_ids[key])}, 1, "
+                f"{_sql_str(key)}, {_sql_str(f'Core ontology predicate {key}.')}, "
+                f"{_sql_str(value_kind)}, {_sql_null_or_str(datatype)}, {_sql_str(cardinality)}, "
+                f"{is_symmetric}, false, '{{}}'::jsonb, {_sql_uuid(actor_id)})"
+            )
+        )
+        op.execute(
+            sa.text(
+                "UPDATE ontology_predicate SET current_revision_id = "
+                f"{_sql_uuid(predicate_revision_ids[key])} "
+                f"WHERE id = {_sql_uuid(predicate_ids[key])}"
+            )
+        )
+        for domain_key in domain_keys:
+            op.execute(
+                sa.text(
+                    "INSERT INTO ontology_predicate_domain "
+                    "(id, predicate_revision_id, class_id) VALUES ("
+                    f"{_sql_uuid(_sid('predicate_domain', 'core', key, domain_key))}, "
+                    f"{_sql_uuid(predicate_revision_ids[key])}, "
+                    f"{_sql_uuid(class_ids[domain_key])})"
+                )
+            )
+        for range_key in range_keys:
+            op.execute(
+                sa.text(
+                    "INSERT INTO ontology_predicate_range "
+                    "(id, predicate_revision_id, class_id) VALUES ("
+                    f"{_sql_uuid(_sid('predicate_range', 'core', key, range_key))}, "
+                    f"{_sql_uuid(predicate_revision_ids[key])}, "
+                    f"{_sql_uuid(class_ids[range_key])})"
+                )
+            )
 
 
 def upgrade() -> None:
@@ -1053,9 +1241,7 @@ def upgrade() -> None:
     )
     # ### end Alembic commands ###
 
-    session = Session(bind=op.get_bind())
-    seed_core_ontology(session)
-    session.flush()
+    _seed_core_ontology()
 
 
 def downgrade() -> None:
