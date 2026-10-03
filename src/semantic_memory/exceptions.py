@@ -28,8 +28,16 @@ class UnknownClassError(DomainError):
     error_code = "UNKNOWN_CLASS"
 
 
+class UnknownPredicateError(DomainError):
+    error_code = "UNKNOWN_PREDICATE"
+
+
 class UnknownEntityError(DomainError):
     error_code = "UNKNOWN_ENTITY"
+
+
+class UnknownStatementError(DomainError):
+    error_code = "UNKNOWN_STATEMENT"
 
 
 class AmbiguousEntityError(DomainError):
@@ -38,6 +46,26 @@ class AmbiguousEntityError(DomainError):
 
 class DuplicateEntityError(DomainError):
     error_code = "DUPLICATE_ENTITY"
+
+
+class DuplicateStatementError(DomainError):
+    error_code = "DUPLICATE_STATEMENT"
+
+
+class DomainViolationError(DomainError):
+    error_code = "DOMAIN_VIOLATION"
+
+
+class RangeViolationError(DomainError):
+    error_code = "RANGE_VIOLATION"
+
+
+class CardinalityViolationError(DomainError):
+    error_code = "CARDINALITY_VIOLATION"
+
+
+class InvalidLiteralTypeError(DomainError):
+    error_code = "INVALID_LITERAL_TYPE"
 
 
 class IdempotencyKeyReusedError(DomainError):
