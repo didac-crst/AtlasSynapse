@@ -175,10 +175,8 @@ class LoggingSemanticReviewer:
         return result
 
 
-def _status_for_decision(decision: ReviewDecision, *, provider: str) -> LlmCallStatus:
+def _status_for_decision(_decision: ReviewDecision, *, provider: str) -> LlmCallStatus:
     if provider == "disabled":
-        return LlmCallStatus.MANUAL_REVIEW
-    if decision == ReviewDecision.MANUAL_REVIEW and provider == "disabled":
         return LlmCallStatus.MANUAL_REVIEW
     return LlmCallStatus.SUCCEEDED
 
