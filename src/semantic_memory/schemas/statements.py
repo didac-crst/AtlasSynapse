@@ -81,6 +81,8 @@ class StatementResponse(BaseModel):
     confidence: Decimal | None = None
     actor_id: uuid.UUID
     normalized_object: str | None = None
+    superseded_by_statement_id: uuid.UUID | None = None
+    retracts_statement_id: uuid.UUID | None = None
     created_at: datetime
 
 
@@ -89,3 +91,32 @@ class AssertStatementResponse(BaseModel):
     statement: StatementResponse
     request_id: uuid.UUID
     reused: bool = False
+
+
+class SupersedeStatementRequest(AssertStatementRequest):
+    previous_statement_id: uuid.UUID
+
+
+class SupersedeStatementResponse(BaseModel):
+    previous_statement: StatementResponse
+    statement: StatementResponse
+    request_id: uuid.UUID
+
+
+class RetractStatementRequest(MutationEnvelope):
+    statement_id: uuid.UUID
+
+
+class RetractStatementResponse(BaseModel):
+    statement: StatementResponse
+    request_id: uuid.UUID
+
+
+class TimelineEntry(BaseModel):
+    statement: StatementResponse
+    sort_time: datetime
+
+
+class TimelineResponse(BaseModel):
+    entity_id: uuid.UUID
+    entries: list[TimelineEntry] = Field(default_factory=list)

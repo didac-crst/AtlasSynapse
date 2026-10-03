@@ -27,6 +27,9 @@ def test_mcp_placeholder() -> None:
     assert placeholder.ready is True
     assert "create_entity" in placeholder.tools
     assert "assert_statement" in placeholder.tools
+    assert "explain_statement" in placeholder.tools
+    assert "add_evidence" in placeholder.tools
+    assert "get_timeline" in placeholder.tools
     assert placeholder.transport in {"stdio", "http"}
 
 

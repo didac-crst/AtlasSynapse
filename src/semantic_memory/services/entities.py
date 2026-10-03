@@ -4,21 +4,16 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from semantic_memory.exceptions import (
-    DbConstraintError,
     DuplicateEntityError,
-    IdempotencyKeyReusedError,
-    InternalError,
     UnknownClassError,
     UnknownEntityError,
 )
 from semantic_memory.models import Entity, EntityStatus
 from semantic_memory.models.capabilities import Capability
 from semantic_memory.repositories.entities import EntityRepository
-from semantic_memory.repositories.idempotency import IdempotencyRepository, hash_request_payload
 from semantic_memory.repositories.ontology import OntologyRepository
 from semantic_memory.schemas.entities import (
     CreateEntityRequest,
@@ -30,6 +25,7 @@ from semantic_memory.schemas.entities import (
 )
 from semantic_memory.services.actors import ActorService
 from semantic_memory.services.identity import IdentityService, ResolutionResult
+from semantic_memory.services.mutations import MutationRunner
 from semantic_memory.validation.normalization import normalize_text
 
 
@@ -40,7 +36,7 @@ class EntityService:
         self._entities = EntityRepository(session)
         self._ontology = OntologyRepository(session)
         self._identity = IdentityService(session)
-        self._idempotency = IdempotencyRepository(session)
+        self._mutations = MutationRunner(session)
 
     def get(self, entity_id: uuid.UUID) -> EntityResponse:
         entity = self._entities.get(entity_id)
@@ -54,7 +50,21 @@ class EntityService:
     def create_entity(self, request: CreateEntityRequest) -> CreateEntityResponse:
         actor = self._actors.require_active_actor(request.actor_key)
         self._actors.require_capability(actor, Capability.KNOWLEDGE_WRITE)
+        return self._mutations.run(
+            actor=actor,
+            operation_name="create_entity",
+            request=request,
+            response_model=CreateEntityResponse,
+            constraint_name="entity_write",
+            execute=lambda: self._create_entity_body(request=request, actor_id=actor.id),
+        )
 
+    def _create_entity_body(
+        self,
+        *,
+        request: CreateEntityRequest,
+        actor_id: uuid.UUID,
+    ) -> CreateEntityResponse:
         ontology_class = self._ontology.get_class_by_key(
             namespace_key=request.namespace_key,
             class_key=request.class_key,
@@ -69,85 +79,25 @@ class EntityService:
                 request_id=str(request.request_id),
             )
 
-        payload = request.model_dump(
-            mode="json",
-            exclude={"request_id", "trace_id", "idempotency_key"},
-        )
-        request_hash = hash_request_payload(payload)
-
-        try:
-            # Nested transaction: failed mutations drop the idempotency reservation
-            # without poisoning the key or wiping earlier work in the outer session.
-            with self._session.begin_nested():
-                return self._create_entity_body(
-                    request=request,
-                    actor_id=actor.id,
-                    class_id=ontology_class.id,
-                    request_hash=request_hash,
-                )
-        except IntegrityError as exc:
-            raise DbConstraintError(
-                "Entity persistence violated a database constraint",
-                details={"constraint": "entity_write"},
-                request_id=str(request.request_id),
-            ) from exc
-
-    def _create_entity_body(
-        self,
-        *,
-        request: CreateEntityRequest,
-        actor_id: uuid.UUID,
-        class_id: uuid.UUID,
-        request_hash: str,
-    ) -> CreateEntityResponse:
-        reservation, created = self._idempotency.reserve_or_get(
-            actor_id=actor_id,
-            idempotency_key=request.idempotency_key,
-            request_hash=request_hash,
-            operation_name="create_entity",
-        )
-
-        if reservation.request_hash != request_hash:
-            raise IdempotencyKeyReusedError(
-                "Idempotency key was reused with a different payload",
-                details={
-                    "idempotency_key": request.idempotency_key,
-                    "actor_key": request.actor_key,
-                },
-                request_id=str(request.request_id),
-            )
-
-        if reservation.response_payload is not None:
-            return CreateEntityResponse.model_validate(reservation.response_payload)
-
-        if not created:
-            raise InternalError(
-                "Idempotency key is reserved by an in-flight request",
-                details={"idempotency_key": request.idempotency_key},
-                request_id=str(request.request_id),
-            )
-
         external = request.external_reference
         # Serialize resolve+create for this identity key, then resolve under the lock.
         self._entities.acquire_identity_lock(
-            class_id=class_id,
+            class_id=ontology_class.id,
             canonical_name=request.canonical_name,
         )
         resolution = self._identity.resolve(
             canonical_name=request.canonical_name,
-            class_id=class_id,
+            class_id=ontology_class.id,
             external_source_system=None if external is None else external.source_system,
             external_id=None if external is None else external.external_id,
         )
 
-        response = self._response_for_resolution(
+        return self._response_for_resolution(
             request,
             resolution,
             actor_id=actor_id,
-            class_id=class_id,
+            class_id=ontology_class.id,
         )
-        self._idempotency.store_response(reservation, response.model_dump(mode="json"))
-        return response
 
     def _response_for_resolution(
         self,

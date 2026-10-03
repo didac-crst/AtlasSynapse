@@ -8,12 +8,20 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from semantic_memory.api.transactions import run_audited_mutation
 from semantic_memory.db import get_db_session
+from semantic_memory.schemas.provenance import ExplainStatementResponse
 from semantic_memory.schemas.statements import (
     AssertStatementRequest,
     AssertStatementResponse,
+    RetractStatementRequest,
+    RetractStatementResponse,
     StatementResponse,
+    SupersedeStatementRequest,
+    SupersedeStatementResponse,
+    TimelineResponse,
 )
+from semantic_memory.services.provenance import ProvenanceService
 from semantic_memory.services.statements import StatementService
 
 router = APIRouter(prefix="/v1", tags=["statements"])
@@ -24,15 +32,39 @@ DbSession = Annotated[Session, Depends(get_db_session)]
 def assert_statement(
     request: AssertStatementRequest, session: DbSession
 ) -> AssertStatementResponse:
-    try:
-        result = StatementService(session).assert_statement(request)
-        session.commit()
-        return result
-    except Exception:
-        session.rollback()
-        raise
+    return run_audited_mutation(
+        session, lambda: StatementService(session).assert_statement(request)
+    )
 
 
 @router.get("/statements/{statement_id}", response_model=StatementResponse)
 def get_statement(statement_id: uuid.UUID, session: DbSession) -> StatementResponse:
     return StatementService(session).get(statement_id)
+
+
+@router.get("/statements/{statement_id}/explain", response_model=ExplainStatementResponse)
+def explain_statement(statement_id: uuid.UUID, session: DbSession) -> ExplainStatementResponse:
+    return ProvenanceService(session).explain_statement(statement_id)
+
+
+@router.post("/statements/supersede", response_model=SupersedeStatementResponse)
+def supersede_statement(
+    request: SupersedeStatementRequest, session: DbSession
+) -> SupersedeStatementResponse:
+    return run_audited_mutation(
+        session, lambda: StatementService(session).supersede_statement(request)
+    )
+
+
+@router.post("/statements/retract", response_model=RetractStatementResponse)
+def retract_statement(
+    request: RetractStatementRequest, session: DbSession
+) -> RetractStatementResponse:
+    return run_audited_mutation(
+        session, lambda: StatementService(session).retract_statement(request)
+    )
+
+
+@router.get("/entities/{entity_id}/timeline", response_model=TimelineResponse)
+def get_timeline(entity_id: uuid.UUID, session: DbSession) -> TimelineResponse:
+    return StatementService(session).get_timeline(entity_id)

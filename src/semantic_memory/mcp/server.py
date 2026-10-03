@@ -1,4 +1,4 @@
-"""Thin MCP transport placeholder with Phase 3 tool registration."""
+"""Thin MCP transport placeholder with registered knowledge-plane tools."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ class MCPPlaceholder:
     transport: str
     ready: bool = True
     message: str = (
-        "Phase 3 exposes create_entity, get_entity, assert_statement, and get_statement tools."
+        "Exposes entity, statement, provenance, supersession, retraction, and timeline tools."
     )
     tools: tuple[str, ...] = field(
         default_factory=lambda: (
@@ -22,6 +22,11 @@ class MCPPlaceholder:
             "get_entity",
             "assert_statement",
             "get_statement",
+            "explain_statement",
+            "add_evidence",
+            "supersede_statement",
+            "retract_statement",
+            "get_timeline",
         )
     )
 

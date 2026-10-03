@@ -2,31 +2,51 @@
 
 ## Phase 0 — Repository and architectural skeleton
 
+Status: Done.
+
 Establish the Python project, PostgreSQL development environment, migration framework, configuration, logging, health checks, CI, documentation, ADRs, and package boundaries.
 
 Exit: PostgreSQL starts locally and live/readiness endpoints are defined. No semantic functionality is required.
 
 ## Phase 1 — Stable physical data model
 
+Status: Done.
+
 Implement the complete v1 schema, foreign keys, checks, indexes, initial migration, and deterministic core ontology seed.
 
 ## Phase 2 — Knowledge-plane core
+
+Status: Done.
 
 Implement actors, entity creation and typing, aliases, external references, identity resolution, normalization, assertion, duplicate detection, and the first read/write MCP tools.
 
 ## Phase 3 — Provenance and memory quality
 
+Status: Done.
+
 Implement sources, evidence, source deduplication, evidence retrieval, and statement explanation.
 
+Evidence retrieval is provided by `explain_statement` (source, excerpt, locator, assertion/observation times). A separate evidence list/get endpoint remains optional.
+
 ## Phase 4 — Temporal knowledge and history
+
+Status: Done.
 
 Implement validity intervals, assertion/observation semantics, supersession, retraction, and timelines.
 
 ## Phase 5 — Idempotency and operational hardening
 
+Status: Done.
+
 Implement operation logs, request/trace IDs, typed errors, retry classification, transaction wrappers, and payload redaction.
 
+Knowledge-plane mutations (entity create, statement assert/supersede/retract, source ensure, evidence add) go through the audited `MutationRunner` path.
+
+Phases 3–5 were delivered together as one milestone: auditable, temporal, retry-safe statements.
+
 ## Phase 6 — Conflicts and ambiguity
+
+Status: Next.
 
 Implement conservative conflict detection, ambiguity results, explicit entity merging, and conflict retrieval.
 
@@ -60,8 +80,8 @@ Improve retrieval quality, decide what becomes durable memory, add inspection UI
 
 ## Milestones
 
-- Milestone A: phases 0–5, usable deterministic memory.
-- Milestone B: phases 6–9, semantic graph memory.
+- Milestone A: phases 0–5, usable deterministic memory. — Done (pending merge of the phases 3–5 PR).
+- Milestone B: phases 6–9, semantic graph memory. — Next starts at phase 6.
 - Milestone C: phases 10–12, governed self-evolving ontology.
 - Milestone D: phases 13+, mature personal knowledge substrate.
 

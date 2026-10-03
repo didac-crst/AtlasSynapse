@@ -9,6 +9,7 @@ from semantic_memory.api.actors import router as actors_router
 from semantic_memory.api.entities import router as entities_router
 from semantic_memory.api.errors import register_exception_handlers
 from semantic_memory.api.health import router as health_router
+from semantic_memory.api.provenance import router as provenance_router
 from semantic_memory.api.statements import router as statements_router
 from semantic_memory.config import Settings, get_settings
 from semantic_memory.db import configure_engine
@@ -33,6 +34,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(actors_router)
     app.include_router(entities_router)
     app.include_router(statements_router)
+    app.include_router(provenance_router)
     return app
 
 
