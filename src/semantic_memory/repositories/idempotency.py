@@ -8,6 +8,7 @@ import uuid
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from semantic_memory.models import IdempotencyRecord
@@ -31,25 +32,38 @@ class IdempotencyRepository:
             )
         )
 
-    def create(
+    def reserve_or_get(
         self,
         *,
         actor_id: uuid.UUID,
         idempotency_key: str,
         request_hash: str,
         operation_name: str,
-    ) -> IdempotencyRecord:
-        record = IdempotencyRecord(
-            id=uuid.uuid4(),
-            actor_id=actor_id,
-            idempotency_key=idempotency_key,
-            request_hash=request_hash,
-            operation_name=operation_name,
-            response_payload=None,
+    ) -> tuple[IdempotencyRecord, bool]:
+        """Atomically reserve an idempotency key or return the existing row.
+
+        Returns ``(record, created)`` where ``created`` is True when this caller
+        inserted the reservation.
+        """
+        stmt = (
+            insert(IdempotencyRecord)
+            .values(
+                id=uuid.uuid4(),
+                actor_id=actor_id,
+                idempotency_key=idempotency_key,
+                request_hash=request_hash,
+                operation_name=operation_name,
+                response_payload=None,
+            )
+            .on_conflict_do_nothing(constraint="uq_idempotency_record_actor_key")
+            .returning(IdempotencyRecord.id)
         )
-        self._session.add(record)
+        inserted_id = self._session.execute(stmt).scalar_one_or_none()
         self._session.flush()
-        return record
+        record = self.get(actor_id=actor_id, idempotency_key=idempotency_key)
+        if record is None:
+            raise RuntimeError("Failed to reserve or load idempotency record")
+        return record, inserted_id is not None
 
     def store_response(
         self, record: IdempotencyRecord, response_payload: dict[str, Any]

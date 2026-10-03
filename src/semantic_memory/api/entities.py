@@ -22,10 +22,13 @@ DbSession = Annotated[Session, Depends(get_db_session)]
 
 @router.post("/entities", response_model=CreateEntityResponse)
 def create_entity(request: CreateEntityRequest, session: DbSession) -> CreateEntityResponse:
-    service = EntityService(session)
-    result = service.create_entity(request)
-    session.commit()
-    return result
+    try:
+        result = EntityService(session).create_entity(request)
+        session.commit()
+        return result
+    except Exception:
+        session.rollback()
+        raise
 
 
 @router.get("/entities/{entity_id}", response_model=EntityResponse)

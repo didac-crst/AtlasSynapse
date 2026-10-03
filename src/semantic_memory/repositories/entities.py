@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, func, select, text
 from sqlalchemy.orm import Session
 
 from semantic_memory.models import (
@@ -17,6 +18,11 @@ from semantic_memory.models import (
     OntologyNamespace,
 )
 from semantic_memory.validation.normalization import normalize_text
+
+
+def _normalized_canonical_sql() -> ColumnElement[str]:
+    collapsed = func.regexp_replace(func.btrim(Entity.canonical_name), r"\s+", " ", "g")
+    return func.lower(collapsed)
 
 
 class EntityRepository:
@@ -109,56 +115,57 @@ class EntityRepository:
             )
         )
 
-    def find_by_canonical_name(self, canonical_name: str) -> list[Entity]:
+    def find_by_canonical_name(
+        self, canonical_name: str, *, class_id: uuid.UUID | None = None
+    ) -> list[Entity]:
         normalized = normalize_text(canonical_name)
-        entities = self._session.scalars(
-            select(Entity).where(Entity.status == EntityStatus.ACTIVE.value)
-        ).all()
-        return [
-            entity for entity in entities if normalize_text(entity.canonical_name) == normalized
-        ]
-
-    def find_by_alias(self, alias: str) -> list[Entity]:
-        normalized = normalize_text(alias)
-        return list(
-            self._session.scalars(
-                select(Entity)
-                .join(EntityAlias, EntityAlias.entity_id == Entity.id)
-                .where(
-                    EntityAlias.normalized_alias == normalized,
-                    Entity.status == EntityStatus.ACTIVE.value,
-                )
-                .distinct()
-            ).all()
+        stmt = (
+            select(Entity)
+            .where(
+                Entity.status == EntityStatus.ACTIVE.value,
+                _normalized_canonical_sql() == normalized,
+            )
+            .distinct()
         )
+        if class_id is not None:
+            stmt = stmt.join(EntityType, EntityType.entity_id == Entity.id).where(
+                EntityType.class_id == class_id
+            )
+        return list(self._session.scalars(stmt).all())
+
+    def find_by_alias(self, alias: str, *, class_id: uuid.UUID | None = None) -> list[Entity]:
+        normalized = normalize_text(alias)
+        stmt = (
+            select(Entity)
+            .join(EntityAlias, EntityAlias.entity_id == Entity.id)
+            .where(
+                EntityAlias.normalized_alias == normalized,
+                Entity.status == EntityStatus.ACTIVE.value,
+            )
+            .distinct()
+        )
+        if class_id is not None:
+            stmt = stmt.join(EntityType, EntityType.entity_id == Entity.id).where(
+                EntityType.class_id == class_id
+            )
+        return list(self._session.scalars(stmt).all())
 
     def find_candidates(
         self, *, name: str, class_id: uuid.UUID | None = None
     ) -> list[tuple[Entity, str]]:
-        """Discover candidate entities that share normalized identity signals.
+        """Discover candidates via indexed alias and normalized canonical SQL."""
+        by_id: dict[uuid.UUID, tuple[Entity, set[str]]] = {}
 
-        Returns (entity, match_reason) pairs. Exact external/canonical/alias
-        matches are expected to be handled by the caller first.
-        """
-        normalized = normalize_text(name)
-        entities = self._session.scalars(
-            select(Entity).where(Entity.status == EntityStatus.ACTIVE.value)
-        ).all()
-        results: list[tuple[Entity, str]] = []
-        seen: set[uuid.UUID] = set()
-        for entity in entities:
-            if class_id is not None and not self.has_type(entity.id, class_id):
-                continue
-            reasons: list[str] = []
-            if normalize_text(entity.canonical_name) == normalized:
-                reasons.append("canonical_name")
-            aliases = self.list_aliases(entity.id)
-            if any(normalize_text(alias) == normalized for alias in aliases):
-                reasons.append("alias")
-            if reasons and entity.id not in seen:
-                seen.add(entity.id)
-                results.append((entity, "+".join(reasons)))
-        return results
+        for entity in self.find_by_canonical_name(name, class_id=class_id):
+            by_id[entity.id] = (entity, {"canonical_name"})
+
+        for entity in self.find_by_alias(name, class_id=class_id):
+            if entity.id in by_id:
+                by_id[entity.id][1].add("alias")
+            else:
+                by_id[entity.id] = (entity, {"alias"})
+
+        return [(entity, "+".join(sorted(reasons))) for entity, reasons in by_id.values()]
 
     def has_type(self, entity_id: uuid.UUID, class_id: uuid.UUID) -> bool:
         row = self._session.scalar(
@@ -201,3 +208,13 @@ class EntityRepository:
             )
         )
         return other is not None
+
+    def acquire_identity_lock(self, *, class_id: uuid.UUID, canonical_name: str) -> None:
+        """Serialize CREATE/resolution for a normalized class+name identity key."""
+        material = f"{class_id}:{normalize_text(canonical_name)}".encode()
+        digest = hashlib.sha256(material).digest()[:8]
+        lock_key = int.from_bytes(digest, byteorder="big", signed=False) % (2**63)
+        self._session.execute(
+            text("SELECT pg_advisory_xact_lock(:lock_key)"),
+            {"lock_key": lock_key},
+        )

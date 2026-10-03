@@ -78,10 +78,22 @@ def client(engine: Engine) -> Generator[TestClient, None, None]:
     reset_engine()
     settings = Settings()
     app = create_app(settings)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+
+    connection = engine.connect()
+    transaction = connection.begin()
+    SessionLocal = sessionmaker(bind=connection, autoflush=False, autocommit=False, future=True)
 
     def _override_db() -> Generator[Session, None, None]:
         session = SessionLocal()
+        session.begin_nested()
+
+        @event.listens_for(session, "after_transaction_end")
+        def _restart_savepoint(sess: Session, trans: object) -> None:
+            if getattr(trans, "nested", False) and not getattr(
+                getattr(trans, "_parent", None), "nested", True
+            ):
+                sess.begin_nested()
+
         try:
             yield session
         finally:
@@ -91,5 +103,8 @@ def client(engine: Engine) -> Generator[TestClient, None, None]:
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+    if transaction.is_active:
+        transaction.rollback()
+    connection.close()
     get_settings.cache_clear()
     reset_engine()

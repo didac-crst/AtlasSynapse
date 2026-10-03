@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pytest
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session, sessionmaker
 
 from semantic_memory.exceptions import (
     DuplicateEntityError,
@@ -13,8 +17,7 @@ from semantic_memory.exceptions import (
     UnauthorizedOperationError,
     UnknownClassError,
 )
-from semantic_memory.models import ActorStatus, ActorType
-from semantic_memory.models.capabilities import DEFAULT_AGENT_CAPABILITIES, Capability
+from semantic_memory.models import ActorStatus, ActorType, Entity, EntityType
 from semantic_memory.repositories.entities import EntityRepository
 from semantic_memory.repositories.ontology import OntologyRepository
 from semantic_memory.schemas.actors import ActorEnsureRequest
@@ -25,6 +28,7 @@ from semantic_memory.schemas.entities import (
 )
 from semantic_memory.services.actors import ActorService
 from semantic_memory.services.entities import EntityService
+from semantic_memory.services.identity import IdentityService
 
 
 def _ensure_writer(session: Session, key: str = "writer") -> None:
@@ -32,7 +36,6 @@ def _ensure_writer(session: Session, key: str = "writer") -> None:
         ActorEnsureRequest(
             key=key,
             actor_type=ActorType.AGENT,
-            capabilities=[cap.value for cap in DEFAULT_AGENT_CAPABILITIES],
         )
     )
 
@@ -134,6 +137,34 @@ def test_ambiguity_returns_candidates_without_merge(db_session: Session) -> None
     assert {item.id for item in result.candidates} == {left.id, right.id}
 
 
+def test_indexed_identity_queries_reuse_and_ambiguity(db_session: Session) -> None:
+    _ensure_writer(db_session)
+    actor = ActorService(db_session).require_active_actor("writer")
+    ontology = OntologyRepository(db_session)
+    person = ontology.get_class_by_key(namespace_key="core", class_key="Person")
+    org = ontology.get_class_by_key(namespace_key="core", class_key="Organization")
+    assert person is not None
+    assert org is not None
+
+    repo = EntityRepository(db_session)
+    person_entity = repo.create(canonical_name="Atlas Corp", created_by_actor_id=actor.id)
+    repo.add_type(entity_id=person_entity.id, class_id=person.id, asserted_by_actor_id=actor.id)
+    repo.add_alias(entity_id=person_entity.id, alias="Atlas")
+
+    org_entity = repo.create(canonical_name="Atlas Corp", created_by_actor_id=actor.id)
+    repo.add_type(entity_id=org_entity.id, class_id=org.id, asserted_by_actor_id=actor.id)
+
+    identity = IdentityService(db_session)
+    person_hit = identity.resolve(canonical_name="atlas", class_id=person.id)
+    assert person_hit.outcome == ResolutionOutcome.REUSE
+    assert person_hit.entity is not None
+    assert person_hit.entity.id == person_entity.id
+
+    ambiguous = identity.resolve(canonical_name="Atlas Corp")
+    assert ambiguous.outcome == ResolutionOutcome.AMBIGUOUS
+    assert {item.id for item in ambiguous.candidates} == {person_entity.id, org_entity.id}
+
+
 def test_unknown_class_error(db_session: Session) -> None:
     _ensure_writer(db_session)
     with pytest.raises(UnknownClassError) as exc:
@@ -149,7 +180,6 @@ def test_disabled_actor_error(db_session: Session) -> None:
             key="disabled-writer",
             actor_type=ActorType.AGENT,
             status=ActorStatus.DISABLED,
-            capabilities=[Capability.KNOWLEDGE_WRITE.value],
         )
     )
     with pytest.raises(UnauthorizedOperationError) as exc:
@@ -170,6 +200,30 @@ def test_duplicate_alias_does_not_silent_merge(db_session: Session) -> None:
             _create_request(name="Didac Garcia", class_key="Person", aliases=["Didac"])
         )
     assert exc.value.error_code == "DUPLICATE_ENTITY"
+
+
+def test_failed_create_rolls_back_idempotency_and_allows_retry(db_session: Session) -> None:
+    _ensure_writer(db_session)
+    service = EntityService(db_session)
+    key = "idem-rollback-retry"
+
+    original = service._create_new_entity
+
+    def _boom(**kwargs: object) -> object:
+        raise RuntimeError("simulated failure")
+
+    service._create_new_entity = _boom  # type: ignore[method-assign]
+    with pytest.raises(RuntimeError, match="simulated failure"):
+        service.create_entity(
+            _create_request(name="Rollback Person", class_key="Person", idempotency_key=key)
+        )
+
+    service._create_new_entity = original  # type: ignore[method-assign]
+    retried = service.create_entity(
+        _create_request(name="Rollback Person", class_key="Person", idempotency_key=key)
+    )
+    assert retried.outcome == ResolutionOutcome.CREATE
+    assert retried.entity is not None
 
 
 def test_idempotent_retry_and_key_reuse(db_session: Session) -> None:
@@ -193,6 +247,71 @@ def test_idempotent_retry_and_key_reuse(db_session: Session) -> None:
             _create_request(name="Airbus", class_key="Organization", idempotency_key=key)
         )
     assert exc.value.error_code == "IDEMPOTENCY_KEY_REUSED"
+
+
+def test_parallel_create_only_one_entity(engine: Engine) -> None:
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+    setup = SessionLocal()
+    try:
+        ActorService(setup).ensure(
+            ActorEnsureRequest(
+                key="parallel-writer",
+                actor_type=ActorType.AGENT,
+            )
+        )
+        setup.commit()
+        ontology = OntologyRepository(setup)
+        person = ontology.get_class_by_key(namespace_key="core", class_key="Person")
+        assert person is not None
+        class_id = person.id
+    finally:
+        setup.close()
+
+    barrier = threading.Barrier(8)
+    name = f"Parallel Person {uuid.uuid4()}"
+
+    def _worker() -> str:
+        session = SessionLocal()
+        try:
+            barrier.wait(timeout=10)
+            result = EntityService(session).create_entity(
+                CreateEntityRequest(
+                    actor_key="parallel-writer",
+                    request_id=uuid.uuid4(),
+                    idempotency_key=str(uuid.uuid4()),
+                    canonical_name=name,
+                    class_key="Person",
+                )
+            )
+            session.commit()
+            assert result.outcome in {ResolutionOutcome.CREATE, ResolutionOutcome.REUSE}
+            assert result.entity is not None
+            return str(result.entity.id)
+        finally:
+            session.close()
+
+    entity_ids: set[str] = set()
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = [pool.submit(_worker) for _ in range(8)]
+        for future in as_completed(futures):
+            entity_ids.add(future.result())
+
+    assert len(entity_ids) == 1
+
+    verify = SessionLocal()
+    try:
+        count = verify.scalar(
+            select(func.count())
+            .select_from(Entity)
+            .join(EntityType, EntityType.entity_id == Entity.id)
+            .where(
+                EntityType.class_id == class_id,
+                Entity.canonical_name == name,
+            )
+        )
+        assert count == 1
+    finally:
+        verify.close()
 
 
 def test_acceptance_scenario(db_session: Session) -> None:
@@ -237,7 +356,6 @@ def test_acceptance_scenario(db_session: Session) -> None:
             key="disabled-writer",
             actor_type=ActorType.AGENT,
             status=ActorStatus.DISABLED,
-            capabilities=[Capability.KNOWLEDGE_WRITE.value],
         )
     )
     with pytest.raises(UnauthorizedOperationError):

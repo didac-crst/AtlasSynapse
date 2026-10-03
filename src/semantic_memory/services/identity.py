@@ -50,14 +50,8 @@ class IdentityService:
                     match_reason="external_reference",
                 )
 
-        # 2. Canonical name exact match
-        canonical_matches = self._entities.find_by_canonical_name(canonical_name)
-        if class_id is not None:
-            canonical_matches = [
-                entity
-                for entity in canonical_matches
-                if self._entities.has_type(entity.id, class_id)
-            ]
+        # 2. Canonical name exact match (indexed normalized SQL, class join)
+        canonical_matches = self._entities.find_by_canonical_name(canonical_name, class_id=class_id)
         if len(canonical_matches) == 1:
             return ResolutionResult(
                 outcome=ResolutionOutcome.REUSE,
@@ -70,12 +64,8 @@ class IdentityService:
                 candidates=self._to_candidates(canonical_matches, "canonical_name"),
             )
 
-        # 3. Alias exact match
-        alias_matches = self._entities.find_by_alias(canonical_name)
-        if class_id is not None:
-            alias_matches = [
-                entity for entity in alias_matches if self._entities.has_type(entity.id, class_id)
-            ]
+        # 3. Alias exact match (indexed normalized_alias, class join)
+        alias_matches = self._entities.find_by_alias(canonical_name, class_id=class_id)
         if len(alias_matches) == 1:
             return ResolutionResult(
                 outcome=ResolutionOutcome.REUSE,
@@ -90,7 +80,14 @@ class IdentityService:
 
         # 4. Candidate discovery (class-scoped structural signals)
         discovered = self._entities.find_candidates(name=canonical_name, class_id=class_id)
-        if discovered:
+        if len(discovered) == 1:
+            entity, reason = discovered[0]
+            return ResolutionResult(
+                outcome=ResolutionOutcome.REUSE,
+                entity=entity,
+                match_reason=reason,
+            )
+        if len(discovered) > 1:
             candidates = [self._to_candidate(entity, reason) for entity, reason in discovered]
             return ResolutionResult(
                 outcome=ResolutionOutcome.AMBIGUOUS,

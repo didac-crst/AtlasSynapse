@@ -52,6 +52,10 @@ class InvalidStateTransitionError(DomainError):
     error_code = "INVALID_STATE_TRANSITION"
 
 
+class ValidationFailedError(DomainError):
+    error_code = "VALIDATION_FAILED"
+
+
 class DbConstraintError(DomainError):
     error_code = "DB_CONSTRAINT_ERROR"
 

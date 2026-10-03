@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from semantic_memory.exceptions import (
@@ -16,6 +17,7 @@ from semantic_memory.exceptions import (
     UnauthorizedOperationError,
     UnknownClassError,
     UnknownEntityError,
+    ValidationFailedError,
 )
 from semantic_memory.schemas.errors import ErrorEnvelope
 
@@ -27,6 +29,7 @@ _STATUS_BY_ERROR: dict[type[DomainError], int] = {
     IdempotencyKeyReusedError: 409,
     UnauthorizedOperationError: 403,
     InvalidStateTransitionError: 409,
+    ValidationFailedError: 422,
     DbConstraintError: 409,
     InternalError: 500,
 }
@@ -44,3 +47,25 @@ def register_exception_handlers(app: FastAPI) -> None:
             retryable=exc.retryable,
         )
         return JSONResponse(status_code=status_code, content=body.model_dump())
+
+    @app.exception_handler(RequestValidationError)
+    async def _validation_error_handler(
+        _request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        body = ErrorEnvelope(
+            error_code=ValidationFailedError.error_code,
+            message="Request validation failed",
+            details={"errors": exc.errors()},
+            retryable=False,
+        )
+        return JSONResponse(status_code=422, content=body.model_dump())
+
+    @app.exception_handler(ValueError)
+    async def _value_error_handler(_request: Request, exc: ValueError) -> JSONResponse:
+        body = ErrorEnvelope(
+            error_code=ValidationFailedError.error_code,
+            message=str(exc) or "Request validation failed",
+            details={},
+            retryable=False,
+        )
+        return JSONResponse(status_code=422, content=body.model_dump())
