@@ -142,9 +142,7 @@ def test_delete_and_rebuild_leave_canonical_data(db_session: Session) -> None:
 
     # Canonical ontology unchanged.
     assert db_session.scalar(select(func.count()).select_from(OntologyClass)) == class_count
-    assert (
-        db_session.scalar(select(func.count()).select_from(OntologyPredicate)) == predicate_count
-    )
+    assert db_session.scalar(select(func.count()).select_from(OntologyPredicate)) == predicate_count
 
     rebuilt_again = embeddings.rebuild_ontology_embeddings()
     assert rebuilt_again == rebuilt

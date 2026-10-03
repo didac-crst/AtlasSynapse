@@ -41,9 +41,7 @@ class EmbeddingRepository:
         content_hash: str,
         created_by_actor_id: uuid.UUID | None = None,
     ) -> Embedding:
-        existing = self.get(
-            object_type=object_type, object_id=object_id, model_key=model_key
-        )
+        existing = self.get(object_type=object_type, object_id=object_id, model_key=model_key)
         if existing is not None:
             existing.dimensions = dimensions
             existing.vector = list(vector)

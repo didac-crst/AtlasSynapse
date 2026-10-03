@@ -115,9 +115,7 @@ def make_semantic_review_gate(
         # The pipeline invokes extras before final_deterministic, so this gate
         # still runs; ProposalService aggregation prefers fail/reuse over review.
         try:
-            result = reviewer.review(
-                ReviewRequest(proposal_type=proposal_type, payload=payload)
-            )
+            result = reviewer.review(ReviewRequest(proposal_type=proposal_type, payload=payload))
         except Exception as exc:  # noqa: BLE001 - degrade to manual_review
             return GateOutcome(
                 "semantic_review",
