@@ -1,6 +1,14 @@
-# AtlasSynapse
+<p align="center">
+  <img src="assets/logo.png" alt="AtlasSynapse logo" width="128" />
+</p>
+
+<p align="center">
+  <img src="assets/wordmark.svg" alt="AtlasSynapse" width="420" />
+</p>
 
 Semantic memory and evolving knowledge graph for AI agents.
+
+Brand tokens (charcoal `#303030`, coral `#E8705C`, Atlas thin / Synapse bold) live in [`assets/brand.yaml`](assets/brand.yaml).
 
 AtlasSynapse is a self-hosted semantic memory service for storing, retrieving, connecting, revising, and reasoning over personal or domain knowledge. The physical database schema is stable while the semantic ontology evolves as governed data.
 
