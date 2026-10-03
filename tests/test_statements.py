@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
@@ -204,6 +204,49 @@ def test_confidence_bounds(db_session: Session) -> None:
         )
 
 
+def test_datetime_offset_equivalent_reuses(db_session: Session) -> None:
+    _ensure_writer(db_session)
+    event_id = _create_entity(db_session, name="Sync Event", class_key="Event")
+    service = StatementService(db_session)
+    instant_utc = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
+    instant_offset = instant_utc.astimezone(timezone(timedelta(hours=2)))
+
+    first = service.assert_statement(
+        _assert_request(
+            subject_entity_id=event_id,
+            predicate_key="occurredAt",
+            object_datetime=instant_utc,
+            valid_from=instant_offset,
+        )
+    )
+    second = service.assert_statement(
+        _assert_request(
+            subject_entity_id=event_id,
+            predicate_key="occurredAt",
+            object_datetime=instant_offset,
+            valid_from=instant_utc,
+        )
+    )
+    assert first.outcome == AssertionOutcome.CREATE
+    assert second.outcome == AssertionOutcome.REUSE
+    assert first.statement.id == second.statement.id
+    assert first.statement.normalized_object == "datetime:2026-01-01T12:00:00+00:00"
+
+
+def test_naive_datetime_rejected(db_session: Session) -> None:
+    _ensure_writer(db_session)
+    event_id = _create_entity(db_session, name="Naive Event", class_key="Event")
+    with pytest.raises(ValidationFailedError) as exc:
+        StatementService(db_session).assert_statement(
+            _assert_request(
+                subject_entity_id=event_id,
+                predicate_key="occurredAt",
+                object_datetime=datetime(2026, 1, 1, 12, 0),
+            )
+        )
+    assert "timezone-aware" in exc.value.message
+
+
 def test_cardinality_one_violation(db_session: Session) -> None:
     _ensure_writer(db_session)
     doc_id = _create_entity(db_session, name="Doc", class_key="Document")
@@ -323,6 +366,81 @@ def test_parallel_assert_only_one_statement(engine: Engine) -> None:
             .where(
                 Statement.subject_entity_id == subject_id,
                 Statement.normalized_object == f"string:{label.casefold()}",
+            )
+        )
+        assert count == 1
+    finally:
+        verify.close()
+
+
+def test_parallel_cardinality_one_allows_single_winner(engine: Engine) -> None:
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+    setup = SessionLocal()
+    try:
+        ActorService(setup).ensure(
+            ActorEnsureRequest(key="card-writer", actor_type=ActorType.AGENT)
+        )
+        setup.commit()
+        doc = EntityService(setup).create_entity(
+            CreateEntityRequest(
+                actor_key="card-writer",
+                request_id=uuid.uuid4(),
+                idempotency_key=str(uuid.uuid4()),
+                canonical_name=f"Card Doc {uuid.uuid4()}",
+                class_key="Document",
+            )
+        )
+        setup.commit()
+        assert doc.entity is not None
+        subject_id = doc.entity.id
+    finally:
+        setup.close()
+
+    barrier = threading.Barrier(8)
+    results: list[str] = []
+    lock = threading.Lock()
+
+    def _worker(index: int) -> None:
+        session = SessionLocal()
+        try:
+            barrier.wait(timeout=10)
+            try:
+                result = StatementService(session).assert_statement(
+                    AssertStatementRequest(
+                        actor_key="card-writer",
+                        request_id=uuid.uuid4(),
+                        idempotency_key=str(uuid.uuid4()),
+                        subject_entity_id=subject_id,
+                        predicate_key="name",
+                        object_string=f"Name-{index}-{uuid.uuid4()}",
+                    )
+                )
+                session.commit()
+                with lock:
+                    results.append(result.outcome.value)
+            except CardinalityViolationError:
+                session.rollback()
+                with lock:
+                    results.append("CARDINALITY_VIOLATION")
+        finally:
+            session.close()
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = [pool.submit(_worker, i) for i in range(8)]
+        for future in as_completed(futures):
+            future.result()
+
+    assert results.count("CREATE") == 1
+    assert results.count("CARDINALITY_VIOLATION") == 7
+
+    verify = SessionLocal()
+    try:
+        count = verify.scalar(
+            select(func.count())
+            .select_from(Statement)
+            .where(
+                Statement.subject_entity_id == subject_id,
+                Statement.status == "asserted",
             )
         )
         assert count == 1

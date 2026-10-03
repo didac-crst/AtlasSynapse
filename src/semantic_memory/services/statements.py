@@ -35,7 +35,12 @@ from semantic_memory.schemas.statements import (
     StatementResponse,
 )
 from semantic_memory.services.actors import ActorService
-from semantic_memory.validation.literals import normalize_confidence, normalize_object_identity
+from semantic_memory.validation.literals import (
+    normalize_confidence,
+    normalize_object_identity,
+    normalize_optional_to_utc,
+    normalize_to_utc,
+)
 
 
 class StatementService:
@@ -118,6 +123,7 @@ class StatementService:
     def _assert_new(
         self, *, request: AssertStatementRequest, actor_id: uuid.UUID
     ) -> AssertStatementResponse:
+        request = self._normalize_request_datetimes(request)
         self._validate_interval(request)
         try:
             confidence = normalize_confidence(request.confidence)
@@ -180,13 +186,21 @@ class StatementService:
                 request_id=str(request.request_id),
             ) from exc
 
-        self._statements.acquire_assertion_lock(
-            subject_entity_id=subject.id,
-            predicate_id=predicate.id,
-            normalized_object=normalized_object,
-            valid_from=request.valid_from,
-            valid_to=request.valid_to,
-        )
+        # Cardinality-one needs subject+predicate serialization; otherwise lock the
+        # semantic identity (with UTC-normalized validity bounds).
+        if revision.cardinality == Cardinality.ONE.value:
+            self._statements.acquire_predicate_lock(
+                subject_entity_id=subject.id,
+                predicate_id=predicate.id,
+            )
+        else:
+            self._statements.acquire_assertion_lock(
+                subject_entity_id=subject.id,
+                predicate_id=predicate.id,
+                normalized_object=normalized_object,
+                valid_from=request.valid_from,
+                valid_to=request.valid_to,
+            )
 
         existing = self._statements.find_semantic_duplicate(
             subject_entity_id=subject.id,
@@ -242,6 +256,29 @@ class StatementService:
             request_id=request.request_id,
             reused=False,
         )
+
+    def _normalize_request_datetimes(
+        self, request: AssertStatementRequest
+    ) -> AssertStatementRequest:
+        try:
+            return request.model_copy(
+                update={
+                    "observed_at": normalize_optional_to_utc(request.observed_at),
+                    "valid_from": normalize_optional_to_utc(request.valid_from),
+                    "valid_to": normalize_optional_to_utc(request.valid_to),
+                    "object_datetime": (
+                        None
+                        if request.object_datetime is None
+                        else normalize_to_utc(request.object_datetime)
+                    ),
+                }
+            )
+        except ValueError as exc:
+            raise ValidationFailedError(
+                str(exc),
+                details={"field": "datetime"},
+                request_id=str(request.request_id),
+            ) from exc
 
     def _validate_interval(self, request: AssertStatementRequest) -> None:
         if (

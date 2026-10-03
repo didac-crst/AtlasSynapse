@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -23,6 +23,20 @@ def normalize_confidence(value: Decimal | None) -> Decimal | None:
     if quantized < 0 or quantized > 1:
         raise ValueError("confidence must be between 0 and 1 inclusive")
     return quantized
+
+
+def normalize_to_utc(value: datetime) -> datetime:
+    """Reject naive datetimes and return the UTC-equivalent instant."""
+    if value.tzinfo is None:
+        raise ValueError("datetime must be timezone-aware")
+    return value.astimezone(UTC)
+
+
+def normalize_optional_to_utc(value: datetime | None) -> datetime | None:
+    """Normalize an optional datetime to UTC, or return ``None``."""
+    if value is None:
+        return None
+    return normalize_to_utc(value)
 
 
 def normalize_object_identity(
@@ -57,7 +71,7 @@ def normalize_object_identity(
     if kind == ValueKind.DATETIME:
         if object_datetime is None:
             raise ValueError("datetime object requires object_datetime")
-        return f"datetime:{object_datetime.isoformat()}"
+        return f"datetime:{normalize_to_utc(object_datetime).isoformat()}"
     if kind == ValueKind.JSON:
         if object_json is None:
             raise ValueError("json object requires object_json")

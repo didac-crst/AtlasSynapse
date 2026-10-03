@@ -12,6 +12,7 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from semantic_memory.models import Statement, StatementStatus
+from semantic_memory.validation.literals import normalize_optional_to_utc
 
 
 class StatementRepository:
@@ -108,6 +109,16 @@ class StatementRepository:
         self._session.flush()
         return row
 
+    def acquire_predicate_lock(
+        self,
+        *,
+        subject_entity_id: uuid.UUID,
+        predicate_id: uuid.UUID,
+    ) -> None:
+        """Serialize all assertions for a subject+predicate pair (cardinality-one)."""
+        material = f"predicate:{subject_entity_id}:{predicate_id}".encode()
+        self._advisory_lock(material)
+
     def acquire_assertion_lock(
         self,
         *,
@@ -118,11 +129,16 @@ class StatementRepository:
         valid_to: datetime | None,
     ) -> None:
         """Serialize assertion for a semantic identity key."""
+        bound_from = normalize_optional_to_utc(valid_from)
+        bound_to = normalize_optional_to_utc(valid_to)
         material = (
-            f"{subject_entity_id}:{predicate_id}:{normalized_object}:"
-            f"{valid_from.isoformat() if valid_from else ''}:"
-            f"{valid_to.isoformat() if valid_to else ''}"
+            f"assertion:{subject_entity_id}:{predicate_id}:{normalized_object}:"
+            f"{bound_from.isoformat() if bound_from else ''}:"
+            f"{bound_to.isoformat() if bound_to else ''}"
         ).encode()
+        self._advisory_lock(material)
+
+    def _advisory_lock(self, material: bytes) -> None:
         digest = hashlib.sha256(material).digest()[:8]
         lock_key = int.from_bytes(digest, byteorder="big", signed=False) % (2**63)
         self._session.execute(
