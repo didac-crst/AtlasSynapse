@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 120" role="img" aria-label="AtlasSynapse">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 586 96" role="img" aria-label="AtlasSynapse">
   <title>AtlasSynapse</title>
   <style>
     .wordmark {
@@ -15,7 +15,7 @@
       font-weight: 700;
     }
   </style>
-  <text class="wordmark" x="0" y="88">
+  <text class="wordmark" x="36" y="76">
     <tspan class="atlas">Atlas</tspan><tspan class="synapse">Synapse</tspan>
   </text>
 </svg>

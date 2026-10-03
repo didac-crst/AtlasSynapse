@@ -26,3 +26,12 @@ typography:
 assets:
   logo: assets/logo.png
   wordmark: assets/wordmark.svg
+  logo_variants:
+    - assets/logo/logo-512.png
+    - assets/logo/logo-256.png
+    - assets/logo/logo-128.png
+    - assets/logo/logo-64.png
+    - assets/logo/logo-48.png
+    - assets/logo/logo-32.png
+  # Palette-compressed square icon for ChatGPT MCP connector uploads (< 10KB).
+  logo_mcp: assets/logo/logo-mcp.png

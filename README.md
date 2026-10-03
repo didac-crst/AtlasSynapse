@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.png" alt="AtlasSynapse logo" width="128" />
+  <img src="assets/logo.png" alt="AtlasSynapse logo" width="200" />
 </p>
 
 <p align="center">
