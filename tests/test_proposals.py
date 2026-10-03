@@ -11,6 +11,8 @@ from sqlalchemy.orm import Session
 
 from semantic_memory.config import get_settings
 from semantic_memory.exceptions import (
+    OntologyCycleError,
+    OntologyReuseRecommendedError,
     RevisionConflictError,
     UnauthorizedOperationError,
     UnknownClassError,
@@ -424,6 +426,95 @@ def test_http_propose_and_apply_endpoints(client: TestClient) -> None:
     )
     assert applied.status_code == 200
     assert applied.json()["outcome"] == "APPLIED"
+
+
+def test_apply_revalidates_against_current_ontology(db_session: Session) -> None:
+    proposer = _ensure_proposer(db_session)
+    applier = _ensure_applier(db_session)
+    service = ProposalService(db_session)
+
+    first = service.propose_class(
+        ProposeClassRequest(**_envelope(proposer), key="SharedLab", parent_keys=["Organization"])
+    )
+    second = service.propose_class(
+        ProposeClassRequest(**_envelope(proposer), key="SharedLab", parent_keys=["Organization"])
+    )
+    assert first.outcome == ProposalOutcome.MANUAL_REVIEW
+    # Second propose sees the key as still free until first applies.
+    assert second.outcome == ProposalOutcome.MANUAL_REVIEW
+
+    service.apply_proposal(
+        ApplyProposalRequest(**_envelope(applier), proposal_id=first.proposal.id)
+    )
+    with pytest.raises(OntologyReuseRecommendedError) as exc:
+        service.apply_proposal(
+            ApplyProposalRequest(**_envelope(applier), proposal_id=second.proposal.id)
+        )
+    assert exc.value.error_code == "ONTOLOGY_REUSE_RECOMMENDED"
+
+
+def test_apply_revalidates_cycles(db_session: Session) -> None:
+    proposer = _ensure_proposer(db_session)
+    applier = _ensure_applier(db_session)
+    service = ProposalService(db_session)
+
+    child = service.propose_class(
+        ProposeClassRequest(**_envelope(proposer), key="CycleA", parent_keys=["Organization"])
+    )
+    service.apply_proposal(
+        ApplyProposalRequest(**_envelope(applier), proposal_id=child.proposal.id)
+    )
+
+    # Propose parenting Organization under CycleA before the link exists → ready/manual.
+    parent_link = service.propose_class_parent(
+        ProposeClassParentRequest(
+            **_envelope(proposer),
+            child_key="Organization",
+            parent_key="CycleA",
+        )
+    )
+    assert parent_link.outcome == ProposalOutcome.REJECTED
+    # Direct apply path: craft a submitted proposal that becomes cyclic after another apply.
+    # Simulate by proposing a sibling link that later cycles via a second applied parent.
+    a_to_b = service.propose_class(
+        ProposeClassRequest(**_envelope(proposer), key="CycleB", parent_keys=["CycleA"])
+    )
+    service.apply_proposal(
+        ApplyProposalRequest(**_envelope(applier), proposal_id=a_to_b.proposal.id)
+    )
+    # Propose CycleA -> CycleB before that parent exists; should fail cycle at propose.
+    reverse = service.propose_class_parent(
+        ProposeClassParentRequest(
+            **_envelope(proposer),
+            child_key="CycleA",
+            parent_key="CycleB",
+        )
+    )
+    assert reverse.outcome == ProposalOutcome.REJECTED
+    assert any(item.gate_name == "cycle" for item in reverse.proposal.gate_results)
+    # Ensure OntologyCycleError is reachable from revalidation helper.
+    from semantic_memory.models.enums import ProposalType
+
+    outcomes = service.gate_pipeline.revalidate_apply(
+        proposal_type=ProposalType.CLASS_PARENT,
+        payload={
+            "namespace_key": "core",
+            "child_key": "CycleA",
+            "parent_key": "CycleB",
+        },
+    )
+    assert any(item.gate_name == "cycle" and item.decision.value == "fail" for item in outcomes)
+    with pytest.raises(OntologyCycleError):
+        service._revalidate_before_apply(
+            proposal_id=reverse.proposal.id,
+            proposal_type=ProposalType.CLASS_PARENT,
+            payload={
+                "namespace_key": "core",
+                "child_key": "CycleA",
+                "parent_key": "CycleB",
+            },
+            request_id=uuid.uuid4(),
+        )
 
 
 def test_mcp_proposal_tools_do_not_expose_apply(db_session: Session) -> None:

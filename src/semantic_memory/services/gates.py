@@ -40,6 +40,23 @@ class DeterministicGatePipeline:
         """Hook for Phase 11/12 similarity and semantic-review gates."""
         self._extra_gates.append(gate)
 
+    def revalidate_apply(
+        self, *, proposal_type: ProposalType, payload: dict[str, Any]
+    ) -> list[GateOutcome]:
+        """Re-run deterministic checks against current ontology state at apply time.
+
+        Does not persist gate rows and skips advisory similarity/review extras.
+        """
+        outcomes = [
+            self._existing_key(proposal_type, payload),
+            self._alias(proposal_type, payload),
+            self._structural(proposal_type, payload),
+            self._cycle(proposal_type, payload),
+            self._domain_range(proposal_type, payload),
+        ]
+        outcomes.append(self._final_deterministic(proposal_type, payload, outcomes))
+        return outcomes
+
     def run(
         self,
         *,

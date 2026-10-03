@@ -238,16 +238,12 @@ class EmbeddingService:
                     for item in filtered
                 ]
             }
-            if top.score >= 0.95:
-                return GateOutcome(
-                    "similarity",
-                    GateDecision.REUSE_RECOMMENDED,
-                    {**details, "reason": "high_similarity_candidate"},
-                )
+            # Similarity is advisory only: never FAIL or REUSE_RECOMMENDED.
+            reason = "high_similarity_candidate" if top.score >= 0.95 else "similar_candidates"
             return GateOutcome(
                 "similarity",
                 GateDecision.MANUAL_REVIEW,
-                {**details, "reason": "similar_candidates"},
+                {**details, "reason": reason},
             )
 
         return _gate

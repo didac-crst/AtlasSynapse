@@ -102,11 +102,9 @@ def test_similarity_is_advisory_only(db_session: Session) -> None:
     similarity = next(
         item for item in result.proposal.gate_results if item.gate_name == "similarity"
     )
-    assert similarity.decision in {
-        GateDecision.REUSE_RECOMMENDED,
-        GateDecision.MANUAL_REVIEW,
-        GateDecision.PASS,
-    }
+    assert similarity.decision in {GateDecision.MANUAL_REVIEW, GateDecision.PASS}
+    assert similarity.decision != GateDecision.REUSE_RECOMMENDED
+    assert similarity.decision != GateDecision.FAIL
     # Existing Person key still wins deterministically over similarity.
     duplicate = service.propose_class(
         ProposeClassRequest(

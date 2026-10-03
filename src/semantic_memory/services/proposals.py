@@ -10,7 +10,12 @@ from sqlalchemy.orm import Session
 
 from semantic_memory.config import Settings, get_settings
 from semantic_memory.exceptions import (
+    OntologyCycleError,
+    OntologyProposalRejectedError,
+    OntologyReuseRecommendedError,
     RevisionConflictError,
+    UnknownClassError,
+    UnknownPredicateError,
     UnknownProposalError,
     ValidationFailedError,
 )
@@ -321,6 +326,12 @@ class ProposalService:
                 request_id=str(request.request_id),
             )
         proposal_type = ProposalType(proposal.proposal_type)
+        self._revalidate_before_apply(
+            proposal_id=proposal.id,
+            proposal_type=proposal_type,
+            payload=proposal.payload,
+            request_id=request.request_id,
+        )
         self._apply_payload(
             proposal=proposal,
             proposal_type=proposal_type,
@@ -337,6 +348,71 @@ class ProposalService:
             proposal=self._to_proposal_response(proposal),
             request_id=request.request_id,
         )
+
+    def _revalidate_before_apply(
+        self,
+        *,
+        proposal_id: uuid.UUID,
+        proposal_type: ProposalType,
+        payload: dict[str, Any],
+        request_id: uuid.UUID,
+    ) -> None:
+        """Re-check deterministic gates against the live ontology before mutate."""
+        outcomes = self._gates.revalidate_apply(proposal_type=proposal_type, payload=payload)
+        details = {
+            "proposal_id": str(proposal_id),
+            "gate_results": [
+                {"gate_name": item.gate_name, "decision": item.decision.value, **item.details}
+                for item in outcomes
+            ],
+        }
+        if any(item.decision == GateDecision.FAIL for item in outcomes):
+            if any(
+                item.gate_name == "cycle" and item.decision == GateDecision.FAIL
+                for item in outcomes
+            ):
+                raise OntologyCycleError(
+                    "Ontology apply rejected: inheritance cycle",
+                    details=details,
+                    request_id=str(request_id),
+                )
+            raise OntologyProposalRejectedError(
+                "Ontology apply rejected by deterministic revalidation",
+                details=details,
+                request_id=str(request_id),
+            )
+        if any(item.decision == GateDecision.REUSE_RECOMMENDED for item in outcomes):
+            raise OntologyReuseRecommendedError(
+                "Ontology apply rejected: reuse existing concept",
+                details=details,
+                request_id=str(request_id),
+            )
+
+    def _require_class(
+        self, *, namespace_key: str, class_key: str, request_id: uuid.UUID
+    ) -> OntologyClass:
+        row = self._ontology.get_class_by_key(namespace_key=namespace_key, class_key=class_key)
+        if row is None:
+            raise UnknownClassError(
+                f"Unknown class '{namespace_key}:{class_key}'",
+                details={"namespace_key": namespace_key, "class_key": class_key},
+                request_id=str(request_id),
+            )
+        return row
+
+    def _require_predicate(
+        self, *, namespace_key: str, predicate_key: str, request_id: uuid.UUID
+    ) -> OntologyPredicate:
+        row = self._ontology.get_predicate_by_key(
+            namespace_key=namespace_key, predicate_key=predicate_key
+        )
+        if row is None:
+            raise UnknownPredicateError(
+                f"Unknown predicate '{namespace_key}:{predicate_key}'",
+                details={"namespace_key": namespace_key, "predicate_key": predicate_key},
+                request_id=str(request_id),
+            )
+        return row
 
     def _apply_payload(
         self,
@@ -359,13 +435,13 @@ class ProposalService:
             )
 
         if proposal_type == ProposalType.CLASS:
-            self._apply_class(proposal, namespace, actor_id)
+            self._apply_class(proposal, namespace, actor_id, request_id)
         elif proposal_type == ProposalType.PREDICATE:
             self._apply_predicate(proposal, namespace, actor_id, request_id)
         elif proposal_type == ProposalType.CONSTRAINT:
             self._apply_constraint(proposal, namespace, actor_id)
         elif proposal_type == ProposalType.ALIAS:
-            self._apply_alias(proposal, namespace, actor_id)
+            self._apply_alias(proposal, namespace, actor_id, request_id)
         elif proposal_type == ProposalType.CLASS_PARENT:
             self._apply_class_parent(proposal, namespace, actor_id, request_id)
         else:
@@ -379,6 +455,7 @@ class ProposalService:
         proposal: OntologyProposal,
         namespace: OntologyNamespace,
         actor_id: uuid.UUID,
+        request_id: uuid.UUID,
     ) -> None:
         payload = proposal.payload
         ontology_class = OntologyClass(
@@ -401,10 +478,11 @@ class ProposalService:
         self._session.flush()
         ontology_class.current_revision_id = revision.id
         for parent_key in payload.get("parent_keys") or []:
-            parent = self._ontology.get_class_by_key(
-                namespace_key=namespace.key, class_key=str(parent_key)
+            parent = self._require_class(
+                namespace_key=namespace.key,
+                class_key=str(parent_key),
+                request_id=request_id,
             )
-            assert parent is not None
             self._session.add(
                 OntologyClassParent(
                     id=uuid.uuid4(),
@@ -486,10 +564,11 @@ class ProposalService:
         self._session.flush()
         predicate.current_revision_id = revision.id
         for domain_key in payload.get("domain_keys") or []:
-            domain = self._ontology.get_class_by_key(
-                namespace_key=namespace.key, class_key=str(domain_key)
+            domain = self._require_class(
+                namespace_key=namespace.key,
+                class_key=str(domain_key),
+                request_id=request_id,
             )
-            assert domain is not None
             self._session.add(
                 OntologyPredicateDomain(
                     id=uuid.uuid4(),
@@ -498,10 +577,11 @@ class ProposalService:
                 )
             )
         for range_key in payload.get("range_keys") or []:
-            range_class = self._ontology.get_class_by_key(
-                namespace_key=namespace.key, class_key=str(range_key)
+            range_class = self._require_class(
+                namespace_key=namespace.key,
+                class_key=str(range_key),
+                request_id=request_id,
             )
-            assert range_class is not None
             self._session.add(
                 OntologyPredicateRange(
                     id=uuid.uuid4(),
@@ -550,22 +630,25 @@ class ProposalService:
         proposal: OntologyProposal,
         namespace: OntologyNamespace,
         actor_id: uuid.UUID,
+        request_id: uuid.UUID,
     ) -> None:
         payload = proposal.payload
         target_type = AliasTargetType(str(payload["target_type"]))
         class_id = None
         predicate_id = None
         if target_type == AliasTargetType.CLASS:
-            target = self._ontology.get_class_by_key(
-                namespace_key=namespace.key, class_key=str(payload["target_key"])
+            target = self._require_class(
+                namespace_key=namespace.key,
+                class_key=str(payload["target_key"]),
+                request_id=request_id,
             )
-            assert target is not None
             class_id = target.id
         else:
-            target_p = self._ontology.get_predicate_by_key(
-                namespace_key=namespace.key, predicate_key=str(payload["target_key"])
+            target_p = self._require_predicate(
+                namespace_key=namespace.key,
+                predicate_key=str(payload["target_key"]),
+                request_id=request_id,
             )
-            assert target_p is not None
             predicate_id = target_p.id
         alias = OntologyAlias(
             id=uuid.uuid4(),
@@ -593,13 +676,16 @@ class ProposalService:
         request_id: uuid.UUID,
     ) -> None:
         payload = proposal.payload
-        child = self._ontology.get_class_by_key(
-            namespace_key=namespace.key, class_key=str(payload["child_key"])
+        child = self._require_class(
+            namespace_key=namespace.key,
+            class_key=str(payload["child_key"]),
+            request_id=request_id,
         )
-        parent = self._ontology.get_class_by_key(
-            namespace_key=namespace.key, class_key=str(payload["parent_key"])
+        parent = self._require_class(
+            namespace_key=namespace.key,
+            class_key=str(payload["parent_key"]),
+            request_id=request_id,
         )
-        assert child is not None and parent is not None
         revision = self._ontology.get_current_class_revision(child)
         current_number = 0 if revision is None else revision.revision_number
         if (
