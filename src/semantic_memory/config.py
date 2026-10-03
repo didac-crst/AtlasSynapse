@@ -21,7 +21,9 @@ class Settings(BaseSettings):
     app_env: str = Field(default="development", alias="APP_ENV")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     database_url: str = Field(
-        default="postgresql+psycopg://semantic_memory:semantic_memory@localhost:5432/semantic_memory",
+        default=(
+            "postgresql+psycopg://semantic_memory:semantic_memory@localhost:5432/semantic_memory"
+        ),
         alias="DATABASE_URL",
     )
     database_pool_size: int = Field(default=5, alias="DATABASE_POOL_SIZE", ge=1)

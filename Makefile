@@ -1,10 +1,12 @@
-.PHONY: help install infra-up infra-down migrate migrate-down seed lint format typecheck test ci docs-check
+.PHONY: help install infra-up infra-down migrate migrate-down seed lint format format-check typecheck test ci docs-check
+
+PYTHON ?= python
 
 help:
-	@echo "Targets: install infra-up infra-down migrate migrate-down seed lint format typecheck test ci"
+	@echo "Targets: install infra-up infra-down migrate migrate-down seed lint format format-check typecheck test ci"
 
 install:
-	python -m pip install -e ".[dev]"
+	$(PYTHON) -m pip install -e ".[dev]"
 
 infra-up:
 	docker compose up -d postgres
@@ -13,28 +15,31 @@ infra-down:
 	docker compose down
 
 migrate:
-	alembic upgrade head
+	$(PYTHON) -m alembic upgrade head
 
 migrate-down:
-	alembic downgrade -1
+	$(PYTHON) -m alembic downgrade -1
 
 seed:
-	python -m semantic_memory.seeding
+	$(PYTHON) -m semantic_memory.seeding
 
 lint:
-	ruff check src tests migrations
+	$(PYTHON) -m ruff check src tests migrations
+
+format-check:
+	$(PYTHON) -m ruff format --check src tests migrations
 
 format:
-	ruff format src tests migrations
-	ruff check --fix src tests migrations
+	$(PYTHON) -m ruff format src tests migrations
+	$(PYTHON) -m ruff check --fix src tests migrations
 
 typecheck:
-	mypy src
+	$(PYTHON) -m mypy src
 
 test:
-	pytest -q
+	$(PYTHON) -m pytest -q
 
-ci: lint typecheck test
+ci: format-check lint typecheck test
 
 docs-check:
 	@test -f README.md && test -f docs/architecture.md && test -f docs/roadmap.md
