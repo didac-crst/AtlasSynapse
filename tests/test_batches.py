@@ -47,11 +47,19 @@ def test_assert_batch_creates_entity_and_statement(db_session: Session) -> None:
     assert len(result.created) == 2
     assert result.rejected == []
     assert result.ontology_required == []
+    entity_result = next(item for item in result.created if item.entity is not None)
+    assert entity_result.entity is not None
+    assert entity_result.entity.entity is not None
+    created_entity_id = entity_result.entity.entity.id
     entity_count = db_session.scalar(
-        select(func.count()).select_from(Entity).where(Entity.canonical_name == "Batch Doc")
+        select(func.count()).select_from(Entity).where(Entity.id == created_entity_id)
     )
     assert entity_count == 1
-    statement_count = db_session.scalar(select(func.count()).select_from(Statement))
+    statement_count = db_session.scalar(
+        select(func.count())
+        .select_from(Statement)
+        .where(Statement.subject_entity_id == created_entity_id)
+    )
     assert statement_count == 1
     batch = db_session.get(IngestionBatch, result.batch_id)
     assert batch is not None
