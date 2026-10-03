@@ -1,0 +1,42 @@
+"""FastAPI application factory."""
+
+from __future__ import annotations
+
+from fastapi import FastAPI
+
+from semantic_memory import __version__
+from semantic_memory.api.health import router as health_router
+from semantic_memory.config import Settings, get_settings
+from semantic_memory.db import configure_engine
+from semantic_memory.observability.logging import configure_logging
+
+
+def create_app(settings: Settings | None = None) -> FastAPI:
+    """Create and configure the FastAPI application."""
+    cfg = settings or get_settings()
+    configure_logging(cfg.log_level)
+    configure_engine(cfg)
+
+    app = FastAPI(
+        title=cfg.app_name,
+        version=__version__,
+        docs_url="/docs" if cfg.app_env != "production" else None,
+        redoc_url=None,
+    )
+    app.state.settings = cfg
+    app.include_router(health_router)
+    return app
+
+
+def run() -> None:
+    """CLI entrypoint for local HTTP serving."""
+    import uvicorn
+
+    cfg = get_settings()
+    uvicorn.run(
+        "semantic_memory.api.app:create_app",
+        factory=True,
+        host=cfg.http_host,
+        port=cfg.http_port,
+        reload=cfg.app_env == "development",
+    )
