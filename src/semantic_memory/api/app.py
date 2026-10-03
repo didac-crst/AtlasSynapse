@@ -5,6 +5,9 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from semantic_memory import __version__
+from semantic_memory.api.actors import router as actors_router
+from semantic_memory.api.entities import router as entities_router
+from semantic_memory.api.errors import register_exception_handlers
 from semantic_memory.api.health import router as health_router
 from semantic_memory.config import Settings, get_settings
 from semantic_memory.db import configure_engine
@@ -24,7 +27,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         redoc_url=None,
     )
     app.state.settings = cfg
+    register_exception_handlers(app)
     app.include_router(health_router)
+    app.include_router(actors_router)
+    app.include_router(entities_router)
     return app
 
 

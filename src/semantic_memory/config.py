@@ -6,6 +6,8 @@ from typing import Literal
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from semantic_memory.models.capabilities import DEFAULT_AGENT_CAPABILITIES
+
 
 class Settings(BaseSettings):
     """Runtime settings for AtlasSynapse."""
@@ -39,12 +41,24 @@ class Settings(BaseSettings):
     mcp_transport: Literal["stdio", "http"] = Field(default="stdio", alias="MCP_TRANSPORT")
     http_host: str = Field(default="0.0.0.0", alias="HTTP_HOST")
     http_port: int = Field(default=8000, alias="HTTP_PORT", ge=1, le=65535)
+    admin_api_token: str = Field(default="", alias="ADMIN_API_TOKEN")
+    default_actor_capabilities: list[str] = Field(
+        default_factory=lambda: [cap.value for cap in DEFAULT_AGENT_CAPABILITIES],
+        alias="DEFAULT_ACTOR_CAPABILITIES",
+    )
 
     @field_validator("database_url")
     @classmethod
     def validate_database_url(cls, value: str) -> str:
         if not value.startswith("postgresql"):
             raise ValueError("DATABASE_URL must be a PostgreSQL SQLAlchemy URL")
+        return value
+
+    @field_validator("default_actor_capabilities")
+    @classmethod
+    def validate_default_capabilities(cls, value: list[str]) -> list[str]:
+        if "admin" in value:
+            raise ValueError("DEFAULT_ACTOR_CAPABILITIES must not include admin")
         return value
 
     @property
