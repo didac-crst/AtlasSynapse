@@ -1,5 +1,13 @@
-"""Persistence repositories.
+"""Persistence repositories."""
 
-Repositories are intentionally empty in Phase 0/1. Persistence operations begin
-in later roadmap phases.
-"""
+from semantic_memory.repositories.actors import ActorRepository
+from semantic_memory.repositories.entities import EntityRepository
+from semantic_memory.repositories.idempotency import IdempotencyRepository
+from semantic_memory.repositories.ontology import OntologyRepository
+
+__all__ = [
+    "ActorRepository",
+    "EntityRepository",
+    "IdempotencyRepository",
+    "OntologyRepository",
+]
