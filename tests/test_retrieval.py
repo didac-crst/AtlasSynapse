@@ -115,9 +115,7 @@ def test_search_entities_and_statements_with_signals(db_session: Session) -> Non
     assert entities.hits
     assert entities.hits[0].entity.id == subject_id
     assert entities.hits[0].signals.lexical_relevance > 0
-    assert any(
-        "not a truth score" in note.lower() for note in entities.ranking_explanations
-    )
+    assert any("not a truth score" in note.lower() for note in entities.ranking_explanations)
     assert any("ordering only" in note for note in entities.ranking_explanations)
 
     statements = service.search_statements(
