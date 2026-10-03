@@ -29,8 +29,8 @@ class EntityRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def get(self, entity_id: uuid.UUID) -> Entity | None:
-        return self._session.get(Entity, entity_id)
+    def get(self, entity_id: uuid.UUID, *, populate_existing: bool = False) -> Entity | None:
+        return self._session.get(Entity, entity_id, populate_existing=populate_existing)
 
     def create(
         self,
@@ -220,15 +220,16 @@ class EntityRepository:
         self._session.flush()
         return entity
 
-    def acquire_merge_lock(self, *, source_entity_id: uuid.UUID) -> None:
-        """Serialize explicit merges for a source entity."""
-        material = f"merge:{source_entity_id}".encode()
-        digest = hashlib.sha256(material).digest()[:8]
-        lock_key = int.from_bytes(digest, byteorder="big", signed=False) % (2**63)
-        self._session.execute(
-            text("SELECT pg_advisory_xact_lock(:lock_key)"),
-            {"lock_key": lock_key},
-        )
+    def acquire_merge_locks(self, *, entity_ids: list[uuid.UUID]) -> None:
+        """Serialize merges involving these entities; lock in sorted ID order."""
+        for entity_id in sorted(set(entity_ids), key=lambda item: item.int):
+            material = f"merge:{entity_id}".encode()
+            digest = hashlib.sha256(material).digest()[:8]
+            lock_key = int.from_bytes(digest, byteorder="big", signed=False) % (2**63)
+            self._session.execute(
+                text("SELECT pg_advisory_xact_lock(:lock_key)"),
+                {"lock_key": lock_key},
+            )
 
     def acquire_identity_lock(self, *, class_id: uuid.UUID, canonical_name: str) -> None:
         """Serialize CREATE/resolution for a normalized class+name identity key."""

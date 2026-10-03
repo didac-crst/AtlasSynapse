@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import uuid
 
+import pytest
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -103,6 +105,30 @@ def test_assert_batch_atomic_rollback_on_ontology_required(db_session: Session) 
     batch = db_session.get(IngestionBatch, result.batch_id)
     assert batch is not None
     assert batch.status == BatchStatus.FAILED.value
+
+
+def test_assert_batch_rejects_duplicate_client_item_ids() -> None:
+    with pytest.raises(ValidationError, match="client_item_id values must be unique"):
+        AssertBatchRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            entities=[
+                BatchEntityItem(
+                    client_item_id="shared",
+                    canonical_name="Doc A",
+                    class_key="Document",
+                )
+            ],
+            statements=[
+                BatchStatementItem(
+                    client_item_id="shared",
+                    subject_client_item_id="shared",
+                    predicate_key="description",
+                    object_string="conflict",
+                )
+            ],
+        )
 
 
 def test_assert_batch_idempotent_retry(db_session: Session) -> None:

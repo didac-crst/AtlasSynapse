@@ -14,13 +14,11 @@ from semantic_memory.exceptions import (
     UnknownPredicateError,
     ValidationFailedError,
 )
-from semantic_memory.models import Entity, Statement
+from semantic_memory.models import Entity
 from semantic_memory.models.capabilities import Capability
 from semantic_memory.models.enums import BatchStatus, EntityStatus
 from semantic_memory.repositories.batches import BatchRepository
 from semantic_memory.repositories.entities import EntityRepository
-from semantic_memory.repositories.ontology import OntologyRepository
-from semantic_memory.repositories.statements import StatementRepository
 from semantic_memory.schemas.batches import (
     AssertBatchRequest,
     AssertBatchResponse,
@@ -42,11 +40,6 @@ class _BatchAtomicAbort(Exception):
 @dataclass
 class _BatchPreload:
     entities: dict[uuid.UUID, Entity] = field(default_factory=dict)
-    class_keys: set[str] = field(default_factory=set)
-    predicate_keys: set[str] = field(default_factory=set)
-    active_statements: dict[tuple[uuid.UUID, uuid.UUID], list[Statement]] = field(
-        default_factory=dict
-    )
 
 
 class BatchService:
@@ -55,8 +48,6 @@ class BatchService:
         self._actors = ActorService(session)
         self._batches = BatchRepository(session)
         self._entities = EntityRepository(session)
-        self._ontology = OntologyRepository(session)
-        self._statements = StatementRepository(session)
         self._entity_service = EntityService(session)
         self._statement_service = StatementService(session)
         self._mutations = MutationRunner(session)
@@ -306,6 +297,7 @@ class BatchService:
         )
 
     def _preload(self, request: AssertBatchRequest) -> _BatchPreload:
+        """Preload active entities referenced by absolute IDs in the batch."""
         preload = _BatchPreload()
         entity_ids = {
             item.subject_entity_id
@@ -321,36 +313,6 @@ class BatchService:
             entity = self._entities.get(entity_id)
             if entity is not None and entity.status == EntityStatus.ACTIVE.value:
                 preload.entities[entity_id] = entity
-
-        for entity_item in request.entities:
-            ontology_class = self._ontology.get_class_by_key(
-                namespace_key=entity_item.namespace_key,
-                class_key=entity_item.class_key,
-            )
-            if ontology_class is not None:
-                preload.class_keys.add(f"{entity_item.namespace_key}:{entity_item.class_key}")
-
-        predicate_ids: list[uuid.UUID] = []
-        for statement_item in request.statements:
-            predicate = self._ontology.get_predicate_by_key(
-                namespace_key=statement_item.namespace_key,
-                predicate_key=statement_item.predicate_key,
-            )
-            if predicate is None:
-                continue
-            preload.predicate_keys.add(
-                f"{statement_item.namespace_key}:{statement_item.predicate_key}"
-            )
-            predicate_ids.append(predicate.id)
-
-        for entity_id in preload.entities:
-            for predicate_id in predicate_ids:
-                rows = self._statements.find_asserted_for_predicate(
-                    subject_entity_id=entity_id,
-                    predicate_id=predicate_id,
-                )
-                if rows:
-                    preload.active_statements[(entity_id, predicate_id)] = rows
         return preload
 
     def _resolve_ref(

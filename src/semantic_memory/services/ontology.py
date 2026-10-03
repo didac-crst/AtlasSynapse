@@ -110,7 +110,7 @@ class OntologyService:
             if alias_row is not None:
                 if alias_row.target_type == AliasTargetType.CLASS.value and alias_row.class_id:
                     target = self._ontology.get_class(alias_row.class_id)
-                    if target is not None:
+                    if target is not None and not target.is_deprecated:
                         hits.append(
                             OntologySearchHit(
                                 hit_type=OntologyHitType.ALIAS,
@@ -125,7 +125,7 @@ class OntologyService:
                     and alias_row.predicate_id
                 ):
                     target_p = self._ontology.get_predicate(alias_row.predicate_id)
-                    if target_p is not None:
+                    if target_p is not None and not target_p.is_deprecated:
                         hits.append(
                             OntologySearchHit(
                                 hit_type=OntologyHitType.ALIAS,

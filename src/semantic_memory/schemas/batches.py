@@ -89,6 +89,10 @@ class AssertBatchRequest(MutationEnvelope):
     def _non_empty(self) -> AssertBatchRequest:
         if not self.entities and not self.statements:
             raise ValueError("Batch must include at least one entity or statement item")
+        ids = [item.client_item_id for item in self.entities]
+        ids += [item.client_item_id for item in self.statements]
+        if len(ids) != len(set(ids)):
+            raise ValueError("client_item_id values must be unique within a batch")
         return self
 
 

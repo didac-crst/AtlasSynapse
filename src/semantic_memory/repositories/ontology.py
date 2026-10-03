@@ -161,7 +161,7 @@ class OntologyRepository:
     def search_classes(
         self, *, query: str, namespace_key: str | None, limit: int
     ) -> list[OntologyClass]:
-        pattern = f"%{query.strip()}%"
+        pattern = _ilike_contains_pattern(query)
         stmt = (
             select(OntologyClass)
             .join(OntologyNamespace, OntologyNamespace.id == OntologyClass.namespace_id)
@@ -172,8 +172,8 @@ class OntologyRepository:
             .where(
                 OntologyClass.is_deprecated.is_(False),
                 or_(
-                    OntologyClass.key.ilike(pattern),
-                    OntologyClassRevision.label.ilike(pattern),
+                    OntologyClass.key.ilike(pattern, escape="\\"),
+                    OntologyClassRevision.label.ilike(pattern, escape="\\"),
                 ),
             )
             .order_by(OntologyClass.key.asc())
@@ -186,7 +186,7 @@ class OntologyRepository:
     def search_predicates(
         self, *, query: str, namespace_key: str | None, limit: int
     ) -> list[OntologyPredicate]:
-        pattern = f"%{query.strip()}%"
+        pattern = _ilike_contains_pattern(query)
         stmt = (
             select(OntologyPredicate)
             .join(OntologyNamespace, OntologyNamespace.id == OntologyPredicate.namespace_id)
@@ -197,8 +197,8 @@ class OntologyRepository:
             .where(
                 OntologyPredicate.is_deprecated.is_(False),
                 or_(
-                    OntologyPredicate.key.ilike(pattern),
-                    OntologyPredicateRevision.label.ilike(pattern),
+                    OntologyPredicate.key.ilike(pattern, escape="\\"),
+                    OntologyPredicateRevision.label.ilike(pattern, escape="\\"),
                 ),
             )
             .order_by(OntologyPredicate.key.asc())
@@ -238,3 +238,9 @@ class OntologyRepository:
         if not allowed_class_ids:
             return True
         return bool(self.list_ancestor_class_ids(class_id) & allowed_class_ids)
+
+
+def _ilike_contains_pattern(query: str) -> str:
+    """Build a case-insensitive contains pattern with LIKE wildcards escaped."""
+    escaped = query.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"

@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -437,7 +437,19 @@ def test_parallel_cardinality_one_allows_coexistence(engine: Engine) -> None:
             )
         )
         assert count == 8
-        conflicts = verify.scalar(select(func.count()).select_from(Conflict))
-        assert conflicts is not None and conflicts >= 1
+        conflicts = verify.scalar(
+            select(func.count(func.distinct(Conflict.id)))
+            .select_from(Conflict)
+            .join(
+                Statement,
+                or_(
+                    Statement.id == Conflict.statement_a_id,
+                    Statement.id == Conflict.statement_b_id,
+                ),
+            )
+            .where(Statement.subject_entity_id == subject_id)
+        )
+        # Eight coexisting distinct names under cardinality-one: C(8, 2) = 28 pairs.
+        assert conflicts == 28
     finally:
         verify.close()

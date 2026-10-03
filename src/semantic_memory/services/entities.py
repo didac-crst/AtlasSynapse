@@ -84,14 +84,18 @@ class EntityService:
                 },
                 request_id=str(request.request_id),
             )
-        source = self._entities.get(request.source_entity_id)
+        self._entities.acquire_merge_locks(
+            entity_ids=[request.source_entity_id, request.target_entity_id]
+        )
+        # Reload under locks so concurrent merges cannot race on stale identity-map rows.
+        source = self._entities.get(request.source_entity_id, populate_existing=True)
+        target = self._entities.get(request.target_entity_id, populate_existing=True)
         if source is None:
             raise UnknownEntityError(
                 f"Source entity {request.source_entity_id} was not found",
                 details={"source_entity_id": str(request.source_entity_id)},
                 request_id=str(request.request_id),
             )
-        target = self._entities.get(request.target_entity_id)
         if target is None or target.status != EntityStatus.ACTIVE.value:
             raise UnknownEntityError(
                 f"Target entity {request.target_entity_id} was not found or is inactive",
@@ -107,7 +111,6 @@ class EntityService:
                 },
                 request_id=str(request.request_id),
             )
-        self._entities.acquire_merge_lock(source_entity_id=source.id)
         merged = self._entities.mark_merged(source, target_entity_id=target.id)
         return MergeEntityResponse(
             source=self._to_entity_response(merged),
