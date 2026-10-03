@@ -10,15 +10,22 @@ from fastapi.responses import JSONResponse
 
 from semantic_memory.exceptions import (
     AmbiguousEntityError,
+    CardinalityViolationError,
     DbConstraintError,
     DomainError,
+    DomainViolationError,
     DuplicateEntityError,
+    DuplicateStatementError,
     IdempotencyKeyReusedError,
     InternalError,
+    InvalidLiteralTypeError,
     InvalidStateTransitionError,
+    RangeViolationError,
     UnauthorizedOperationError,
     UnknownClassError,
     UnknownEntityError,
+    UnknownPredicateError,
+    UnknownStatementError,
     ValidationFailedError,
 )
 from semantic_memory.schemas.errors import ErrorEnvelope
@@ -27,9 +34,16 @@ logger = logging.getLogger(__name__)
 
 _STATUS_BY_ERROR: dict[type[DomainError], int] = {
     UnknownClassError: 404,
+    UnknownPredicateError: 404,
     UnknownEntityError: 404,
+    UnknownStatementError: 404,
     AmbiguousEntityError: 409,
     DuplicateEntityError: 409,
+    DuplicateStatementError: 409,
+    DomainViolationError: 422,
+    RangeViolationError: 422,
+    CardinalityViolationError: 422,
+    InvalidLiteralTypeError: 422,
     IdempotencyKeyReusedError: 409,
     UnauthorizedOperationError: 403,
     InvalidStateTransitionError: 409,

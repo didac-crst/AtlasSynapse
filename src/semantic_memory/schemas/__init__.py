@@ -9,10 +9,19 @@ from semantic_memory.schemas.entities import (
 )
 from semantic_memory.schemas.errors import ErrorEnvelope
 from semantic_memory.schemas.health import HealthResponse, ReadyResponse
+from semantic_memory.schemas.statements import (
+    AssertionOutcome,
+    AssertStatementRequest,
+    AssertStatementResponse,
+    StatementResponse,
+)
 
 __all__ = [
     "ActorEnsureRequest",
     "ActorResponse",
+    "AssertStatementRequest",
+    "AssertStatementResponse",
+    "AssertionOutcome",
     "CreateEntityRequest",
     "CreateEntityResponse",
     "EntityResponse",
@@ -20,4 +29,5 @@ __all__ = [
     "HealthResponse",
     "ReadyResponse",
     "ResolutionOutcome",
+    "StatementResponse",
 ]

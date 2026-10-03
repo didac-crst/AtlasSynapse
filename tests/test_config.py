@@ -26,6 +26,7 @@ def test_mcp_placeholder() -> None:
     placeholder = MCPPlaceholder.from_settings(Settings())
     assert placeholder.ready is True
     assert "create_entity" in placeholder.tools
+    assert "assert_statement" in placeholder.tools
     assert placeholder.transport in {"stdio", "http"}
 
 
