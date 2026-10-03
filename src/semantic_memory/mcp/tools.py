@@ -10,8 +10,22 @@ from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 
 from semantic_memory.exceptions import DomainError, ValidationFailedError
+from semantic_memory.models.enums import ConflictStatus
+from semantic_memory.schemas.batches import AssertBatchRequest
+from semantic_memory.schemas.conflicts import (
+    DismissConflictRequest,
+    FindConflictsResponse,
+    MergeEntityRequest,
+    ResolveConflictRequest,
+)
 from semantic_memory.schemas.entities import CreateEntityRequest, EntityResponse
 from semantic_memory.schemas.errors import ErrorEnvelope
+from semantic_memory.schemas.ontology import (
+    OntologyClassResponse,
+    OntologyContextResponse,
+    OntologyPredicateResponse,
+    OntologySearchResponse,
+)
 from semantic_memory.schemas.provenance import AddEvidenceRequest, ExplainStatementResponse
 from semantic_memory.schemas.statements import (
     AssertStatementRequest,
@@ -20,7 +34,10 @@ from semantic_memory.schemas.statements import (
     SupersedeStatementRequest,
     TimelineResponse,
 )
+from semantic_memory.services.batches import BatchService
+from semantic_memory.services.conflicts import ConflictService
 from semantic_memory.services.entities import EntityService
+from semantic_memory.services.ontology import OntologyService
 from semantic_memory.services.provenance import ProvenanceService
 from semantic_memory.services.statements import StatementService
 
@@ -83,6 +100,12 @@ class EntityMCPTools:
                 )
             )
 
+    def merge_entity(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return _run_mutation(
+            self._session,
+            lambda: self._entities.merge_entity(MergeEntityRequest.model_validate(payload)),
+        )
+
 
 class StatementMCPTools:
     """Translate MCP tool calls into statement and provenance operations."""
@@ -91,6 +114,7 @@ class StatementMCPTools:
         self._session = session
         self._statements = StatementService(session)
         self._provenance = ProvenanceService(session)
+        self._conflicts = ConflictService(session)
 
     def assert_statement(self, payload: dict[str, Any]) -> dict[str, Any]:
         return _run_mutation(
@@ -163,5 +187,153 @@ class StatementMCPTools:
                 ValidationFailedError(
                     "Invalid entity id",
                     details={"entity_id": entity_id, "error": str(exc)},
+                )
+            )
+
+    def find_conflicts(
+        self,
+        *,
+        entity_id: str | None = None,
+        statement_id: str | None = None,
+        status: str | None = "open",
+    ) -> dict[str, Any]:
+        try:
+            resolved_status: ConflictStatus | None
+            if status is None:
+                resolved_status = None
+            else:
+                resolved_status = ConflictStatus(status)
+            result: FindConflictsResponse = self._conflicts.find_conflicts(
+                entity_id=None if entity_id is None else uuid.UUID(entity_id),
+                statement_id=None if statement_id is None else uuid.UUID(statement_id),
+                status=resolved_status,
+            )
+            return result.model_dump(mode="json")
+        except (DomainError, ValueError) as exc:
+            if isinstance(exc, DomainError):
+                return _error(exc)
+            return _error(
+                ValidationFailedError(
+                    "Invalid conflict query",
+                    details={"error": str(exc)},
+                )
+            )
+
+    def resolve_conflict(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return _run_mutation(
+            self._session,
+            lambda: self._conflicts.resolve_conflict(
+                ResolveConflictRequest.model_validate(payload)
+            ),
+        )
+
+    def dismiss_conflict(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return _run_mutation(
+            self._session,
+            lambda: self._conflicts.dismiss_conflict(
+                DismissConflictRequest.model_validate(payload)
+            ),
+        )
+
+    def assert_batch(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return _run_mutation(
+            self._session,
+            lambda: BatchService(self._session).assert_batch(
+                AssertBatchRequest.model_validate(payload)
+            ),
+        )
+
+
+class OntologyMCPTools:
+    """Translate MCP tool calls into ontology read operations."""
+
+    def __init__(self, session: Session) -> None:
+        self._ontology = OntologyService(session)
+
+    def get_class(
+        self,
+        *,
+        class_key: str | None = None,
+        class_id: str | None = None,
+        alias: str | None = None,
+        namespace_key: str = "core",
+    ) -> dict[str, Any]:
+        try:
+            result: OntologyClassResponse = self._ontology.get_class(
+                class_key=class_key,
+                class_id=None if class_id is None else uuid.UUID(class_id),
+                alias=alias,
+                namespace_key=namespace_key,
+            )
+            return result.model_dump(mode="json")
+        except (DomainError, ValueError) as exc:
+            if isinstance(exc, DomainError):
+                return _error(exc)
+            return _error(
+                ValidationFailedError("Invalid class lookup", details={"error": str(exc)})
+            )
+
+    def get_predicate(
+        self,
+        *,
+        predicate_key: str | None = None,
+        predicate_id: str | None = None,
+        alias: str | None = None,
+        namespace_key: str = "core",
+    ) -> dict[str, Any]:
+        try:
+            result: OntologyPredicateResponse = self._ontology.get_predicate(
+                predicate_key=predicate_key,
+                predicate_id=None if predicate_id is None else uuid.UUID(predicate_id),
+                alias=alias,
+                namespace_key=namespace_key,
+            )
+            return result.model_dump(mode="json")
+        except (DomainError, ValueError) as exc:
+            if isinstance(exc, DomainError):
+                return _error(exc)
+            return _error(
+                ValidationFailedError("Invalid predicate lookup", details={"error": str(exc)})
+            )
+
+    def search_ontology(
+        self,
+        *,
+        query: str,
+        namespace_key: str | None = "core",
+        limit: int = 25,
+    ) -> dict[str, Any]:
+        try:
+            result: OntologySearchResponse = self._ontology.search_ontology(
+                query=query,
+                namespace_key=namespace_key,
+                limit=limit,
+            )
+            return result.model_dump(mode="json")
+        except DomainError as exc:
+            return _error(exc)
+
+    def get_ontology_context(
+        self,
+        *,
+        class_key: str | None = None,
+        class_id: str | None = None,
+        alias: str | None = None,
+        namespace_key: str = "core",
+    ) -> dict[str, Any]:
+        try:
+            result: OntologyContextResponse = self._ontology.get_ontology_context(
+                class_key=class_key,
+                class_id=None if class_id is None else uuid.UUID(class_id),
+                alias=alias,
+                namespace_key=namespace_key,
+            )
+            return result.model_dump(mode="json")
+        except (DomainError, ValueError) as exc:
+            if isinstance(exc, DomainError):
+                return _error(exc)
+            return _error(
+                ValidationFailedError(
+                    "Invalid ontology context lookup", details={"error": str(exc)}
                 )
             )

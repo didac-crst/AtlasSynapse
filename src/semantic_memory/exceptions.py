@@ -68,6 +68,14 @@ class CardinalityViolationError(DomainError):
     error_code = "CARDINALITY_VIOLATION"
 
 
+class ConflictDetectedError(DomainError):
+    error_code = "CONFLICT_DETECTED"
+
+
+class UnknownConflictError(DomainError):
+    error_code = "UNKNOWN_CONFLICT"
+
+
 class InvalidLiteralTypeError(DomainError):
     error_code = "INVALID_LITERAL_TYPE"
 

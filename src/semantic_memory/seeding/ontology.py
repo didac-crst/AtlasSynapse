@@ -85,6 +85,27 @@ CORE_PREDICATES: tuple[
     ("source", ValueKind.ENTITY, Cardinality.MANY, ("Thing",), ("Document",)),
 )
 
+# Data-only extensions for Milestone B Phase 7 proofs. No new SQL tables.
+# Applied by ensure_rich_event_models() on top of the bootstrap seed.
+RICH_EVENT_INHERITANCE_FIXES: tuple[tuple[str, str], ...] = (
+    ("Agent", "Thing"),
+    ("Place", "Thing"),
+)
+
+RICH_EVENT_CLASSES: tuple[tuple[str, str], ...] = (
+    ("Employment", "RelationshipContext"),
+    ("Residence", "RelationshipContext"),
+    ("MoveEvent", "Event"),
+    ("ProjectParticipation", "RelationshipContext"),
+    ("ExperimentRun", "Activity"),
+)
+
+RICH_EVENT_DOMAIN_EXTENSIONS: tuple[tuple[str, str], ...] = (
+    ("startedAt", "RelationshipContext"),
+    ("endedAt", "RelationshipContext"),
+    ("locatedAt", "RelationshipContext"),
+)
+
 
 def stable_seed_id(*parts: str) -> uuid.UUID:
     """Return a stable UUID for a seed row identity."""
@@ -223,4 +244,113 @@ def seed_core_ontology(session: Session) -> dict[str, Any]:
         "created": True,
         "class_count": len(CORE_CLASSES),
         "predicate_count": len(CORE_PREDICATES),
+    }
+
+
+def ensure_rich_event_models(session: Session) -> dict[str, Any]:
+    """Ensure representative rich-event classes and predicate domains exist.
+
+    Uses only existing ontology tables. Safe to call repeatedly. Does not create
+    domain-specific SQL tables or require a schema migration.
+    """
+    namespace = session.scalar(
+        select(OntologyNamespace).where(OntologyNamespace.key == CORE_NAMESPACE_KEY)
+    )
+    if namespace is None:
+        seed_core_ontology(session)
+        namespace = session.scalar(
+            select(OntologyNamespace).where(OntologyNamespace.key == CORE_NAMESPACE_KEY)
+        )
+    assert namespace is not None
+    actor = _get_or_create_system_actor(session)
+
+    classes: dict[str, OntologyClass] = {}
+    for row in session.scalars(
+        select(OntologyClass).where(OntologyClass.namespace_id == namespace.id)
+    ).all():
+        classes[row.key] = row
+
+    created_classes = 0
+    for class_key, _parent_key in RICH_EVENT_CLASSES:
+        if class_key in classes:
+            continue
+        ontology_class = OntologyClass(
+            id=stable_seed_id("class", CORE_NAMESPACE_KEY, class_key),
+            namespace_id=namespace.id,
+            key=class_key,
+        )
+        session.add(ontology_class)
+        session.flush()
+        revision = OntologyClassRevision(
+            id=stable_seed_id("class_revision", CORE_NAMESPACE_KEY, class_key, "1"),
+            class_id=ontology_class.id,
+            revision_number=1,
+            label=class_key,
+            description=f"Rich-event ontology class {class_key}.",
+            metadata_json={"seed_extension": "rich_events"},
+            created_by_actor_id=actor.id,
+        )
+        session.add(revision)
+        session.flush()
+        ontology_class.current_revision_id = revision.id
+        classes[class_key] = ontology_class
+        created_classes += 1
+
+    created_parents = 0
+    for child_key, parent_key in (*RICH_EVENT_INHERITANCE_FIXES, *RICH_EVENT_CLASSES):
+        child = classes[child_key]
+        parent = classes[parent_key]
+        exists = session.scalar(
+            select(OntologyClassParent.id).where(
+                OntologyClassParent.child_class_id == child.id,
+                OntologyClassParent.parent_class_id == parent.id,
+            )
+        )
+        if exists is not None:
+            continue
+        session.add(
+            OntologyClassParent(
+                id=stable_seed_id("class_parent", CORE_NAMESPACE_KEY, child_key, parent_key),
+                child_class_id=child.id,
+                parent_class_id=parent.id,
+            )
+        )
+        created_parents += 1
+
+    created_domains = 0
+    for predicate_key, domain_key in RICH_EVENT_DOMAIN_EXTENSIONS:
+        predicate = session.scalar(
+            select(OntologyPredicate).where(
+                OntologyPredicate.namespace_id == namespace.id,
+                OntologyPredicate.key == predicate_key,
+            )
+        )
+        if predicate is None or predicate.current_revision_id is None:
+            continue
+        domain_class = classes[domain_key]
+        exists = session.scalar(
+            select(OntologyPredicateDomain.id).where(
+                OntologyPredicateDomain.predicate_revision_id == predicate.current_revision_id,
+                OntologyPredicateDomain.class_id == domain_class.id,
+            )
+        )
+        if exists is not None:
+            continue
+        session.add(
+            OntologyPredicateDomain(
+                id=stable_seed_id(
+                    "predicate_domain", CORE_NAMESPACE_KEY, predicate_key, domain_key
+                ),
+                predicate_revision_id=predicate.current_revision_id,
+                class_id=domain_class.id,
+            )
+        )
+        created_domains += 1
+
+    session.flush()
+    return {
+        "namespace": CORE_NAMESPACE_KEY,
+        "created_classes": created_classes,
+        "created_parents": created_parents,
+        "created_domains": created_domains,
     }

@@ -58,6 +58,7 @@ class EntityResponse(BaseModel):
     id: uuid.UUID
     canonical_name: str
     status: EntityStatus
+    merged_into_entity_id: uuid.UUID | None = None
     types: list[EntityTypeResponse] = Field(default_factory=list)
     aliases: list[str] = Field(default_factory=list)
     external_references: list[ExternalReferenceResponse] = Field(default_factory=list)

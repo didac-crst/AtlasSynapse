@@ -91,6 +91,7 @@ class AssertStatementResponse(BaseModel):
     statement: StatementResponse
     request_id: uuid.UUID
     reused: bool = False
+    conflict_ids: list[uuid.UUID] = Field(default_factory=list)
 
 
 class SupersedeStatementRequest(AssertStatementRequest):
