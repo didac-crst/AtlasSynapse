@@ -61,6 +61,17 @@ def test_http_actor_ensure_requires_admin_token(client: TestClient) -> None:
     assert with_token.json()["error_code"] == "UNAUTHORIZED_OPERATION"
 
 
+def test_admin_api_token_defaults_fail_closed() -> None:
+    get_settings.cache_clear()
+    try:
+        from semantic_memory.config import Settings
+
+        assert Settings(admin_api_token="").admin_api_token == ""
+        assert Settings.model_fields["admin_api_token"].default == ""
+    finally:
+        get_settings.cache_clear()
+
+
 def test_http_create_and_get_entity(client: TestClient) -> None:
     _ensure_writer_http(client)
     payload = {

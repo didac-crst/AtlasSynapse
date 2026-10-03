@@ -23,6 +23,8 @@ def pytest_configure() -> None:
         "DATABASE_URL",
         "postgresql+psycopg://semantic_memory:semantic_memory@localhost:5432/semantic_memory",
     )
+    # Production defaults fail closed; tests explicitly enable a local admin token.
+    os.environ.setdefault("ADMIN_API_TOKEN", "test-admin-token")
 
 
 def _database_url() -> str:

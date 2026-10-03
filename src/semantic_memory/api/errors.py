@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -20,6 +22,8 @@ from semantic_memory.exceptions import (
     ValidationFailedError,
 )
 from semantic_memory.schemas.errors import ErrorEnvelope
+
+logger = logging.getLogger(__name__)
 
 _STATUS_BY_ERROR: dict[type[DomainError], int] = {
     UnknownClassError: 404,
@@ -62,9 +66,10 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(ValueError)
     async def _value_error_handler(_request: Request, exc: ValueError) -> JSONResponse:
+        logger.warning("Unhandled ValueError at transport boundary", exc_info=exc)
         body = ErrorEnvelope(
             error_code=ValidationFailedError.error_code,
-            message=str(exc) or "Request validation failed",
+            message="Request validation failed",
             details={},
             retryable=False,
         )

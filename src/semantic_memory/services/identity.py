@@ -78,22 +78,6 @@ class IdentityService:
                 candidates=self._to_candidates(alias_matches, "alias"),
             )
 
-        # 4. Candidate discovery (class-scoped structural signals)
-        discovered = self._entities.find_candidates(name=canonical_name, class_id=class_id)
-        if len(discovered) == 1:
-            entity, reason = discovered[0]
-            return ResolutionResult(
-                outcome=ResolutionOutcome.REUSE,
-                entity=entity,
-                match_reason=reason,
-            )
-        if len(discovered) > 1:
-            candidates = [self._to_candidate(entity, reason) for entity, reason in discovered]
-            return ResolutionResult(
-                outcome=ResolutionOutcome.AMBIGUOUS,
-                candidates=candidates,
-            )
-
         return ResolutionResult(outcome=ResolutionOutcome.CREATE)
 
     def _to_candidates(self, entities: list[Entity], reason: str) -> list[EntityCandidate]:

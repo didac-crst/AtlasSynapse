@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     mcp_transport: Literal["stdio", "http"] = Field(default="stdio", alias="MCP_TRANSPORT")
     http_host: str = Field(default="0.0.0.0", alias="HTTP_HOST")
     http_port: int = Field(default=8000, alias="HTTP_PORT", ge=1, le=65535)
-    admin_api_token: str = Field(default="dev-admin-token", alias="ADMIN_API_TOKEN")
+    admin_api_token: str = Field(default="", alias="ADMIN_API_TOKEN")
     default_actor_capabilities: list[str] = Field(
         default_factory=lambda: [cap.value for cap in DEFAULT_AGENT_CAPABILITIES],
         alias="DEFAULT_ACTOR_CAPABILITIES",
