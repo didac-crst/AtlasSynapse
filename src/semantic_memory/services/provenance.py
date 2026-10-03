@@ -165,12 +165,17 @@ class ProvenanceService:
             source_input.uri,
             source_input.title,
         )
-        lock_material = (
-            f"ext:{source_input.source_system}:{source_input.external_id}"
-            if source_input.source_system and source_input.external_id
-            else f"hash:{content_hash or uuid.uuid4()}"
-        )
-        self._provenance.acquire_source_lock(material=lock_material)
+        # Take every applicable identity lock so concurrent callers that share
+        # either external identity or content_hash serialize before lookup/create.
+        lock_materials: list[str] = []
+        if source_input.source_system and source_input.external_id:
+            lock_materials.append(f"ext:{source_input.source_system}:{source_input.external_id}")
+        if content_hash:
+            lock_materials.append(f"hash:{content_hash}")
+        if not lock_materials:
+            lock_materials.append(f"hash:{uuid.uuid4()}")
+        for lock_material in sorted(lock_materials):
+            self._provenance.acquire_source_lock(material=lock_material)
 
         if source_input.source_system and source_input.external_id:
             existing = self._provenance.find_source_by_external(
