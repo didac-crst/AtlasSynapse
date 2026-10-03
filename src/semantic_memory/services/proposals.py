@@ -279,11 +279,14 @@ class ProposalService:
             "operation_log_id": None if operation is None else operation.id,
             "trace_id": None if operation is None else operation.trace_id,
         }
-        outcomes = self._gates.run(
-            proposal_id=proposal.id,
-            proposal_type=proposal_type,
-            payload=payload,
-        )
+        try:
+            outcomes = self._gates.run(
+                proposal_id=proposal.id,
+                proposal_type=proposal_type,
+                payload=payload,
+            )
+        finally:
+            self._review_context = {}
         outcome, status, reason = self._aggregate(outcomes)
         self._governance.set_proposal_status(proposal, status=status, decision_reason=reason)
         return ProposeResponse(

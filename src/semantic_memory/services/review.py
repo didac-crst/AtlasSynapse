@@ -153,7 +153,7 @@ class LoggingSemanticReviewer:
                     outcome="unavailable",
                     reason="reviewer_failure",
                     error_code="DEPENDENCY_UNAVAILABLE",
-                    error_message=str(exc),
+                    error_message="Semantic reviewer call failed",
                     metadata={"error_type": type(exc).__name__},
                 ),
             )
