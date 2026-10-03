@@ -17,7 +17,8 @@ from semantic_memory.exceptions import (
     UnauthorizedOperationError,
     UnknownClassError,
 )
-from semantic_memory.models import ActorStatus, ActorType, Entity, EntityType
+from semantic_memory.models import ActorStatus, ActorType, Entity, EntityType, OperationLog
+from semantic_memory.models.enums import OperationStatus
 from semantic_memory.repositories.entities import EntityRepository
 from semantic_memory.repositories.ontology import OntologyRepository
 from semantic_memory.schemas.actors import ActorEnsureRequest
@@ -362,3 +363,29 @@ def test_acceptance_scenario(db_session: Session) -> None:
         service.create_entity(
             _create_request(name="Y", class_key="Person", actor_key="disabled-writer")
         )
+
+
+def test_create_entity_records_operation_log_success(db_session: Session) -> None:
+    _ensure_writer(db_session)
+    request = _create_request(name="Audited Person", class_key="Person")
+    result = EntityService(db_session).create_entity(request)
+    assert result.outcome == ResolutionOutcome.CREATE
+    log = db_session.scalars(
+        select(OperationLog).where(OperationLog.request_id == request.request_id)
+    ).one()
+    assert log.operation_name == "create_entity"
+    assert log.status == OperationStatus.SUCCESS.value
+    assert log.error_code is None
+
+
+def test_create_entity_records_operation_log_rejection(db_session: Session) -> None:
+    _ensure_writer(db_session)
+    request = _create_request(name="Ghost", class_key="Spaceship")
+    with pytest.raises(UnknownClassError):
+        EntityService(db_session).create_entity(request)
+    log = db_session.scalars(
+        select(OperationLog).where(OperationLog.request_id == request.request_id)
+    ).one()
+    assert log.operation_name == "create_entity"
+    assert log.status == OperationStatus.REJECTED.value
+    assert log.error_code == "UNKNOWN_CLASS"
