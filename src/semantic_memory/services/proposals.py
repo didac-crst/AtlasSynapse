@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from semantic_memory.config import Settings, get_settings
 from semantic_memory.exceptions import (
     RevisionConflictError,
     UnknownProposalError,
@@ -51,16 +52,33 @@ from semantic_memory.schemas.proposals import (
 from semantic_memory.services.actors import ActorService
 from semantic_memory.services.gates import DeterministicGatePipeline
 from semantic_memory.services.mutations import MutationRunner
+from semantic_memory.services.review import (
+    SemanticReviewer,
+    build_semantic_reviewer,
+    make_semantic_review_gate,
+)
 
 
 class ProposalService:
-    def __init__(self, session: Session) -> None:
+    def __init__(
+        self,
+        session: Session,
+        *,
+        settings: Settings | None = None,
+        reviewer: SemanticReviewer | None = None,
+    ) -> None:
         self._session = session
-        self._actors = ActorService(session)
+        self._settings = settings or get_settings()
+        self._actors = ActorService(session, settings=self._settings)
         self._governance = GovernanceRepository(session)
         self._ontology = OntologyRepository(session)
         self._gates = DeterministicGatePipeline(session)
-        self._mutations = MutationRunner(session)
+        self._mutations = MutationRunner(session, settings=self._settings)
+        if reviewer is None:
+            self._reviewer = build_semantic_reviewer(self._settings)
+        else:
+            self._reviewer = reviewer
+        self._gates.register_extra_gate(make_semantic_review_gate(self._reviewer))
 
     @property
     def gate_pipeline(self) -> DeterministicGatePipeline:

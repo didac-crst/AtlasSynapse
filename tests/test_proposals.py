@@ -99,9 +99,10 @@ def test_propose_and_apply_class_creates_revision_and_change(db_session: Session
             parent_keys=["Organization"],
         )
     )
-    assert proposed.outcome == ProposalOutcome.READY_TO_APPLY
-    assert proposed.proposal.status == ProposalStatus.SUBMITTED
+    assert proposed.outcome == ProposalOutcome.MANUAL_REVIEW
+    assert proposed.proposal.status == ProposalStatus.IN_REVIEW
     assert any(item.gate_name == "final_deterministic" for item in proposed.proposal.gate_results)
+    assert any(item.gate_name == "semantic_review" for item in proposed.proposal.gate_results)
 
     before_classes = db_session.scalar(select(func.count()).select_from(OntologyClass))
     applied = service.apply_proposal(
@@ -161,7 +162,7 @@ def test_inheritance_cycle_is_rejected(db_session: Session) -> None:
             parent_keys=["Organization"],
         )
     )
-    assert created.outcome == ProposalOutcome.READY_TO_APPLY
+    assert created.outcome == ProposalOutcome.MANUAL_REVIEW
     service.apply_proposal(
         ApplyProposalRequest(**_envelope(applier), proposal_id=created.proposal.id)
     )
@@ -245,7 +246,7 @@ def test_stale_revision_returns_revision_conflict(db_session: Session) -> None:
             range_keys=["Person"],
         )
     )
-    assert create.outcome == ProposalOutcome.READY_TO_APPLY
+    assert create.outcome == ProposalOutcome.MANUAL_REVIEW
     service.apply_proposal(
         ApplyProposalRequest(**_envelope(applier), proposal_id=create.proposal.id)
     )
@@ -261,7 +262,7 @@ def test_stale_revision_returns_revision_conflict(db_session: Session) -> None:
             base_revision_number=0,
         )
     )
-    assert stale.outcome == ProposalOutcome.READY_TO_APPLY
+    assert stale.outcome == ProposalOutcome.MANUAL_REVIEW
     with pytest.raises(RevisionConflictError) as exc:
         service.apply_proposal(
             ApplyProposalRequest(**_envelope(applier), proposal_id=stale.proposal.id)
@@ -275,7 +276,7 @@ def test_unauthorized_actor_cannot_apply(db_session: Session) -> None:
     proposed = service.propose_class(
         ProposeClassRequest(**_envelope(proposer), key="Faculty", parent_keys=["Person"])
     )
-    assert proposed.outcome == ProposalOutcome.READY_TO_APPLY
+    assert proposed.outcome == ProposalOutcome.MANUAL_REVIEW
     with pytest.raises(UnauthorizedOperationError) as exc:
         service.apply_proposal(
             ApplyProposalRequest(**_envelope(proposer), proposal_id=proposed.proposal.id)
@@ -298,7 +299,7 @@ def test_propose_alias_constraint_and_parent(db_session: Session) -> None:
             target_key="Person",
         )
     )
-    assert alias.outcome == ProposalOutcome.READY_TO_APPLY
+    assert alias.outcome == ProposalOutcome.MANUAL_REVIEW
     service.apply_proposal(
         ApplyProposalRequest(**_envelope(applier), proposal_id=alias.proposal.id)
     )
@@ -312,7 +313,7 @@ def test_propose_alias_constraint_and_parent(db_session: Session) -> None:
             expression={"requires": "displayName"},
         )
     )
-    assert constraint.outcome == ProposalOutcome.READY_TO_APPLY
+    assert constraint.outcome == ProposalOutcome.MANUAL_REVIEW
     service.apply_proposal(
         ApplyProposalRequest(**_envelope(applier), proposal_id=constraint.proposal.id)
     )
@@ -349,7 +350,7 @@ def test_propose_alias_constraint_and_parent(db_session: Session) -> None:
             base_revision_number=revision.revision_number,
         )
     )
-    assert parent.outcome == ProposalOutcome.READY_TO_APPLY
+    assert parent.outcome == ProposalOutcome.MANUAL_REVIEW
     service.apply_proposal(
         ApplyProposalRequest(**_envelope(applier), proposal_id=parent.proposal.id)
     )
@@ -394,7 +395,7 @@ def test_http_propose_and_apply_endpoints(client: TestClient) -> None:
     proposed = client.post("/v1/ontology/proposals/classes", json=propose_body)
     assert proposed.status_code == 200
     body = proposed.json()
-    assert body["outcome"] == "READY_TO_APPLY"
+    assert body["outcome"] == "MANUAL_REVIEW"
     proposal_id = body["proposal"]["id"]
 
     fetched = client.get(f"/v1/ontology/proposals/{proposal_id}")
@@ -442,5 +443,5 @@ def test_mcp_proposal_tools_do_not_expose_apply(db_session: Session) -> None:
             "parent_keys": ["Thing"],
         }
     )
-    assert result["outcome"] == "READY_TO_APPLY"
+    assert result["outcome"] == "MANUAL_REVIEW"
     assert "error_code" not in result
