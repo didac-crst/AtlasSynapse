@@ -13,6 +13,8 @@ from semantic_memory.models.enums import (
     EmbeddingObjectType,
     EntityStatus,
     GateDecision,
+    LlmCallStatus,
+    LlmCostStatus,
     OntologyChangeObjectType,
     OperationStatus,
     ProposalStatus,
@@ -32,6 +34,7 @@ from semantic_memory.models.knowledge import (
     Statement,
     StatementQualifier,
 )
+from semantic_memory.models.llm_calls import LlmCallLog
 from semantic_memory.models.ontology import (
     OntologyAlias,
     OntologyClass,
@@ -69,6 +72,9 @@ __all__ = [
     "GateDecision",
     "IdempotencyRecord",
     "IngestionBatch",
+    "LlmCallLog",
+    "LlmCallStatus",
+    "LlmCostStatus",
     "OntologyAlias",
     "OntologyChange",
     "OntologyChangeObjectType",

@@ -92,16 +92,22 @@ Status: Done.
 
 Add optional embeddings with a provider interface and JSONB vector storage. `pgvector` is not required. Embeddings never determine truth, identity, or acceptance.
 
-## Phase 13+ — Retrieval, ingestion policy, administration, and advanced semantic capabilities
+## Phase 13 — Retrieval and LLM observability
 
-Improve retrieval quality, decide what becomes durable memory, add inspection UI if justified, and consider exports, inference, and ontology health tooling.
+Status: Done.
+
+Implement database-backed retrieval with transparent ranking signals, and durable `llm_call_log` observability for provider calls (separate from `operation_log`; one begin/complete row per call). Retrieval must work without an LLM or vector provider. Every semantic-review call must be measurable.
+
+## Phase 14+ — Ingestion policy, administration, and advanced semantic capabilities
+
+Decide what becomes durable memory, add inspection UI if justified, and consider exports, inference, and ontology health tooling.
 
 ## Milestones
 
 - Milestone A: phases 0–5, usable deterministic memory. — Done.
 - Milestone B: phases 6–9, semantic graph memory. — Done.
 - Milestone C: phases 10–12, governed self-evolving ontology. — Done.
-- Milestone D: phases 13+, mature personal knowledge substrate.
+- Milestone D: phases 13+, mature personal knowledge substrate. — Starts at phase 13.
 
 ## Stop conditions
 

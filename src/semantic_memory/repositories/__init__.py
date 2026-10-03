@@ -7,6 +7,7 @@ from semantic_memory.repositories.embeddings import EmbeddingRepository
 from semantic_memory.repositories.entities import EntityRepository
 from semantic_memory.repositories.governance import GovernanceRepository
 from semantic_memory.repositories.idempotency import IdempotencyRepository
+from semantic_memory.repositories.llm_calls import LlmCallLogRepository
 from semantic_memory.repositories.ontology import OntologyRepository
 from semantic_memory.repositories.operations import OperationLogRepository
 from semantic_memory.repositories.provenance import ProvenanceRepository
@@ -20,6 +21,7 @@ __all__ = [
     "EntityRepository",
     "GovernanceRepository",
     "IdempotencyRepository",
+    "LlmCallLogRepository",
     "OntologyRepository",
     "OperationLogRepository",
     "ProvenanceRepository",

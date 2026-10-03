@@ -14,6 +14,7 @@ from semantic_memory.api.health import router as health_router
 from semantic_memory.api.ontology import router as ontology_router
 from semantic_memory.api.proposals import router as proposals_router
 from semantic_memory.api.provenance import router as provenance_router
+from semantic_memory.api.retrieval import router as retrieval_router
 from semantic_memory.api.statements import router as statements_router
 from semantic_memory.config import Settings, get_settings
 from semantic_memory.db import configure_engine
@@ -36,6 +37,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     register_exception_handlers(app)
     app.include_router(health_router)
     app.include_router(actors_router)
+    # Retrieval static paths (/entities/search, /statements/search) before UUID routes.
+    app.include_router(retrieval_router)
     app.include_router(entities_router)
     app.include_router(statements_router)
     app.include_router(provenance_router)

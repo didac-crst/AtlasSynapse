@@ -9,6 +9,7 @@ from semantic_memory.services.identity import IdentityService
 from semantic_memory.services.ontology import OntologyService
 from semantic_memory.services.proposals import ProposalService
 from semantic_memory.services.provenance import ProvenanceService
+from semantic_memory.services.retrieval import RetrievalService
 from semantic_memory.services.review import (
     DisabledSemanticReviewer,
     MockSemanticReviewer,
@@ -28,6 +29,7 @@ __all__ = [
     "OntologyService",
     "ProposalService",
     "ProvenanceService",
+    "RetrievalService",
     "SemanticReviewer",
     "StatementService",
 ]

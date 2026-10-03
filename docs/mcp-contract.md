@@ -13,6 +13,8 @@ search_statements
 get_statement
 explain_statement
 find_conflicts
+search_semantic_memory
+get_relevant_context
 get_class
 get_predicate
 search_ontology

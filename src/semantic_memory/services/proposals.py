@@ -34,6 +34,7 @@ from semantic_memory.models import (
     OntologyPredicateRange,
     OntologyPredicateRevision,
     OntologyProposal,
+    OperationLog,
     ProposalStatus,
 )
 from semantic_memory.models.capabilities import Capability
@@ -58,8 +59,10 @@ from semantic_memory.services.actors import ActorService
 from semantic_memory.services.embedding_providers import EmbeddingProvider
 from semantic_memory.services.embeddings import EmbeddingService
 from semantic_memory.services.gates import DeterministicGatePipeline
+from semantic_memory.services.llm_logging import DatabaseLlmCallLogger
 from semantic_memory.services.mutations import MutationRunner
 from semantic_memory.services.review import (
+    LoggingSemanticReviewer,
     SemanticReviewer,
     build_semantic_reviewer,
     make_semantic_review_gate,
@@ -82,10 +85,14 @@ class ProposalService:
         self._ontology = OntologyRepository(session)
         self._gates = DeterministicGatePipeline(session)
         self._mutations = MutationRunner(session, settings=self._settings)
+        self._llm_logger = DatabaseLlmCallLogger(session, self._settings)
+        self._review_context: dict[str, Any] = {}
         if reviewer is None:
-            self._reviewer = build_semantic_reviewer(self._settings)
-        else:
+            self._reviewer = build_semantic_reviewer(self._settings, logger=self._llm_logger)
+        elif isinstance(reviewer, LoggingSemanticReviewer):
             self._reviewer = reviewer
+        else:
+            self._reviewer = LoggingSemanticReviewer(reviewer, self._llm_logger)
         self._embeddings = EmbeddingService(
             session,
             settings=self._settings,
@@ -93,7 +100,9 @@ class ProposalService:
         )
         # Gate order: … → similarity → semantic review → final_deterministic.
         self._gates.register_extra_gate(self._embeddings.make_similarity_gate())
-        self._gates.register_extra_gate(make_semantic_review_gate(self._reviewer))
+        self._gates.register_extra_gate(
+            make_semantic_review_gate(self._reviewer, context_provider=lambda: self._review_context)
+        )
 
     @property
     def gate_pipeline(self) -> DeterministicGatePipeline:
@@ -258,11 +267,26 @@ class ProposalService:
             base_revision_number=base_revision_number,
             status=ProposalStatus.SUBMITTED,
         )
-        outcomes = self._gates.run(
-            proposal_id=proposal.id,
-            proposal_type=proposal_type,
-            payload=payload,
+        operation = self._session.scalar(
+            select(OperationLog)
+            .where(OperationLog.request_id == request_id)
+            .order_by(OperationLog.started_at.desc())
+            .limit(1)
         )
+        self._review_context = {
+            "actor_id": actor_id,
+            "request_id": request_id,
+            "operation_log_id": None if operation is None else operation.id,
+            "trace_id": None if operation is None else operation.trace_id,
+        }
+        try:
+            outcomes = self._gates.run(
+                proposal_id=proposal.id,
+                proposal_type=proposal_type,
+                payload=payload,
+            )
+        finally:
+            self._review_context = {}
         outcome, status, reason = self._aggregate(outcomes)
         self._governance.set_proposal_status(proposal, status=status, decision_reason=reason)
         return ProposeResponse(
