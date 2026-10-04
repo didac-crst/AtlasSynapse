@@ -54,12 +54,13 @@ def test_fresh_database_migrates_from_zero(alembic_cfg: Config) -> None:
         "actor",
         "embedding",
         "llm_call_log",
+        "agent_feedback",
     }
     assert required_tables.issubset(set(inspector.get_table_names()))
 
     with engine.connect() as conn:
         version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        assert version == "c3a91d7e2b4f"
+        assert version == "d4b02e8f3c5a"
         class_count = conn.execute(
             text(
                 "SELECT COUNT(*) FROM ontology_class c "

@@ -12,6 +12,10 @@ from semantic_memory.models.enums import (
     ConstraintType,
     EmbeddingObjectType,
     EntityStatus,
+    FeedbackOutcome,
+    FeedbackSeverity,
+    FeedbackStatus,
+    FeedbackType,
     GateDecision,
     LlmCallStatus,
     LlmCostStatus,
@@ -22,6 +26,7 @@ from semantic_memory.models.enums import (
     StatementStatus,
     ValueKind,
 )
+from semantic_memory.models.feedback import AgentFeedback
 from semantic_memory.models.governance import (
     OntologyChange,
     OntologyGateResult,
@@ -69,6 +74,11 @@ __all__ = [
     "EntityStatus",
     "EntityType",
     "ExternalReference",
+    "FeedbackOutcome",
+    "FeedbackSeverity",
+    "FeedbackStatus",
+    "FeedbackType",
+    "AgentFeedback",
     "GateDecision",
     "IdempotencyRecord",
     "IngestionBatch",

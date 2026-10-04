@@ -112,11 +112,23 @@ Package the application for deployment before connecting real users or agents:
 - Backup/restore, TLS/proxy, and observability documentation
 - Deployment smoke tests and a committed dependency lockfile
 
-## Phase 15+ — Ingestion policy, administration, and advanced semantic capabilities
+## Phase 15a — Agent feedback channel
+
+Status: Done.
+
+Add a first-class `agent_feedback` channel for dogfooding: agents report quality observations via MCP/HTTP without conflating them with `operation_log`, `llm_call_log`, or ontology proposals. Include fingerprint dedupe for open rows, redacted context, and admin list/resolve.
+
+## Phase 15b — Admin inspection APIs
+
+Status: Done.
+
+Expose read-only `/v1/admin/*` HTTP inspection over `operation_log`, `llm_call_log`, `agent_feedback`, `ontology_proposal`, `conflict`, and `ingestion_batch`, plus cross-domain SQL aggregates. Metadata-first list projections, deterministic pagination, `X-Admin-Token` auth. No UI, no MCP admin tools, no mutations, no ingestion policy.
+
+## Phase 15+ — Ingestion policy, administration UI, and advanced semantic capabilities
 
 Status: Next.
 
-Decide what becomes durable memory (ingestion policy), add inspection UI if justified, and consider exports, inference, and ontology health tooling. Prefer evidence from dogfooding and agent feedback over speculative automation.
+After dogfooding with feedback + admin inspection, decide what becomes durable memory (ingestion policy), add inspection UI if justified, and consider exports, inference, and ontology health tooling. Prefer evidence from observed failure modes over speculative automation.
 
 ## Milestones
 
@@ -125,7 +137,7 @@ Decide what becomes durable memory (ingestion policy), add inspection UI if just
 - Milestone C: phases 10–12, governed self-evolving ontology. — Done.
 - Milestone D: phase 13 retrieval/LLM observability. — Done.
 - Milestone E: phase 14 production readiness. — Done.
-- Milestone F: phase 15+ ingestion policy, administration, and advanced capabilities. — Next.
+- Milestone F: phases 15a–15b feedback + admin inspection done; remaining 15+ ingestion policy / UI / advanced capabilities. — Next.
 
 ## Stop conditions
 

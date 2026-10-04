@@ -14,6 +14,7 @@ from semantic_memory.db import configure_engine, get_session_factory
 from semantic_memory.mcp.stdio import StdioMCPServer, ToolSpec
 from semantic_memory.mcp.tools import (
     EntityMCPTools,
+    FeedbackMCPTools,
     OntologyMCPTools,
     RetrievalMCPTools,
     StatementMCPTools,
@@ -47,6 +48,7 @@ REGISTERED_TOOL_NAMES: tuple[str, ...] = (
     "propose_constraint",
     "propose_alias",
     "propose_class_parent",
+    "report_feedback",
 )
 
 _PAYLOAD_SCHEMA: dict[str, Any] = {
@@ -68,7 +70,7 @@ class MCPServerInfo:
     message: str = (
         "Stdio MCP transport exposing entity, statement, provenance, conflict, "
         "merge, supersession, retraction, timeline, retrieval, ontology read, "
-        "and proposal tools."
+        "proposal, and feedback tools."
     )
     tools: tuple[str, ...] = field(default_factory=lambda: REGISTERED_TOOL_NAMES)
 
@@ -397,6 +399,11 @@ def build_mcp_tools() -> list[ToolSpec]:
             "propose_class_parent",
             "Propose a class parent link.",
             lambda session, payload: OntologyMCPTools(session).propose_class_parent(payload),
+        ),
+        _payload_tool(
+            "report_feedback",
+            "Report an agent feedback observation about system quality.",
+            lambda session, payload: FeedbackMCPTools(session).report_feedback(payload),
         ),
     ]
 

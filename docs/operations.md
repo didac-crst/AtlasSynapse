@@ -12,10 +12,13 @@ knowledge.write
 ontology.read
 ontology.propose
 ontology.apply
+feedback.create
+feedback.read
+feedback.manage
 admin
 ```
 
-The normal ChatGPT integration receives the first four except `ontology.apply`.
+The normal ChatGPT integration receives knowledge/ontology read-write/propose plus `feedback.create`. Direct ontology application and feedback administration are reserved for privileged actors.
 
 ## Mutation envelope
 
@@ -44,13 +47,21 @@ Every semantic-review invocation is recorded in `llm_call_log` (not `operation_l
 
 Retrieval (`search_entities`, `search_statements`, `search_semantic_memory`, `get_relevant_context`, neighborhood/timeline/explain/conflicts) is database-backed and must succeed without an LLM or embedding provider. Ranking exposes transparent signals (lexical, temporal, recency, evidence, reliability, proximity, ontology specificity) and must not collapse into an unexplained truth score. Vector search remains optional.
 
+## Agent feedback
+
+Agents may report quality observations via `report_feedback` / `POST /v1/feedback` without treating a successful operation as a failure. Feedback lives in `agent_feedback`, separate from `operation_log`, `llm_call_log`, and ontology proposals. Open rows with the same fingerprint are deduplicated by incrementing `occurrence_count`. Context payloads follow the same retention/redaction policy as operation audits. Listing and resolution require `feedback.read` / `feedback.manage` (or `admin`).
+
 ## Health behavior
 
 `/health/live` reports process liveness. `/health/ready` verifies database connectivity and migration compatibility. The readiness check must not require an external LLM or embedding provider.
 
 ## HTTP authentication
 
-Application HTTP routes require a shared API token (`Authorization: Bearer` or `X-API-Token`) when `HTTP_API_TOKEN` is configured, and always when `APP_ENV=production`. Health probes (`/health`, `/health/*`) and documentation routes (`/docs`, `/openapi.json`, `/redoc`, when enabled) stay public. `actor_key` remains an audit/capability identifier, not the authentication secret. Actor provisioning additionally requires `X-Admin-Token`.
+Application HTTP routes require a shared API token (`Authorization: Bearer` or `X-API-Token`) when `HTTP_API_TOKEN` is configured, and always when `APP_ENV=production`. Health probes (`/health`, `/health/*`) and documentation routes (`/docs`, `/openapi.json`, `/redoc`, when enabled) stay public. `actor_key` remains an audit/capability identifier, not the authentication secret. Administrative routes (`POST /v1/actors/ensure` and `/v1/admin/*`) additionally require `X-Admin-Token` (missing/invalid → 403; missing outer API token → 401).
+
+## Admin inspection
+
+`/v1/admin/*` is HTTP-only, read-only observability for humans/ops: list/get filters over operations, LLM calls, feedback, ontology proposals, conflicts, and ingestion batches, plus `GET /v1/admin/summary`. Collection views return metadata projections (no request/response payloads, LLM metadata, feedback context, or proposal payloads). Detail endpoints may opt in with `include_payloads=true`. Pagination is deterministic (`created_at DESC, id DESC`) with exact totals. No MCP admin tools.
 
 ## Deployment
 

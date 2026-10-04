@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from semantic_memory.models import (
@@ -24,6 +25,111 @@ class GovernanceRepository:
 
     def get_proposal(self, proposal_id: uuid.UUID) -> OntologyProposal | None:
         return self._session.get(OntologyProposal, proposal_id)
+
+    def list_proposals(
+        self,
+        *,
+        status: str | None = None,
+        proposal_type: str | None = None,
+        proposed_by_actor_id: uuid.UUID | None = None,
+        request_id: uuid.UUID | None = None,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[OntologyProposal]:
+        stmt = self._proposal_filtered_select(
+            status=status,
+            proposal_type=proposal_type,
+            proposed_by_actor_id=proposed_by_actor_id,
+            request_id=request_id,
+            created_after=created_after,
+            created_before=created_before,
+        ).order_by(OntologyProposal.created_at.desc(), OntologyProposal.id.desc())
+        return list(self._session.scalars(stmt.limit(limit).offset(offset)).all())
+
+    def count_proposals(
+        self,
+        *,
+        status: str | None = None,
+        proposal_type: str | None = None,
+        proposed_by_actor_id: uuid.UUID | None = None,
+        request_id: uuid.UUID | None = None,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
+    ) -> int:
+        filtered = self._proposal_filtered_select(
+            status=status,
+            proposal_type=proposal_type,
+            proposed_by_actor_id=proposed_by_actor_id,
+            request_id=request_id,
+            created_after=created_after,
+            created_before=created_before,
+        ).subquery()
+        return int(self._session.scalar(select(func.count()).select_from(filtered)) or 0)
+
+    def aggregate_proposal_summary(
+        self,
+        *,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
+    ) -> dict[str, Any]:
+        by_status_rows = self._session.execute(
+            self._proposal_time_filters(
+                select(OntologyProposal.status, func.count()),
+                created_after=created_after,
+                created_before=created_before,
+            ).group_by(OntologyProposal.status)
+        )
+        by_type_rows = self._session.execute(
+            self._proposal_time_filters(
+                select(OntologyProposal.proposal_type, func.count()),
+                created_after=created_after,
+                created_before=created_before,
+            ).group_by(OntologyProposal.proposal_type)
+        )
+        by_status = {str(k): int(v) for k, v in by_status_rows}
+        return {
+            "total": sum(by_status.values()),
+            "by_status": by_status,
+            "by_type": {str(k): int(v) for k, v in by_type_rows},
+        }
+
+    def _proposal_filtered_select(
+        self,
+        *,
+        status: str | None,
+        proposal_type: str | None,
+        proposed_by_actor_id: uuid.UUID | None,
+        request_id: uuid.UUID | None,
+        created_after: datetime | None,
+        created_before: datetime | None,
+    ) -> Any:
+        stmt = select(OntologyProposal)
+        if status is not None:
+            stmt = stmt.where(OntologyProposal.status == status)
+        if proposal_type is not None:
+            stmt = stmt.where(OntologyProposal.proposal_type == proposal_type)
+        if proposed_by_actor_id is not None:
+            stmt = stmt.where(OntologyProposal.proposed_by_actor_id == proposed_by_actor_id)
+        if request_id is not None:
+            stmt = stmt.where(OntologyProposal.request_id == request_id)
+        return self._proposal_time_filters(
+            stmt, created_after=created_after, created_before=created_before
+        )
+
+    @staticmethod
+    def _proposal_time_filters(
+        stmt: Any,
+        *,
+        created_after: datetime | None,
+        created_before: datetime | None,
+    ) -> Any:
+        if created_after is not None:
+            stmt = stmt.where(OntologyProposal.created_at >= created_after)
+        if created_before is not None:
+            stmt = stmt.where(OntologyProposal.created_at <= created_before)
+        return stmt
 
     def create_proposal(
         self,

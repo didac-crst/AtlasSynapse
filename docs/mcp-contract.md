@@ -46,6 +46,14 @@ propose_alias
 propose_class_parent
 ```
 
+## Feedback tools
+
+```text
+report_feedback
+```
+
+Agents use `report_feedback` to record quality observations. Admin list/resolve and `/v1/admin/*` inspection stay on the HTTP API (no MCP admin tools).
+
 ## Request rules
 
 Every mutation accepts actor context, request ID, and an idempotency key. The adapter validates request schemas and delegates to services. Service results are translated into typed response schemas.
@@ -72,4 +80,4 @@ Unknown predicates do not create ontology implicitly. They may include suggested
 
 ## Capabilities
 
-The expected default ChatGPT actor capabilities are `knowledge.read`, `knowledge.write`, `ontology.read`, and `ontology.propose`. Direct ontology application is reserved for the governance controller.
+The expected default ChatGPT actor capabilities are `knowledge.read`, `knowledge.write`, `ontology.read`, `ontology.propose`, and `feedback.create`. Direct ontology application and feedback administration are reserved for privileged actors.

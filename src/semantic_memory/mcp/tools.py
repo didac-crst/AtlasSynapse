@@ -20,6 +20,7 @@ from semantic_memory.schemas.conflicts import (
 )
 from semantic_memory.schemas.entities import CreateEntityRequest, EntityResponse
 from semantic_memory.schemas.errors import ErrorEnvelope
+from semantic_memory.schemas.feedback import ReportFeedbackRequest
 from semantic_memory.schemas.ontology import (
     OntologyClassResponse,
     OntologyContextResponse,
@@ -51,6 +52,7 @@ from semantic_memory.schemas.statements import (
 from semantic_memory.services.batches import BatchService
 from semantic_memory.services.conflicts import ConflictService
 from semantic_memory.services.entities import EntityService
+from semantic_memory.services.feedback import FeedbackService
 from semantic_memory.services.ontology import OntologyService
 from semantic_memory.services.proposals import ProposalService
 from semantic_memory.services.provenance import ProvenanceService
@@ -477,4 +479,18 @@ class OntologyMCPTools:
             lambda: self._proposals.propose_class_parent(
                 ProposeClassParentRequest.model_validate(payload)
             ),
+        )
+
+
+class FeedbackMCPTools:
+    """Translate MCP tool calls into feedback service operations."""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+        self._feedback = FeedbackService(session)
+
+    def report_feedback(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return _run_mutation(
+            self._session,
+            lambda: self._feedback.report_feedback(ReportFeedbackRequest.model_validate(payload)),
         )

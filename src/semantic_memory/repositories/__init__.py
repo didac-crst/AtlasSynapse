@@ -5,6 +5,7 @@ from semantic_memory.repositories.batches import BatchRepository
 from semantic_memory.repositories.conflicts import ConflictRepository
 from semantic_memory.repositories.embeddings import EmbeddingRepository
 from semantic_memory.repositories.entities import EntityRepository
+from semantic_memory.repositories.feedback import FeedbackRepository
 from semantic_memory.repositories.governance import GovernanceRepository
 from semantic_memory.repositories.idempotency import IdempotencyRepository
 from semantic_memory.repositories.llm_calls import LlmCallLogRepository
@@ -19,6 +20,7 @@ __all__ = [
     "ConflictRepository",
     "EmbeddingRepository",
     "EntityRepository",
+    "FeedbackRepository",
     "GovernanceRepository",
     "IdempotencyRepository",
     "LlmCallLogRepository",

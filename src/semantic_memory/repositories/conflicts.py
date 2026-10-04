@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from semantic_memory.models import Conflict, ConflictStatus, Statement
@@ -57,10 +58,72 @@ class ConflictRepository:
         entity_id: uuid.UUID | None = None,
         statement_id: uuid.UUID | None = None,
         status: ConflictStatus | str | None = ConflictStatus.OPEN,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+        newest_first: bool = False,
     ) -> list[Conflict]:
+        stmt = self._filtered_select(
+            entity_id=entity_id,
+            statement_id=statement_id,
+            status=None if status is None else str(status),
+            created_after=created_after,
+            created_before=created_before,
+        )
+        if newest_first:
+            stmt = stmt.order_by(Conflict.created_at.desc(), Conflict.id.desc())
+        else:
+            stmt = stmt.order_by(Conflict.created_at.asc(), Conflict.id.asc())
+        if limit is not None:
+            stmt = stmt.limit(limit).offset(offset)
+        return list(self._session.scalars(stmt).all())
+
+    def count_conflicts(
+        self,
+        *,
+        entity_id: uuid.UUID | None = None,
+        statement_id: uuid.UUID | None = None,
+        status: str | None = None,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
+    ) -> int:
+        filtered = self._filtered_select(
+            entity_id=entity_id,
+            statement_id=statement_id,
+            status=status,
+            created_after=created_after,
+            created_before=created_before,
+        ).subquery()
+        return int(self._session.scalar(select(func.count()).select_from(filtered)) or 0)
+
+    def aggregate_summary(
+        self,
+        *,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
+    ) -> dict[str, Any]:
+        rows = self._session.execute(
+            self._time_filters(
+                select(Conflict.status, func.count()),
+                created_after=created_after,
+                created_before=created_before,
+            ).group_by(Conflict.status)
+        )
+        return {"by_status": {str(k): int(v) for k, v in rows}}
+
+    def _filtered_select(
+        self,
+        *,
+        entity_id: uuid.UUID | None,
+        statement_id: uuid.UUID | None,
+        status: str | None,
+        created_after: datetime | None,
+        created_before: datetime | None,
+    ) -> Any:
         stmt = select(Conflict)
         if status is not None:
-            stmt = stmt.where(Conflict.status == str(status))
+            stmt = stmt.where(Conflict.status == status)
         if statement_id is not None:
             stmt = stmt.where(
                 or_(
@@ -69,6 +132,7 @@ class ConflictRepository:
                 )
             )
         if entity_id is not None:
+            # Any involvement: subject or entity-valued object on either statement.
             stmt = (
                 stmt.join(
                     Statement,
@@ -85,8 +149,20 @@ class ConflictRepository:
                 )
                 .distinct()
             )
-        stmt = stmt.order_by(Conflict.created_at.asc(), Conflict.id.asc())
-        return list(self._session.scalars(stmt).all())
+        return self._time_filters(stmt, created_after=created_after, created_before=created_before)
+
+    @staticmethod
+    def _time_filters(
+        stmt: Any,
+        *,
+        created_after: datetime | None,
+        created_before: datetime | None,
+    ) -> Any:
+        if created_after is not None:
+            stmt = stmt.where(Conflict.created_at >= created_after)
+        if created_before is not None:
+            stmt = stmt.where(Conflict.created_at <= created_before)
+        return stmt
 
     def set_status(
         self,

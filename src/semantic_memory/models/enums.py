@@ -124,3 +124,38 @@ class ConflictStatus(StrEnum):
     OPEN = "open"
     RESOLVED = "resolved"
     DISMISSED = "dismissed"
+
+
+class FeedbackType(StrEnum):
+    ERROR = "error"
+    WARNING = "warning"
+    DATA_QUALITY = "data_quality"
+    ONTOLOGY_GAP = "ontology_gap"
+    AMBIGUITY = "ambiguity"
+    SUGGESTION = "suggestion"
+    USABILITY = "usability"
+    PERFORMANCE = "performance"
+    SECURITY = "security"
+    DOCUMENTATION = "documentation"
+    UNEXPECTED_BEHAVIOR = "unexpected_behavior"
+    MISSING_CAPABILITY = "missing_capability"
+
+
+class FeedbackSeverity(StrEnum):
+    INFO = "info"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class FeedbackStatus(StrEnum):
+    OPEN = "open"
+    ACKNOWLEDGED = "acknowledged"
+    RESOLVED = "resolved"
+    DISMISSED = "dismissed"
+
+
+class FeedbackOutcome(StrEnum):
+    CREATE = "CREATE"
+    DEDUPED = "DEDUPED"
