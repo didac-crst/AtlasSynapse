@@ -22,7 +22,9 @@ from semantic_memory.models.enums import OperationStatus
 from semantic_memory.repositories.entities import EntityRepository
 from semantic_memory.repositories.ontology import OntologyRepository
 from semantic_memory.schemas.actors import ActorEnsureRequest
+from semantic_memory.schemas.conflicts import MergeEntityRequest
 from semantic_memory.schemas.entities import (
+    AddEntityAliasRequest,
     CreateEntityRequest,
     ExternalReferenceInput,
     ResolutionOutcome,
@@ -193,14 +195,94 @@ def test_disabled_actor_error(db_session: Session) -> None:
 def test_duplicate_alias_does_not_silent_merge(db_session: Session) -> None:
     _ensure_writer(db_session)
     service = EntityService(db_session)
-    service.create_entity(
-        _create_request(name="Didac Costa", class_key="Person", aliases=["Didac"])
+    first = service.create_entity(
+        _create_request(name="Alpha Loop", class_key="Project", aliases=["SharedMark"])
     )
+    assert first.entity is not None
     with pytest.raises(DuplicateEntityError) as exc:
         service.create_entity(
-            _create_request(name="Didac Garcia", class_key="Person", aliases=["Didac"])
+            _create_request(name="Beta Loop", class_key="Project", aliases=["SharedMark"])
         )
     assert exc.value.error_code == "DUPLICATE_ENTITY"
+
+
+def test_shared_nickname_near_name_is_ambiguous(db_session: Session) -> None:
+    """Didac Costa vs Didac Garcia must not silent-merge; near-name forces review."""
+    _ensure_writer(db_session)
+    service = EntityService(db_session)
+    first = service.create_entity(
+        _create_request(name="Didac Costa", class_key="Person", aliases=["Didac"])
+    )
+    assert first.entity is not None
+    second = service.create_entity(
+        _create_request(name="Didac Garcia", class_key="Person")
+    )
+    assert second.outcome == ResolutionOutcome.AMBIGUOUS
+    assert {item.id for item in second.candidates} == {first.entity.id}
+
+
+def test_near_name_is_ambiguous_not_create(db_session: Session) -> None:
+    _ensure_writer(db_session)
+    service = EntityService(db_session)
+    short = service.create_entity(_create_request(name="Didac", class_key="Person"))
+    assert short.entity is not None
+
+    longer = service.create_entity(
+        _create_request(name="Didac Cristobal", class_key="Person")
+    )
+    assert longer.outcome == ResolutionOutcome.AMBIGUOUS
+    assert longer.entity is None
+    assert {item.id for item in longer.candidates} == {short.entity.id}
+    assert longer.candidates[0].match_reason == "near_name"
+
+
+def test_add_entity_alias_enables_reuse(db_session: Session) -> None:
+    _ensure_writer(db_session)
+    service = EntityService(db_session)
+    created = service.create_entity(
+        _create_request(name="Didac Cristobal", class_key="Person")
+    )
+    assert created.entity is not None
+
+    updated = service.add_entity_alias(
+        AddEntityAliasRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            entity_id=created.entity.id,
+            alias="Didac",
+        )
+    )
+    assert "Didac" in updated.aliases
+
+    reused = service.create_entity(_create_request(name="Didac", class_key="Person"))
+    assert reused.outcome == ResolutionOutcome.REUSE
+    assert reused.entity is not None
+    assert reused.entity.id == created.entity.id
+
+
+def test_merge_transfers_aliases_for_redirect(db_session: Session) -> None:
+    _ensure_writer(db_session)
+    service = EntityService(db_session)
+    left = service.create_entity(_create_request(name="Alpha Loop", class_key="Project"))
+    right = service.create_entity(_create_request(name="Beta Loop", class_key="Project"))
+    assert left.entity is not None
+    assert right.entity is not None
+
+    merged = service.merge_entity(
+        MergeEntityRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            source_entity_id=right.entity.id,
+            target_entity_id=left.entity.id,
+        )
+    )
+    assert "Beta Loop" in merged.target.aliases
+    reused = service.create_entity(_create_request(name="Beta Loop", class_key="Project"))
+    assert reused.outcome == ResolutionOutcome.REUSE
+    assert reused.entity is not None
+    assert reused.entity.id == left.entity.id
 
 
 def test_failed_create_rolls_back_idempotency_and_allows_retry(db_session: Session) -> None:

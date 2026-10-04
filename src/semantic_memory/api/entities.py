@@ -12,6 +12,7 @@ from semantic_memory.api.transactions import run_audited_mutation
 from semantic_memory.db import get_db_session
 from semantic_memory.schemas.conflicts import MergeEntityRequest, MergeEntityResponse
 from semantic_memory.schemas.entities import (
+    AddEntityAliasRequest,
     CreateEntityRequest,
     CreateEntityResponse,
     EntityResponse,
@@ -30,6 +31,13 @@ def create_entity(request: CreateEntityRequest, session: DbSession) -> CreateEnt
 @router.post("/entities/merge", response_model=MergeEntityResponse)
 def merge_entity(request: MergeEntityRequest, session: DbSession) -> MergeEntityResponse:
     return run_audited_mutation(session, lambda: EntityService(session).merge_entity(request))
+
+
+@router.post("/entities/aliases", response_model=EntityResponse)
+def add_entity_alias(request: AddEntityAliasRequest, session: DbSession) -> EntityResponse:
+    return run_audited_mutation(
+        session, lambda: EntityService(session).add_entity_alias(request)
+    )
 
 
 @router.get("/entities/{entity_id}", response_model=EntityResponse)

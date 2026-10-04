@@ -167,6 +167,77 @@ class EntityRepository:
 
         return [(entity, "+".join(sorted(reasons))) for entity, reasons in by_id.values()]
 
+    def find_near_name_candidates(
+        self, name: str, *, class_id: uuid.UUID | None = None
+    ) -> list[Entity]:
+        """Find active entities whose name/alias is a token-subset near-match.
+
+        Examples: ``Didac`` ↔ ``Didac Cristobal``. Does not match unrelated
+        shared nicknames such as ``Didac Costa`` vs ``Didac Garcia``.
+        """
+        normalized = normalize_text(name)
+        tokens = [token for token in normalized.split(" ") if token]
+        if not tokens:
+            return []
+
+        by_id: dict[uuid.UUID, Entity] = {}
+
+        # Shorter existing names that are proper prefixes of the incoming name.
+        for end in range(1, len(tokens)):
+            prefix = " ".join(tokens[:end])
+            for entity in self.find_by_canonical_name(prefix, class_id=class_id):
+                by_id[entity.id] = entity
+            for entity in self.find_by_alias(prefix, class_id=class_id):
+                by_id[entity.id] = entity
+
+        # Longer existing names/aliases that start with the incoming name.
+        like_pattern = f"{normalized} %"
+        canonical_stmt = (
+            select(Entity)
+            .where(
+                Entity.status == EntityStatus.ACTIVE.value,
+                _normalized_canonical_sql().like(like_pattern),
+            )
+            .distinct()
+        )
+        alias_stmt = (
+            select(Entity)
+            .join(EntityAlias, EntityAlias.entity_id == Entity.id)
+            .where(
+                Entity.status == EntityStatus.ACTIVE.value,
+                EntityAlias.normalized_alias.like(like_pattern),
+            )
+            .distinct()
+        )
+        if class_id is not None:
+            canonical_stmt = canonical_stmt.join(
+                EntityType, EntityType.entity_id == Entity.id
+            ).where(EntityType.class_id == class_id)
+            alias_stmt = alias_stmt.join(EntityType, EntityType.entity_id == Entity.id).where(
+                EntityType.class_id == class_id
+            )
+        for entity in self._session.scalars(canonical_stmt).all():
+            by_id[entity.id] = entity
+        for entity in self._session.scalars(alias_stmt).all():
+            by_id[entity.id] = entity
+
+        return list(by_id.values())
+
+    def ensure_alias(self, *, entity_id: uuid.UUID, alias: str) -> EntityAlias | None:
+        """Add alias if missing; return None when it already exists on this entity."""
+        normalized = normalize_text(alias)
+        if not normalized:
+            return None
+        existing = self._session.scalar(
+            select(EntityAlias).where(
+                EntityAlias.entity_id == entity_id,
+                EntityAlias.normalized_alias == normalized,
+            )
+        )
+        if existing is not None:
+            return None
+        return self.add_alias(entity_id=entity_id, alias=alias.strip())
+
     def has_type(self, entity_id: uuid.UUID, class_id: uuid.UUID) -> bool:
         row = self._session.scalar(
             select(EntityType.id).where(
@@ -202,9 +273,12 @@ class EntityRepository:
     def alias_exists_on_other_entity(self, *, alias: str, entity_id: uuid.UUID) -> bool:
         normalized = normalize_text(alias)
         other = self._session.scalar(
-            select(EntityAlias.id).where(
+            select(EntityAlias.id)
+            .join(Entity, Entity.id == EntityAlias.entity_id)
+            .where(
                 EntityAlias.normalized_alias == normalized,
                 EntityAlias.entity_id != entity_id,
+                Entity.status == EntityStatus.ACTIVE.value,
             )
         )
         return other is not None

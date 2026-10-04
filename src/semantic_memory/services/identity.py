@@ -78,6 +78,17 @@ class IdentityService:
                 candidates=self._to_candidates(alias_matches, "alias"),
             )
 
+        # 4. Near-name token-subset candidates (Didac ↔ Didac Cristobal).
+        # Never auto-merge; force the caller to reuse, alias, or merge explicitly.
+        near_matches = self._entities.find_near_name_candidates(
+            canonical_name, class_id=class_id
+        )
+        if near_matches:
+            return ResolutionResult(
+                outcome=ResolutionOutcome.AMBIGUOUS,
+                candidates=self._to_candidates(near_matches, "near_name"),
+            )
+
         return ResolutionResult(outcome=ResolutionOutcome.CREATE)
 
     def _to_candidates(self, entities: list[Entity], reason: str) -> list[EntityCandidate]:

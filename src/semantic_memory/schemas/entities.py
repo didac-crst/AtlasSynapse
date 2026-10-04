@@ -33,6 +33,11 @@ class CreateEntityRequest(MutationEnvelope):
     external_reference: ExternalReferenceInput | None = None
 
 
+class AddEntityAliasRequest(MutationEnvelope):
+    entity_id: uuid.UUID
+    alias: str = Field(min_length=1)
+
+
 class EntityTypeResponse(BaseModel):
     class_id: uuid.UUID
     class_key: str

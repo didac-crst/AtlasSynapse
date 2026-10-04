@@ -28,6 +28,7 @@ REGISTERED_TOOL_NAMES: tuple[str, ...] = (
     "search_entities",
     "get_entity_neighborhood",
     "merge_entity",
+    "add_entity_alias",
     "assert_statement",
     "get_statement",
     "search_statements",
@@ -218,8 +219,15 @@ def build_mcp_tools() -> list[ToolSpec]:
         ),
         _payload_tool(
             "merge_entity",
-            "Explicitly merge two entities.",
+            "Explicitly merge two entities. Copies source names/aliases onto the "
+            "target so future create/search by those names reuse the survivor.",
             lambda session, payload: EntityMCPTools(session).merge_entity(payload),
+        ),
+        _payload_tool(
+            "add_entity_alias",
+            "Add an alternate name/alias to an existing active entity "
+            "(e.g. add 'Didac' to 'Didac Cristobal').",
+            lambda session, payload: EntityMCPTools(session).add_entity_alias(payload),
         ),
         _payload_tool(
             "assert_statement",

@@ -32,6 +32,7 @@ def test_mcp_server_info() -> None:
     assert "get_timeline" in info.tools
     assert "find_conflicts" in info.tools
     assert "merge_entity" in info.tools
+    assert "add_entity_alias" in info.tools
     assert "assert_batch" in info.tools
     assert "get_class" in info.tools
     assert "get_predicate" in info.tools

@@ -18,7 +18,11 @@ from semantic_memory.schemas.conflicts import (
     MergeEntityRequest,
     ResolveConflictRequest,
 )
-from semantic_memory.schemas.entities import CreateEntityRequest, EntityResponse
+from semantic_memory.schemas.entities import (
+    AddEntityAliasRequest,
+    CreateEntityRequest,
+    EntityResponse,
+)
 from semantic_memory.schemas.errors import ErrorEnvelope
 from semantic_memory.schemas.feedback import ReportFeedbackRequest
 from semantic_memory.schemas.ontology import (
@@ -195,6 +199,14 @@ class EntityMCPTools:
         return _run_mutation(
             self._session,
             lambda: self._entities.merge_entity(MergeEntityRequest.model_validate(payload)),
+        )
+
+    def add_entity_alias(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return _run_mutation(
+            self._session,
+            lambda: self._entities.add_entity_alias(
+                AddEntityAliasRequest.model_validate(payload)
+            ),
         )
 
 

@@ -19,6 +19,7 @@ from semantic_memory.repositories.entities import EntityRepository
 from semantic_memory.repositories.ontology import OntologyRepository
 from semantic_memory.schemas.conflicts import MergeEntityRequest, MergeEntityResponse
 from semantic_memory.schemas.entities import (
+    AddEntityAliasRequest,
     CreateEntityRequest,
     CreateEntityResponse,
     EntityResponse,
@@ -74,6 +75,42 @@ class EntityService:
             execute=lambda: self._merge_entity_body(request=request),
         )
 
+    def add_entity_alias(self, request: AddEntityAliasRequest) -> EntityResponse:
+        actor = self._actors.require_active_actor(request.actor_key)
+        self._actors.require_capability(actor, Capability.KNOWLEDGE_WRITE)
+        return self._mutations.run(
+            actor=actor,
+            operation_name="add_entity_alias",
+            request=request,
+            response_model=EntityResponse,
+            constraint_name="entity_write",
+            execute=lambda: self._add_entity_alias_body(request=request),
+        )
+
+    def _add_entity_alias_body(self, *, request: AddEntityAliasRequest) -> EntityResponse:
+        entity = self._entities.get(request.entity_id)
+        if entity is None or entity.status != EntityStatus.ACTIVE.value:
+            raise UnknownEntityError(
+                f"Entity {request.entity_id} was not found or is inactive",
+                details={"entity_id": str(request.entity_id)},
+                request_id=str(request.request_id),
+            )
+        alias = request.alias.strip()
+        if not normalize_text(alias):
+            raise ValidationFailedError(
+                "Alias must contain non-whitespace characters",
+                details={"alias": request.alias},
+                request_id=str(request.request_id),
+            )
+        if self._entities.alias_exists_on_other_entity(alias=alias, entity_id=entity.id):
+            raise DuplicateEntityError(
+                f"Alias '{alias}' already belongs to another entity",
+                details={"alias": alias, "entity_id": str(entity.id)},
+                request_id=str(request.request_id),
+            )
+        self._entities.ensure_alias(entity_id=entity.id, alias=alias)
+        return self._to_entity_response(entity)
+
     def _merge_entity_body(self, *, request: MergeEntityRequest) -> MergeEntityResponse:
         if request.source_entity_id == request.target_entity_id:
             raise ValidationFailedError(
@@ -111,7 +148,13 @@ class EntityService:
                 },
                 request_id=str(request.request_id),
             )
+        # Mark merged first so source aliases no longer block transfer, then
+        # redirect future identity resolution onto the survivor (ADR-007).
         merged = self._entities.mark_merged(source, target_entity_id=target.id)
+        for alias in [source.canonical_name, *self._entities.list_aliases(source.id)]:
+            if self._entities.alias_exists_on_other_entity(alias=alias, entity_id=target.id):
+                continue
+            self._entities.ensure_alias(entity_id=target.id, alias=alias)
         return MergeEntityResponse(
             source=self._to_entity_response(merged),
             target=self._to_entity_response(target),

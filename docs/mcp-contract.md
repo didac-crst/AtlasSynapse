@@ -28,6 +28,7 @@ get_proposal
 
 ```text
 create_entity
+add_entity_alias
 assert_statement
 assert_batch
 supersede_statement
