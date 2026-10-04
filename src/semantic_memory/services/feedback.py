@@ -127,6 +127,8 @@ class FeedbackService:
             status=None if status is None else status.value,
             feedback_type=feedback_type,
             limit=limit,
+            offset=0,
+            order_by_created=False,
         )
         return ListFeedbackResponse(items=[self._to_response(row) for row in rows])
 

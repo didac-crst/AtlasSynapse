@@ -57,7 +57,11 @@ Agents may report quality observations via `report_feedback` / `POST /v1/feedbac
 
 ## HTTP authentication
 
-Application HTTP routes require a shared API token (`Authorization: Bearer` or `X-API-Token`) when `HTTP_API_TOKEN` is configured, and always when `APP_ENV=production`. Health probes (`/health`, `/health/*`) and documentation routes (`/docs`, `/openapi.json`, `/redoc`, when enabled) stay public. `actor_key` remains an audit/capability identifier, not the authentication secret. Actor provisioning additionally requires `X-Admin-Token`.
+Application HTTP routes require a shared API token (`Authorization: Bearer` or `X-API-Token`) when `HTTP_API_TOKEN` is configured, and always when `APP_ENV=production`. Health probes (`/health`, `/health/*`) and documentation routes (`/docs`, `/openapi.json`, `/redoc`, when enabled) stay public. `actor_key` remains an audit/capability identifier, not the authentication secret. Administrative routes (`POST /v1/actors/ensure` and `/v1/admin/*`) additionally require `X-Admin-Token` (missing/invalid → 403; missing outer API token → 401).
+
+## Admin inspection
+
+`/v1/admin/*` is HTTP-only, read-only observability for humans/ops: list/get filters over operations, LLM calls, feedback, ontology proposals, conflicts, and ingestion batches, plus `GET /v1/admin/summary`. Collection views return metadata projections (no request/response payloads, LLM metadata, feedback context, or proposal payloads). Detail endpoints may opt in with `include_payloads=true`. Pagination is deterministic (`created_at DESC, id DESC`) with exact totals. No MCP admin tools.
 
 ## Deployment
 

@@ -52,7 +52,7 @@ propose_class_parent
 report_feedback
 ```
 
-Agents use `report_feedback` to record quality observations. Admin list/resolve stay on the HTTP API.
+Agents use `report_feedback` to record quality observations. Admin list/resolve and `/v1/admin/*` inspection stay on the HTTP API (no MCP admin tools).
 
 ## Request rules
 

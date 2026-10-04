@@ -100,6 +100,18 @@ class UnknownFeedbackError(DomainError):
     error_code = "UNKNOWN_FEEDBACK"
 
 
+class UnknownOperationError(DomainError):
+    error_code = "UNKNOWN_OPERATION"
+
+
+class UnknownLlmCallError(DomainError):
+    error_code = "UNKNOWN_LLM_CALL"
+
+
+class UnknownBatchError(DomainError):
+    error_code = "UNKNOWN_BATCH"
+
+
 class InvalidLiteralTypeError(DomainError):
     error_code = "INVALID_LITERAL_TYPE"
 
