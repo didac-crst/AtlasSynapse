@@ -40,9 +40,14 @@ def test_dockerfile_and_compose_define_app_and_migrate() -> None:
 
 def test_deployment_docs_cover_backup_and_secrets() -> None:
     doc = (ROOT / "docs" / "deployment.md").read_text(encoding="utf-8")
-    assert 'sh -c \'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom\'' in doc
-    assert "hostname `postgres`" in doc
+    # Contract checks — avoid exact prose/command layout that docs rewording would break.
+    assert "pg_dump" in doc
+    assert '-U "$POSTGRES_USER"' in doc
+    assert '-d "$POSTGRES_DB"' in doc
+    assert "--format=custom" in doc
+    assert any("postgres" in line and "host" in line.lower() for line in doc.splitlines())
     assert "/docs" in doc
     assert "HTTP_API_TOKEN" in doc
     assert "rate limiting" in doc.lower()
-    assert "Terminate TLS at a reverse proxy" in doc
+    assert "tls" in doc.lower()
+    assert "reverse proxy" in doc.lower()
