@@ -187,11 +187,7 @@ An agent can then inspect the sources and resolve the discrepancy.
 
 AtlasSynapse does not have a predefined `receipt` database, a `tax` database and a `warranty` database.
 
-Those are semantic concepts.
-
-From here the README becomes more technical. The value proposition above is the whole pitch; what follows is how the system is engineered.
-
-The underlying model remains generic:
+Those are semantic concepts in one shared model:
 
 ```text
 Class       What kinds of things exist
@@ -201,24 +197,38 @@ Statement   A claim about that thing
 Source      Why that claim exists
 ```
 
-This means the same system can eventually represent:
+From here the README becomes more technical. The value proposition above is the whole pitch; what follows is how the system is engineered.
+
+The same substrate can represent people, companies, projects, documents, equipment, contracts, experiments, decisions, expenses, properties, events, and places — because domain meaning lives above the storage layer, not inside a growing set of specialty tables.
+
+## Stable physical schema, evolving meaning
+
+A conventional application often hard-codes domain concepts into tables and columns: `persons`, `projects`, `warranties`, `insurance_claims`, and the join tables that connect them.
+
+That approach is appropriate when the domain is known and stable.
+
+AtlasSynapse is designed for a knowledge model that keeps evolving — including concepts that were not anticipated when the database was designed.
+
+In AtlasSynapse, new classes, predicates, entities, and statements are normally added as **data**, not by creating new SQL tables, columns, or join tables.
+
+So a relationship such as:
 
 ```text
-people
-companies
-projects
-documents
-equipment
-contracts
-experiments
-decisions
-expenses
-properties
-events
-places
+Laptop → insuredBy → InsurancePolicy_17
 ```
 
-without creating a new SQL schema for every domain.
+should not require an `ALTER TABLE` or a new application model. If `insuredBy` or `InsurancePolicy` is missing, that is an ontology/data question — not a storage redesign.
+
+Architecturally, AtlasSynapse separates:
+
+1. **Stable physical schema** — PostgreSQL tables for entities, statements, provenance, and ontology records;
+2. **Evolving semantic model** — classes, predicates, and constraints that describe what the knowledge means.
+
+The ontology evolves above the storage substrate. Ordinary semantic expansion should not require a migration.
+
+> **New meaning should usually create new data, not new database structures.**
+
+When an agent needs a concept that does not exist yet, it proposes one. Quality gates and semantic review decide whether to accept it. If accepted, the ontology evolves — still without changing the core PostgreSQL schema.
 
 ## An ontology that can evolve
 
@@ -240,7 +250,7 @@ InsuranceClaim
 CancellationWindow
 ```
 
-AtlasSynapse therefore separates two concerns.
+That is why AtlasSynapse separates routine knowledge writes from governed ontology change.
 
 ### Knowledge plane
 
@@ -276,9 +286,7 @@ Ontology changes pass through a sequence of **quality gates**:
 
 AtlasSynapse can let an LLM review ontology changes, but only inside that deterministic quality-gate system — with clarification, challenge, provenance, cost tracking, and safe fallback.
 
-Only then does the ontology evolve.
-
-The physical PostgreSQL schema remains stable.
+Accepted proposals add meaning as ontology data. The core physical schema stays put.
 
 > **Meaning evolves as data.**
 
