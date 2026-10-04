@@ -34,9 +34,50 @@ class Settings(BaseSettings):
         default="redacted",
         alias="RAW_PAYLOAD_RETENTION",
     )
-    semantic_review_mode: Literal["disabled", "mock", "external"] = Field(
+    semantic_review_mode: Literal["disabled", "mock", "shadow", "external"] = Field(
         default="disabled",
         alias="SEMANTIC_REVIEW_MODE",
+    )
+    semantic_review_provider: str = Field(default="openai", alias="SEMANTIC_REVIEW_PROVIDER")
+    semantic_review_model: str = Field(default="gpt-5.6-terra", alias="SEMANTIC_REVIEW_MODEL")
+    semantic_review_model_version: str | None = Field(
+        default=None, alias="SEMANTIC_REVIEW_MODEL_VERSION"
+    )
+    semantic_review_api_key: str = Field(default="", alias="SEMANTIC_REVIEW_API_KEY")
+    semantic_review_api_base: str = Field(
+        default="https://api.openai.com/v1",
+        alias="SEMANTIC_REVIEW_API_BASE",
+    )
+    semantic_review_reasoning_effort: Literal["low", "medium", "high"] = Field(
+        default="low",
+        alias="SEMANTIC_REVIEW_REASONING_EFFORT",
+    )
+    semantic_review_max_candidates: int = Field(
+        default=8, alias="SEMANTIC_REVIEW_MAX_CANDIDATES", ge=1, le=50
+    )
+    semantic_review_max_context_tokens: int = Field(
+        default=2000, alias="SEMANTIC_REVIEW_MAX_CONTEXT_TOKENS", ge=200, le=32000
+    )
+    semantic_review_max_output_tokens: int = Field(
+        default=500, alias="SEMANTIC_REVIEW_MAX_OUTPUT_TOKENS", ge=64, le=4000
+    )
+    semantic_review_approve_threshold: float = Field(
+        default=0.85, alias="SEMANTIC_REVIEW_APPROVE_THRESHOLD", ge=0.0, le=1.0
+    )
+    semantic_review_reject_threshold: float = Field(
+        default=0.85, alias="SEMANTIC_REVIEW_REJECT_THRESHOLD", ge=0.0, le=1.0
+    )
+    semantic_review_input_rate_per_token: str = Field(
+        default="0.000002",
+        alias="SEMANTIC_REVIEW_INPUT_RATE_PER_TOKEN",
+    )
+    semantic_review_output_rate_per_token: str = Field(
+        default="0.000012",
+        alias="SEMANTIC_REVIEW_OUTPUT_RATE_PER_TOKEN",
+    )
+    semantic_review_currency: str = Field(default="USD", alias="SEMANTIC_REVIEW_CURRENCY")
+    semantic_review_timeout_seconds: float = Field(
+        default=45.0, alias="SEMANTIC_REVIEW_TIMEOUT_SECONDS", gt=0
     )
     embedding_mode: Literal["disabled", "mock"] = Field(
         default="disabled",

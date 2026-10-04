@@ -481,6 +481,26 @@ class OntologyMCPTools:
             ),
         )
 
+    def challenge_ontology_review(self, payload: dict[str, Any]) -> dict[str, Any]:
+        from semantic_memory.schemas.semantic_review import ChallengeOntologyReviewRequest
+
+        return _run_mutation(
+            self._session,
+            lambda: self._proposals.challenge_ontology_review(
+                ChallengeOntologyReviewRequest.model_validate(payload)
+            ),
+        )
+
+    def answer_semantic_clarification(self, payload: dict[str, Any]) -> dict[str, Any]:
+        from semantic_memory.schemas.semantic_review import AnswerSemanticClarificationRequest
+
+        return _run_mutation(
+            self._session,
+            lambda: self._proposals.answer_semantic_clarification(
+                AnswerSemanticClarificationRequest.model_validate(payload)
+            ),
+        )
+
 
 class FeedbackMCPTools:
     """Translate MCP tool calls into feedback service operations."""

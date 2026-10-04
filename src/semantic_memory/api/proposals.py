@@ -21,6 +21,12 @@ from semantic_memory.schemas.proposals import (
     ProposePredicateRequest,
     ProposeResponse,
 )
+from semantic_memory.schemas.semantic_review import (
+    AnswerSemanticClarificationRequest,
+    AnswerSemanticClarificationResponse,
+    ChallengeOntologyReviewRequest,
+    ChallengeOntologyReviewResponse,
+)
 from semantic_memory.services.proposals import ProposalService
 
 router = APIRouter(prefix="/v1/ontology/proposals", tags=["ontology-proposals"])
@@ -30,6 +36,27 @@ DbSession = Annotated[Session, Depends(get_db_session)]
 @router.get("/{proposal_id}", response_model=ProposalResponse)
 def get_proposal(proposal_id: uuid.UUID, session: DbSession) -> ProposalResponse:
     return ProposalService(session).get_proposal(proposal_id)
+
+
+@router.post("/challenge-review", response_model=ChallengeOntologyReviewResponse)
+def challenge_ontology_review(
+    request: ChallengeOntologyReviewRequest, session: DbSession
+) -> ChallengeOntologyReviewResponse:
+    return run_audited_mutation(
+        session, lambda: ProposalService(session).challenge_ontology_review(request)
+    )
+
+
+@router.post(
+    "/answer-clarification",
+    response_model=AnswerSemanticClarificationResponse,
+)
+def answer_semantic_clarification(
+    request: AnswerSemanticClarificationRequest, session: DbSession
+) -> AnswerSemanticClarificationResponse:
+    return run_audited_mutation(
+        session, lambda: ProposalService(session).answer_semantic_clarification(request)
+    )
 
 
 @router.post("/classes", response_model=ProposeResponse)

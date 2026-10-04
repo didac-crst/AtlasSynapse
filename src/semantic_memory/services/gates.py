@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -16,6 +17,18 @@ from semantic_memory.models.enums import (
 )
 from semantic_memory.repositories.governance import GovernanceRepository
 from semantic_memory.repositories.ontology import OntologyRepository
+
+DETERMINISTIC_GATE_NAMES = frozenset(
+    {
+        "schema",
+        "authorization",
+        "existing_key",
+        "alias",
+        "structural",
+        "cycle",
+        "domain_range",
+    }
+)
 
 
 @dataclass
@@ -32,11 +45,9 @@ class DeterministicGatePipeline:
         self._session = session
         self._ontology = OntologyRepository(session)
         self._governance = GovernanceRepository(session)
-        self._extra_gates: list[Callable[[ProposalType, dict[str, Any]], GateOutcome | None]] = []
+        self._extra_gates: list[Callable[..., GateOutcome | None]] = []
 
-    def register_extra_gate(
-        self, gate: Callable[[ProposalType, dict[str, Any]], GateOutcome | None]
-    ) -> None:
+    def register_extra_gate(self, gate: Callable[..., GateOutcome | None]) -> None:
         """Hook for Phase 11/12 similarity and semantic-review gates."""
         self._extra_gates.append(gate)
 
@@ -73,8 +84,16 @@ class DeterministicGatePipeline:
             self._cycle(proposal_type, payload),
             self._domain_range(proposal_type, payload),
         ]
+        deterministic_failed = any(
+            item.gate_name in DETERMINISTIC_GATE_NAMES and item.decision == GateDecision.FAIL
+            for item in outcomes
+        )
+        runtime = {
+            "deterministic_failed": deterministic_failed,
+            "prior_outcomes": list(outcomes),
+        }
         for extra in self._extra_gates:
-            result = extra(proposal_type, payload)
+            result = _invoke_extra_gate(extra, proposal_type, payload, runtime)
             if result is not None:
                 outcomes.append(result)
         outcomes.append(self._final_deterministic(proposal_type, payload, outcomes))
@@ -306,19 +325,10 @@ class DeterministicGatePipeline:
         payload: dict[str, Any],
         prior: list[GateOutcome],
     ) -> GateOutcome:
-        deterministic = {
-            "schema",
-            "authorization",
-            "existing_key",
-            "alias",
-            "structural",
-            "cycle",
-            "domain_range",
-        }
         failures = [
             item.gate_name
             for item in prior
-            if item.gate_name in deterministic and item.decision == GateDecision.FAIL
+            if item.gate_name in DETERMINISTIC_GATE_NAMES and item.decision == GateDecision.FAIL
         ]
         if failures:
             return GateOutcome(
@@ -339,3 +349,18 @@ class DeterministicGatePipeline:
                     {"recheck_gate": check.gate_name, **check.details},
                 )
         return GateOutcome("final_deterministic", GateDecision.PASS)
+
+
+def _invoke_extra_gate(
+    extra: Callable[..., GateOutcome | None],
+    proposal_type: ProposalType,
+    payload: dict[str, Any],
+    runtime: dict[str, Any],
+) -> GateOutcome | None:
+    try:
+        signature = inspect.signature(extra)
+        if len(signature.parameters) >= 3:
+            return extra(proposal_type, payload, runtime)
+    except (TypeError, ValueError):
+        pass
+    return extra(proposal_type, payload)

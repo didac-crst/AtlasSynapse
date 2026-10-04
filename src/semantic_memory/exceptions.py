@@ -96,6 +96,18 @@ class UnknownProposalError(DomainError):
     error_code = "UNKNOWN_PROPOSAL"
 
 
+class ClarificationRequestNotFoundError(DomainError):
+    error_code = "CLARIFICATION_REQUEST_NOT_FOUND"
+
+
+class ClarificationRequestAlreadyResolvedError(DomainError):
+    error_code = "CLARIFICATION_REQUEST_ALREADY_RESOLVED"
+
+
+class ClarificationRequestSupersededError(DomainError):
+    error_code = "CLARIFICATION_REQUEST_SUPERSEDED"
+
+
 class UnknownFeedbackError(DomainError):
     error_code = "UNKNOWN_FEEDBACK"
 

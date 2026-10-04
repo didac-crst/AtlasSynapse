@@ -480,4 +480,5 @@ class StatementService:
             superseded_by_statement_id=statement.superseded_by_statement_id,
             retracts_statement_id=statement.retracts_statement_id,
             created_at=statement.created_at,
+            metadata=dict(statement.metadata_json or {}),
         )

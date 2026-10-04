@@ -60,7 +60,7 @@ def test_disabled_embeddings_pass_similarity_gate(db_session: Session) -> None:
             idempotency_key=f"idem-{uuid.uuid4()}",
             key="EmbedLab",
             parent_keys=["Organization"],
-            metadata={"review_decision": ReviewDecision.ACCEPT.value},
+            metadata={"review_decision": ReviewDecision.APPROVE.value},
         )
     )
     assert result.outcome == ProposalOutcome.READY_TO_APPLY
@@ -96,7 +96,7 @@ def test_similarity_is_advisory_only(db_session: Session) -> None:
             key="HumanPerson",
             label="Person human agent",
             parent_keys=["Agent"],
-            metadata={"review_decision": ReviewDecision.ACCEPT.value},
+            metadata={"review_decision": ReviewDecision.APPROVE.value},
         )
     )
     similarity = next(
@@ -113,7 +113,7 @@ def test_similarity_is_advisory_only(db_session: Session) -> None:
             idempotency_key=f"idem-{uuid.uuid4()}",
             key="Person",
             label="Totally New Label",
-            metadata={"review_decision": ReviewDecision.ACCEPT.value},
+            metadata={"review_decision": ReviewDecision.APPROVE.value},
         )
     )
     assert duplicate.outcome == ProposalOutcome.REUSE_RECOMMENDED

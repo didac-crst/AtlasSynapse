@@ -19,6 +19,10 @@ from semantic_memory.models.enums import (
     ValueKind,
 )
 from semantic_memory.schemas.common import MutationEnvelope
+from semantic_memory.schemas.semantic_review import (
+    ClarificationRequestResponse,
+    SemanticReviewResponse,
+)
 
 
 class ProposeClassRequest(MutationEnvelope):
@@ -114,6 +118,9 @@ class ProposalResponse(BaseModel):
     decision_reason: str | None = None
     gate_results: list[GateResultResponse] = Field(default_factory=list)
     changes: list[OntologyChangeResponse] = Field(default_factory=list)
+    effective_semantic_review_id: uuid.UUID | None = None
+    effective_semantic_review: SemanticReviewResponse | None = None
+    semantic_reviews: list[SemanticReviewResponse] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -121,6 +128,7 @@ class ProposalResponse(BaseModel):
 class ProposeResponse(BaseModel):
     outcome: ProposalOutcome
     proposal: ProposalResponse
+    open_clarification_request: ClarificationRequestResponse | None = None
     request_id: uuid.UUID
 
 

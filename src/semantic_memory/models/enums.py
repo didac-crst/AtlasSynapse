@@ -159,3 +159,22 @@ class FeedbackStatus(StrEnum):
 class FeedbackOutcome(StrEnum):
     CREATE = "CREATE"
     DEDUPED = "DEDUPED"
+
+
+class SemanticReviewStage(StrEnum):
+    INITIAL = "initial"
+    CHALLENGE = "challenge"
+    CLARIFICATION = "clarification"
+
+
+class SemanticChallengeStatus(StrEnum):
+    ACCEPTED_FOR_REVIEW = "accepted_for_review"
+    REJECTED_AS_INSUBSTANTIVE = "rejected_as_insubstantive"
+    REVIEWED = "reviewed"
+
+
+class SemanticClarificationStatus(StrEnum):
+    OPEN = "open"
+    ANSWERED = "answered"
+    SUPERSEDED = "superseded"
+    RESOLVED = "resolved"

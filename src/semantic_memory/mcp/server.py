@@ -48,6 +48,8 @@ REGISTERED_TOOL_NAMES: tuple[str, ...] = (
     "propose_constraint",
     "propose_alias",
     "propose_class_parent",
+    "challenge_ontology_review",
+    "answer_semantic_clarification",
     "report_feedback",
 )
 
@@ -377,12 +379,14 @@ def build_mcp_tools() -> list[ToolSpec]:
         ),
         _payload_tool(
             "propose_class",
-            "Propose a new ontology class.",
+            "Propose a new ontology class. On ambiguous overlap, response includes "
+            "open_clarification_request with AtlasSynapse-issued clarification_request_id.",
             lambda session, payload: OntologyMCPTools(session).propose_class(payload),
         ),
         _payload_tool(
             "propose_predicate",
-            "Propose a new ontology predicate.",
+            "Propose a new ontology predicate. On ambiguous overlap, response includes "
+            "open_clarification_request with AtlasSynapse-issued clarification_request_id.",
             lambda session, payload: OntologyMCPTools(session).propose_predicate(payload),
         ),
         _payload_tool(
@@ -399,6 +403,19 @@ def build_mcp_tools() -> list[ToolSpec]:
             "propose_class_parent",
             "Propose a class parent link.",
             lambda session, payload: OntologyMCPTools(session).propose_class_parent(payload),
+        ),
+        _payload_tool(
+            "challenge_ontology_review",
+            "Challenge a reject/reuse semantic review with new rationale/evidence.",
+            lambda session, payload: OntologyMCPTools(session).challenge_ontology_review(payload),
+        ),
+        _payload_tool(
+            "answer_semantic_clarification",
+            "Answer an AtlasSynapse clarification_request_id with the intended "
+            "semantic distinction and examples; triggers re-review.",
+            lambda session, payload: OntologyMCPTools(session).answer_semantic_clarification(
+                payload
+            ),
         ),
         _payload_tool(
             "report_feedback",

@@ -58,17 +58,17 @@ That is very different from preserving the underlying structure.
 Eventually, questions appear such as:
 
 > Which expenses from last year might be relevant when preparing my taxes?
-
+>
 > Do I still have proof of purchase for the washing machine?
-
+>
 > When does its warranty expire?
-
+>
 > Which invoice corresponds to this bank payment?
-
+>
 > Did I already receive the reimbursement associated with this expense?
-
+>
 > Which active contracts have a cancellation deadline in the next three months?
-
+>
 > Why do we believe this subscription costs €29.99 rather than €24.99?
 
 At that point, remembering more text is not quite enough.

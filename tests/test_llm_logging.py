@@ -162,7 +162,7 @@ def test_reviewer_logs_and_links_to_operation_request(db_session: Session) -> No
             idempotency_key=f"llm-{uuid.uuid4()}",
             key="LoggedLab",
             parent_keys=["Organization"],
-            metadata={"review_decision": ReviewDecision.ACCEPT.value},
+            metadata={"review_decision": ReviewDecision.APPROVE.value},
         )
     )
     assert result.proposal.id is not None
@@ -175,7 +175,7 @@ def test_reviewer_logs_and_links_to_operation_request(db_session: Session) -> No
     assert call.operation_log_id is not None
     assert call.actor_id is not None
     assert call.status == LlmCallStatus.SUCCEEDED.value
-    assert call.outcome == ReviewDecision.ACCEPT.value
+    assert call.outcome == ReviewDecision.APPROVE.value
     assert call.input_tokens is not None and call.input_tokens > 0
     assert call.cost_status == LlmCostStatus.ESTIMATED.value
     assert "payload" not in (call.metadata_json or {})

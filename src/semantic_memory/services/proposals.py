@@ -10,6 +10,9 @@ from sqlalchemy.orm import Session
 
 from semantic_memory.config import Settings, get_settings
 from semantic_memory.exceptions import (
+    ClarificationRequestAlreadyResolvedError,
+    ClarificationRequestNotFoundError,
+    ClarificationRequestSupersededError,
     OntologyCycleError,
     OntologyProposalRejectedError,
     OntologyReuseRecommendedError,
@@ -38,7 +41,17 @@ from semantic_memory.models import (
     ProposalStatus,
 )
 from semantic_memory.models.capabilities import Capability
-from semantic_memory.models.enums import GateDecision, ProposalType
+from semantic_memory.models.enums import (
+    GateDecision,
+    ProposalType,
+    SemanticChallengeStatus,
+    SemanticClarificationStatus,
+    SemanticReviewStage,
+)
+from semantic_memory.models.governance import (
+    OntologySemanticClarificationRequest,
+    OntologySemanticReview,
+)
 from semantic_memory.repositories.governance import GovernanceRepository
 from semantic_memory.repositories.ontology import OntologyRepository
 from semantic_memory.schemas.proposals import (
@@ -55,18 +68,43 @@ from semantic_memory.schemas.proposals import (
     ProposePredicateRequest,
     ProposeResponse,
 )
+from semantic_memory.schemas.semantic_review import (
+    CLARIFICATION_REASON_CODE,
+    AnswerSemanticClarificationRequest,
+    AnswerSemanticClarificationResponse,
+    ChallengeOntologyReviewRequest,
+    ChallengeOntologyReviewResponse,
+    ClarificationRequestResponse,
+    RelatedExistingConcept,
+    ReviewReason,
+    SemanticDecision,
+    SemanticReviewResponse,
+    StructuredReviewResult,
+)
 from semantic_memory.services.actors import ActorService
 from semantic_memory.services.embedding_providers import EmbeddingProvider
 from semantic_memory.services.embeddings import EmbeddingService
 from semantic_memory.services.gates import DeterministicGatePipeline
 from semantic_memory.services.llm_logging import DatabaseLlmCallLogger
 from semantic_memory.services.mutations import MutationRunner
+from semantic_memory.services.openai_reviewer import PROMPT_TEMPLATE_VERSION
 from semantic_memory.services.review import (
     LoggingSemanticReviewer,
+    ReviewDecision,
+    ReviewRequest,
     SemanticReviewer,
+    apply_confidence_policy,
     build_semantic_reviewer,
+    default_clarification_asks,
     make_semantic_review_gate,
+    review_decision_to_gate,
 )
+from semantic_memory.services.review_context import (
+    CONTEXT_BUILDER_VERSION,
+    SemanticReviewContextBuilder,
+    lexical_similarity_candidates,
+)
+from semantic_memory.services.review_metrics import SEMANTIC_REVIEW_METRICS
 
 
 class ProposalService:
@@ -273,11 +311,21 @@ class ProposalService:
             .order_by(OperationLog.started_at.desc())
             .limit(1)
         )
+        review_context = SemanticReviewContextBuilder(self._session, self._settings).build(
+            proposal_type=proposal_type,
+            payload=payload,
+        )
+        lexical = lexical_similarity_candidates(
+            self._session, proposal_type=proposal_type, payload=payload, limit=5
+        )
         self._review_context = {
             "actor_id": actor_id,
             "request_id": request_id,
             "operation_log_id": None if operation is None else operation.id,
             "trace_id": None if operation is None else operation.trace_id,
+            "review_context": review_context,
+            "lexical_candidates": lexical,
+            "settings": self._settings,
         }
         try:
             outcomes = self._gates.run(
@@ -287,35 +335,722 @@ class ProposalService:
             )
         finally:
             self._review_context = {}
-        outcome, status, reason = self._aggregate(outcomes)
+        provider = str(
+            getattr(self._reviewer, "_provider", getattr(self._reviewer, "provider", "unknown"))
+        )
+        model = str(getattr(self._reviewer, "_model", getattr(self._reviewer, "model", "unknown")))
+        self._persist_initial_semantic_review(
+            proposal=proposal,
+            outcomes=outcomes,
+            provider=provider,
+            model=model,
+        )
+        outcome, status, reason = self._aggregate(outcomes, proposal=proposal)
         self._governance.set_proposal_status(proposal, status=status, decision_reason=reason)
         return ProposeResponse(
             outcome=outcome,
             proposal=self._to_proposal_response(proposal),
+            open_clarification_request=self._open_clarification_response(proposal.id),
             request_id=request_id,
         )
 
-    def _aggregate(self, outcomes: list[Any]) -> tuple[ProposalOutcome, ProposalStatus, str | None]:
-        if any(item.decision == GateDecision.FAIL for item in outcomes):
-            failed = [item.gate_name for item in outcomes if item.decision == GateDecision.FAIL]
+    def _aggregate(
+        self,
+        outcomes: list[Any],
+        *,
+        proposal: OntologyProposal | None = None,
+    ) -> tuple[ProposalOutcome, ProposalStatus, str | None]:
+        # Historical semantic_review gate rows stay append-only; effective review wins.
+        effective_decision = self._effective_semantic_gate_decision(proposal)
+        non_semantic = [item for item in outcomes if item.gate_name != "semantic_review"]
+        semantic_gate = next(
+            (item for item in outcomes if item.gate_name == "semantic_review"), None
+        )
+        semantic_decision = effective_decision
+        if semantic_decision is None and semantic_gate is not None:
+            semantic_decision = semantic_gate.decision
+
+        failed = [
+            item.gate_name for item in non_semantic if item.decision == GateDecision.FAIL
+        ]
+        if semantic_decision == GateDecision.FAIL:
+            failed.append("semantic_review")
+        if failed:
             return (
                 ProposalOutcome.REJECTED,
                 ProposalStatus.REJECTED,
                 f"Failed gates: {', '.join(failed)}",
             )
-        if any(item.decision == GateDecision.REUSE_RECOMMENDED for item in outcomes):
+        if semantic_decision == GateDecision.REUSE_RECOMMENDED or any(
+            item.decision == GateDecision.REUSE_RECOMMENDED for item in non_semantic
+        ):
             return (
                 ProposalOutcome.REUSE_RECOMMENDED,
                 ProposalStatus.REJECTED,
                 "Reuse an existing ontology concept",
             )
-        if any(item.decision == GateDecision.MANUAL_REVIEW for item in outcomes):
+        if semantic_decision == GateDecision.MANUAL_REVIEW or any(
+            item.decision == GateDecision.MANUAL_REVIEW for item in non_semantic
+        ):
             return (
                 ProposalOutcome.MANUAL_REVIEW,
                 ProposalStatus.IN_REVIEW,
                 "Semantic review required",
             )
         return ProposalOutcome.READY_TO_APPLY, ProposalStatus.SUBMITTED, None
+
+    def _effective_semantic_gate_decision(
+        self, proposal: OntologyProposal | None
+    ) -> GateDecision | None:
+        if proposal is None or proposal.effective_semantic_review_id is None:
+            return None
+        review = self._governance.get_semantic_review(proposal.effective_semantic_review_id)
+        if review is None:
+            return None
+        # Shadow / non-authoritative reviews never bind proposal outcomes.
+        if not review.authoritative:
+            return GateDecision.MANUAL_REVIEW
+        return review_decision_to_gate(ReviewDecision(review.decision))
+
+    def _persist_initial_semantic_review(
+        self,
+        *,
+        proposal: OntologyProposal,
+        outcomes: list[Any],
+        provider: str,
+        model: str,
+    ) -> None:
+        semantic = next((item for item in outcomes if item.gate_name == "semantic_review"), None)
+        if semantic is None or (semantic.details or {}).get("skipped"):
+            return
+        details = semantic.details or {}
+        model_decision = str(
+            details.get("model_decision")
+            or details.get("decision")
+            or details.get("review_decision")
+            or "manual_review"
+        )
+        authoritative = bool(details.get("authoritative", True)) and not bool(
+            details.get("shadow")
+        )
+        review = self._governance.create_semantic_review(
+            proposal_id=proposal.id,
+            review_stage=SemanticReviewStage.INITIAL,
+            provider=provider,
+            model=model,
+            model_version=self._settings.semantic_review_model_version,
+            prompt_template_version=str(
+                details.get("prompt_template_version") or PROMPT_TEMPLATE_VERSION
+            ),
+            context_builder_version=str(
+                details.get("context_builder_version") or CONTEXT_BUILDER_VERSION
+            ),
+            input_hash=str(details.get("input_hash") or ""),
+            context_concept_keys=list(details.get("context_concept_keys") or []),
+            decision=model_decision,
+            confidence=details.get("confidence"),
+            summary=str(details.get("summary") or details.get("reason") or ""),
+            reasons=list(details.get("reasons") or []),
+            related_existing_concepts=list(details.get("related_existing_concepts") or []),
+            recommended_actions=list(details.get("recommended_actions") or []),
+            context_sufficient=bool(details.get("context_sufficient", True)),
+            challengeable=bool(details.get("challengeable", True)),
+            authoritative=authoritative,
+            llm_call_log_id=_optional_uuid(details.get("llm_call_log_id")),
+            details={
+                "gate_decision": semantic.decision.value,
+                "shadow": bool(details.get("shadow")),
+                "model_decision": model_decision,
+                "candidate_selection_trace": list(
+                    details.get("candidate_selection_trace") or []
+                ),
+                "required_clarification": list(
+                    details.get("required_clarification") or []
+                ),
+            },
+        )
+        self._governance.set_effective_semantic_review(proposal, review.id)
+        clarification = self._maybe_issue_clarification_request(proposal=proposal, review=review)
+        details["review_id"] = str(review.id)
+        if clarification is not None:
+            details["clarification_request_id"] = str(clarification.id)
+            details["reason_code"] = clarification.reason_code
+            details["required_clarification"] = list(
+                clarification.required_clarification or []
+            )
+        # Enrich historical gate details with review_id pointer only; decision stays unchanged.
+        self._governance.upsert_gate_result(
+            proposal_id=proposal.id,
+            gate_name="semantic_review",
+            decision=semantic.decision,
+            details=details,
+        )
+
+    def challenge_ontology_review(
+        self, request: ChallengeOntologyReviewRequest
+    ) -> ChallengeOntologyReviewResponse:
+        actor = self._actors.require_active_actor(request.actor_key)
+        self._actors.require_capability(actor, Capability.ONTOLOGY_PROPOSE)
+        return self._mutations.run(
+            actor=actor,
+            operation_name="challenge_ontology_review",
+            request=request,
+            response_model=ChallengeOntologyReviewResponse,
+            constraint_name="ontology_propose",
+            execute=lambda: self._challenge_body(request=request, actor_id=actor.id),
+        )
+
+    def _challenge_body(
+        self, *, request: ChallengeOntologyReviewRequest, actor_id: uuid.UUID
+    ) -> ChallengeOntologyReviewResponse:
+        proposal = self._governance.get_proposal(request.proposal_id)
+        if proposal is None:
+            raise UnknownProposalError(
+                f"Proposal {request.proposal_id} was not found",
+                details={"proposal_id": str(request.proposal_id)},
+                request_id=str(request.request_id),
+            )
+        if proposal.status not in {
+            ProposalStatus.REJECTED.value,
+            ProposalStatus.IN_REVIEW.value,
+        }:
+            raise ValidationFailedError(
+                "Only rejected or in-review proposals can be challenged",
+                details={"status": proposal.status},
+                request_id=str(request.request_id),
+            )
+        prior = None
+        if proposal.effective_semantic_review_id is not None:
+            prior = self._governance.get_semantic_review(proposal.effective_semantic_review_id)
+        if prior is None:
+            raise ValidationFailedError(
+                "No semantic review available to challenge",
+                details={"proposal_id": str(proposal.id)},
+                request_id=str(request.request_id),
+            )
+        if not prior.challengeable or prior.decision in {
+            SemanticDecision.APPROVE.value,
+        }:
+            raise ValidationFailedError(
+                "Effective semantic review is not challengeable",
+                details={"review_id": str(prior.id), "decision": prior.decision},
+                request_id=str(request.request_id),
+            )
+        if not _challenge_is_substantive(request.challenge_reason):
+            challenge = self._governance.create_semantic_challenge(
+                proposal_id=proposal.id,
+                against_review_id=prior.id,
+                challenge_reason=request.challenge_reason,
+                evidence_refs=request.evidence_refs,
+                proposed_revision=request.proposed_revision,
+                created_by_actor_id=actor_id,
+                status=SemanticChallengeStatus.REJECTED_AS_INSUBSTANTIVE,
+            )
+            raise ValidationFailedError(
+                "Challenge must include substantive new rationale or evidence",
+                details={
+                    "challenge_id": str(challenge.id),
+                    "reason": "challenge_insubstantive",
+                },
+                request_id=str(request.request_id),
+            )
+
+        challenge = self._governance.create_semantic_challenge(
+            proposal_id=proposal.id,
+            against_review_id=prior.id,
+            challenge_reason=request.challenge_reason,
+            evidence_refs=request.evidence_refs,
+            proposed_revision=request.proposed_revision,
+            created_by_actor_id=actor_id,
+            status=SemanticChallengeStatus.ACCEPTED_FOR_REVIEW,
+        )
+        proposal_type = ProposalType(proposal.proposal_type)
+        review_context = SemanticReviewContextBuilder(self._session, self._settings).build(
+            proposal_type=proposal_type,
+            payload=proposal.payload,
+        )
+        prior_structured = _review_row_to_structured(prior)
+        try:
+            raw = self._reviewer.review(
+                ReviewRequest(
+                    proposal_type=proposal_type,
+                    payload=proposal.payload,
+                    actor_id=actor_id,
+                    request_id=request.request_id,
+                    context=review_context,
+                    prior_decision=prior_structured,
+                    challenge_reason=request.challenge_reason,
+                    evidence_refs=request.evidence_refs,
+                    proposed_revision=request.proposed_revision,
+                    review_stage="challenge",
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            structured = StructuredReviewResult(
+                decision=SemanticDecision.MANUAL_REVIEW,
+                confidence=0.0,
+                summary="Semantic reviewer unavailable during challenge",
+                reasons=[
+                    ReviewReason(
+                        code="semantic_reviewer_unavailable",
+                        message="Semantic reviewer call failed",
+                    )
+                ],
+                context_sufficient=False,
+                challengeable=True,
+                previous_decision=SemanticDecision(prior.decision),
+                decision_changed=False,
+            )
+            details = {"reason": "reviewer_failure", "error_type": type(exc).__name__}
+            input_tokens = output_tokens = None
+            prompt_version = PROMPT_TEMPLATE_VERSION
+        else:
+            structured = raw.structured or StructuredReviewResult(
+                decision=SemanticDecision(raw.decision.value),
+                confidence=0.0,
+                summary=raw.reason,
+                reasons=[ReviewReason(code="unstructured", message=raw.reason)],
+                context_sufficient=True,
+                challengeable=True,
+            )
+            proposal_key = str(proposal.payload.get("key") or "")
+            structured = apply_confidence_policy(
+                structured,
+                settings=self._settings,
+                challenge=True,
+                proposal_key=proposal_key,
+                proposal_description=str(proposal.payload.get("description") or ""),
+            )
+            structured = structured.model_copy(
+                update={
+                    "previous_decision": SemanticDecision(prior.decision),
+                    "decision_changed": structured.decision.value != prior.decision
+                    and structured.decision != SemanticDecision.UPHOLD_REJECTION,
+                }
+            )
+            if (
+                structured.decision == SemanticDecision.UPHOLD_REJECTION
+                or structured.decision.value == prior.decision
+            ):
+                structured = structured.model_copy(update={"decision_changed": False})
+            if (
+                structured.decision == SemanticDecision.APPROVE
+                and prior.decision != SemanticDecision.APPROVE.value
+            ):
+                structured = structured.model_copy(update={"decision_changed": True})
+            details = dict(raw.details)
+            input_tokens = raw.input_tokens
+            output_tokens = raw.output_tokens
+            prompt_version = raw.prompt_template_version
+
+        shadow = self._settings.semantic_review_mode == "shadow"
+        review = self._governance.create_semantic_review(
+            proposal_id=proposal.id,
+            review_stage=SemanticReviewStage.CHALLENGE,
+            previous_review_id=prior.id,
+            challenge_id=challenge.id,
+            provider=str(getattr(self._reviewer, "_provider", "unknown")),
+            model=str(getattr(self._reviewer, "_model", "unknown")),
+            model_version=self._settings.semantic_review_model_version,
+            prompt_template_version=prompt_version,
+            context_builder_version=review_context.builder_version,
+            input_hash=review_context.input_hash,
+            context_concept_keys=review_context.concept_keys(),
+            decision=structured.decision.value,
+            confidence=structured.confidence,
+            summary=structured.summary,
+            reasons=[item.model_dump(mode="json") for item in structured.reasons],
+            related_existing_concepts=[
+                item.model_dump(mode="json") for item in structured.related_existing_concepts
+            ],
+            recommended_actions=list(structured.recommended_actions),
+            context_sufficient=structured.context_sufficient,
+            challengeable=structured.challengeable
+            and structured.decision != SemanticDecision.APPROVE,
+            authoritative=not shadow,
+            previous_decision=prior.decision,
+            decision_changed=structured.decision_changed,
+            llm_call_log_id=_optional_uuid(details.get("llm_call_log_id")),
+            details={
+                **details,
+                "shadow": shadow,
+                "model_decision": structured.decision.value,
+                "authoritative": not shadow,
+                "candidate_selection_trace": list(review_context.candidate_selection_trace),
+                "required_clarification": list(structured.required_clarification),
+            },
+        )
+        self._governance.set_challenge_status(
+            challenge, status=SemanticChallengeStatus.REVIEWED
+        )
+        self._governance.set_effective_semantic_review(proposal, review.id)
+        self._maybe_issue_clarification_request(proposal=proposal, review=review)
+        # Do NOT mutate historical ontology_gate_result rows.
+        from semantic_memory.services.gates import GateOutcome
+
+        outcome, status, reason = self._aggregate(
+            [
+                GateOutcome(
+                    gate_name=item.gate_name,
+                    decision=GateDecision(item.decision),
+                    details=item.details or {},
+                )
+                for item in self._governance.list_gate_results(proposal.id)
+            ],
+            proposal=proposal,
+        )
+        self._governance.set_proposal_status(proposal, status=status, decision_reason=reason)
+        SEMANTIC_REVIEW_METRICS.record_review(
+            decision=structured.decision.value,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            challenge=True,
+            overturn=bool(structured.decision_changed),
+        )
+        return ChallengeOntologyReviewResponse(
+            outcome=outcome.value,
+            proposal_id=proposal.id,
+            challenge_id=challenge.id,
+            review=self._to_semantic_review_response(review),
+            open_clarification_request=self._open_clarification_response(proposal.id),
+            request_id=request.request_id,
+        )
+
+    def answer_semantic_clarification(
+        self, request: AnswerSemanticClarificationRequest
+    ) -> AnswerSemanticClarificationResponse:
+        actor = self._actors.require_active_actor(request.actor_key)
+        self._actors.require_capability(actor, Capability.ONTOLOGY_PROPOSE)
+        return self._mutations.run(
+            actor=actor,
+            operation_name="answer_semantic_clarification",
+            request=request,
+            response_model=AnswerSemanticClarificationResponse,
+            constraint_name="ontology_propose",
+            execute=lambda: self._answer_clarification_body(
+                request=request, actor_id=actor.id
+            ),
+        )
+
+    def _answer_clarification_body(
+        self, *, request: AnswerSemanticClarificationRequest, actor_id: uuid.UUID
+    ) -> AnswerSemanticClarificationResponse:
+        clarification = self._governance.get_clarification_request(
+            request.clarification_request_id
+        )
+        if clarification is None:
+            raise ClarificationRequestNotFoundError(
+                "Clarification request was not found",
+                details={
+                    "clarification_request_id": str(request.clarification_request_id)
+                },
+                request_id=str(request.request_id),
+            )
+        if clarification.status == SemanticClarificationStatus.SUPERSEDED.value:
+            raise ClarificationRequestSupersededError(
+                "Clarification request was superseded by a newer review",
+                details={
+                    "clarification_request_id": str(clarification.id),
+                    "status": clarification.status,
+                },
+                request_id=str(request.request_id),
+            )
+        if clarification.status in {
+            SemanticClarificationStatus.ANSWERED.value,
+            SemanticClarificationStatus.RESOLVED.value,
+        }:
+            raise ClarificationRequestAlreadyResolvedError(
+                "Clarification request was already answered",
+                details={
+                    "clarification_request_id": str(clarification.id),
+                    "status": clarification.status,
+                },
+                request_id=str(request.request_id),
+            )
+        if clarification.status != SemanticClarificationStatus.OPEN.value:
+            raise ClarificationRequestAlreadyResolvedError(
+                "Clarification request is not open",
+                details={
+                    "clarification_request_id": str(clarification.id),
+                    "status": clarification.status,
+                },
+                request_id=str(request.request_id),
+            )
+
+        proposal = self._governance.get_proposal(clarification.proposal_id)
+        if proposal is None:
+            raise UnknownProposalError(
+                f"Proposal {clarification.proposal_id} was not found",
+                details={"proposal_id": str(clarification.proposal_id)},
+                request_id=str(request.request_id),
+            )
+        prior = self._governance.get_semantic_review(clarification.review_id)
+        if prior is None:
+            raise ValidationFailedError(
+                "Semantic review for clarification request is missing",
+                details={"review_id": str(clarification.review_id)},
+                request_id=str(request.request_id),
+            )
+
+        answer = request.response.strip()
+        if len(answer) < 20:
+            raise ValidationFailedError(
+                "Clarification response must include substantive semantic content",
+                details={"reason": "clarification_insubstantive"},
+                request_id=str(request.request_id),
+            )
+
+        self._governance.mark_clarification_answered(
+            clarification,
+            answer_text=answer,
+            answered_by_actor_id=actor_id,
+            evidence_refs=request.evidence_refs,
+        )
+
+        proposal_type = ProposalType(proposal.proposal_type)
+        review_context = SemanticReviewContextBuilder(self._session, self._settings).build(
+            proposal_type=proposal_type,
+            payload=proposal.payload,
+        )
+        prior_structured = _review_row_to_structured(prior)
+        proposal_key = str(proposal.payload.get("key") or "")
+        try:
+            raw = self._reviewer.review(
+                ReviewRequest(
+                    proposal_type=proposal_type,
+                    payload=proposal.payload,
+                    actor_id=actor_id,
+                    request_id=request.request_id,
+                    context=review_context,
+                    prior_decision=prior_structured,
+                    challenge_reason=answer,
+                    evidence_refs=request.evidence_refs,
+                    proposed_revision=request.proposed_revision,
+                    review_stage="clarification",
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            structured = StructuredReviewResult(
+                decision=SemanticDecision.MANUAL_REVIEW,
+                confidence=0.0,
+                summary="Semantic reviewer unavailable during clarification",
+                reasons=[
+                    ReviewReason(
+                        code="semantic_reviewer_unavailable",
+                        message="Semantic reviewer call failed",
+                    )
+                ],
+                context_sufficient=False,
+                challengeable=True,
+                previous_decision=SemanticDecision(prior.decision),
+                decision_changed=False,
+            )
+            details = {"reason": "reviewer_failure", "error_type": type(exc).__name__}
+            input_tokens = output_tokens = None
+            prompt_version = PROMPT_TEMPLATE_VERSION
+        else:
+            structured = raw.structured or StructuredReviewResult(
+                decision=SemanticDecision(raw.decision.value),
+                confidence=0.0,
+                summary=raw.reason,
+                reasons=[ReviewReason(code="unstructured", message=raw.reason)],
+                context_sufficient=True,
+                challengeable=True,
+            )
+            structured = apply_confidence_policy(
+                structured,
+                settings=self._settings,
+                challenge=True,
+                proposal_key=proposal_key,
+                proposal_description=str(proposal.payload.get("description") or ""),
+            )
+            structured = structured.model_copy(
+                update={
+                    "previous_decision": SemanticDecision(prior.decision),
+                    "decision_changed": structured.decision.value != prior.decision,
+                }
+            )
+            details = dict(raw.details)
+            input_tokens = raw.input_tokens
+            output_tokens = raw.output_tokens
+            prompt_version = raw.prompt_template_version
+
+        shadow = self._settings.semantic_review_mode == "shadow"
+        review = self._governance.create_semantic_review(
+            proposal_id=proposal.id,
+            review_stage=SemanticReviewStage.CLARIFICATION,
+            previous_review_id=prior.id,
+            provider=str(getattr(self._reviewer, "_provider", "unknown")),
+            model=str(getattr(self._reviewer, "_model", "unknown")),
+            model_version=self._settings.semantic_review_model_version,
+            prompt_template_version=prompt_version,
+            context_builder_version=review_context.builder_version,
+            input_hash=review_context.input_hash,
+            context_concept_keys=review_context.concept_keys(),
+            decision=structured.decision.value,
+            confidence=structured.confidence,
+            summary=structured.summary,
+            reasons=[item.model_dump(mode="json") for item in structured.reasons],
+            related_existing_concepts=[
+                item.model_dump(mode="json") for item in structured.related_existing_concepts
+            ],
+            recommended_actions=list(structured.recommended_actions),
+            context_sufficient=structured.context_sufficient,
+            challengeable=structured.challengeable
+            and structured.decision != SemanticDecision.APPROVE,
+            authoritative=not shadow,
+            previous_decision=prior.decision,
+            decision_changed=structured.decision_changed,
+            llm_call_log_id=_optional_uuid(details.get("llm_call_log_id")),
+            details={
+                **details,
+                "shadow": shadow,
+                "model_decision": structured.decision.value,
+                "authoritative": not shadow,
+                "candidate_selection_trace": list(review_context.candidate_selection_trace),
+                "required_clarification": list(structured.required_clarification),
+                "answered_clarification_request_id": str(clarification.id),
+            },
+        )
+        self._governance.mark_clarification_resolved(
+            clarification, resulting_review_id=review.id
+        )
+        self._governance.set_effective_semantic_review(proposal, review.id)
+        self._maybe_issue_clarification_request(proposal=proposal, review=review)
+
+        from semantic_memory.services.gates import GateOutcome
+
+        outcome, status, reason = self._aggregate(
+            [
+                GateOutcome(
+                    gate_name=item.gate_name,
+                    decision=GateDecision(item.decision),
+                    details=item.details or {},
+                )
+                for item in self._governance.list_gate_results(proposal.id)
+            ],
+            proposal=proposal,
+        )
+        self._governance.set_proposal_status(proposal, status=status, decision_reason=reason)
+        SEMANTIC_REVIEW_METRICS.record_review(
+            decision=structured.decision.value,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            challenge=True,
+            overturn=bool(structured.decision_changed),
+        )
+        # Count clarification rounds as clarification-stage reviews on this proposal.
+        clar_rounds = sum(
+            1
+            for item in self._governance.list_semantic_reviews(proposal.id)
+            if item.review_stage == SemanticReviewStage.CLARIFICATION.value
+        )
+        SEMANTIC_REVIEW_METRICS.record_clarification_resolved(
+            rounds_for_proposal=max(1, clar_rounds)
+        )
+        # Refresh status after resolve (+ optional new open ask).
+        self._session.refresh(clarification)
+        return AnswerSemanticClarificationResponse(
+            outcome=outcome.value,
+            proposal_id=proposal.id,
+            clarification_request_id=clarification.id,
+            clarification_status=SemanticClarificationStatus(clarification.status),
+            resolved_by_review_id=clarification.resulting_review_id,
+            review=self._to_semantic_review_response(review),
+            open_clarification_request=self._open_clarification_response(proposal.id),
+            request_id=request.request_id,
+        )
+
+    def _maybe_issue_clarification_request(
+        self,
+        *,
+        proposal: OntologyProposal,
+        review: OntologySemanticReview,
+    ) -> OntologySemanticClarificationRequest | None:
+        """Create a deterministic clarification_request_id when review needs more semantics."""
+        if review.decision != SemanticDecision.MANUAL_REVIEW.value:
+            return None
+
+        details = dict(review.details or {})
+        asks = [str(x) for x in details.get("required_clarification") or [] if str(x).strip()]
+        related = list(review.related_existing_concepts or [])
+        reason_codes = {
+            str(item.get("code"))
+            for item in (review.reasons or [])
+            if isinstance(item, dict) and item.get("code")
+        }
+        ambiguity_codes = {
+            CLARIFICATION_REASON_CODE,
+            "ambiguous_semantic_distinction",
+            "semantic_distinction_unclear",
+        }
+        if not asks and not related and not (reason_codes & ambiguity_codes):
+            return None
+
+        if not asks and related:
+            proposal_key = str(proposal.payload.get("key") or "the proposal")
+            asks = default_clarification_asks(
+                proposal_key=proposal_key,
+                related=[RelatedExistingConcept.model_validate(item) for item in related],
+            )
+
+        if not asks:
+            asks = ["Please explain the intended semantic distinction from related concepts."]
+
+        superseded_ids = self._governance.supersede_open_clarifications(proposal.id)
+        clarification = self._governance.create_clarification_request(
+            proposal_id=proposal.id,
+            review_id=review.id,
+            reason_code=CLARIFICATION_REASON_CODE,
+            question=asks[0],
+            required_clarification=asks,
+            related_existing_concepts=related,
+            supersedes_clarification_request_id=(
+                superseded_ids[0] if superseded_ids else None
+            ),
+        )
+        review.details = {
+            **details,
+            "clarification_request_id": str(clarification.id),
+            "reason_code": CLARIFICATION_REASON_CODE,
+            "required_clarification": asks,
+            "supersedes_clarification_request_id": (
+                str(clarification.supersedes_clarification_request_id)
+                if clarification.supersedes_clarification_request_id
+                else None
+            ),
+        }
+        self._session.flush()
+        SEMANTIC_REVIEW_METRICS.record_clarification_opened()
+        return clarification
+
+    def _open_clarification_response(
+        self, proposal_id: uuid.UUID
+    ) -> ClarificationRequestResponse | None:
+        row = self._governance.get_open_clarification_for_proposal(proposal_id)
+        if row is None:
+            return None
+        return self._to_clarification_response(row)
+
+    def _to_clarification_response(
+        self, row: OntologySemanticClarificationRequest
+    ) -> ClarificationRequestResponse:
+        return ClarificationRequestResponse(
+            clarification_request_id=row.id,
+            proposal_id=row.proposal_id,
+            review_id=row.review_id,
+            reason_code=row.reason_code,
+            question=row.question,
+            required_clarification=[str(x) for x in row.required_clarification or []],
+            related_existing_concepts=[
+                RelatedExistingConcept.model_validate(item)
+                for item in row.related_existing_concepts or []
+            ],
+            clarification_status=SemanticClarificationStatus(row.status),
+            supersedes_clarification_request_id=row.supersedes_clarification_request_id,
+            resolved_by_review_id=row.resulting_review_id,
+            created_at=row.created_at,
+        )
 
     def _apply_body(
         self, *, request: ApplyProposalRequest, actor_id: uuid.UUID
@@ -337,16 +1072,25 @@ class ProposalService:
                 request_id=str(request.request_id),
             )
         gates = self._governance.list_gate_results(proposal.id)
-        if any(item.decision == GateDecision.FAIL.value for item in gates):
+        effective_semantic = self._effective_semantic_gate_decision(proposal)
+        blocking = []
+        for item in gates:
+            if item.gate_name == "semantic_review":
+                decision = effective_semantic or GateDecision(item.decision)
+            else:
+                decision = GateDecision(item.decision)
+            if decision == GateDecision.FAIL:
+                blocking.append(item.gate_name)
+            if decision == GateDecision.REUSE_RECOMMENDED:
+                raise ValidationFailedError(
+                    "Cannot apply a proposal that recommends reuse",
+                    details={"proposal_id": str(proposal.id)},
+                    request_id=str(request.request_id),
+                )
+        if blocking:
             raise ValidationFailedError(
                 "Cannot apply a proposal with failed gates",
-                details={"proposal_id": str(proposal.id)},
-                request_id=str(request.request_id),
-            )
-        if any(item.decision == GateDecision.REUSE_RECOMMENDED.value for item in gates):
-            raise ValidationFailedError(
-                "Cannot apply a proposal that recommends reuse",
-                details={"proposal_id": str(proposal.id)},
+                details={"proposal_id": str(proposal.id), "failed_gates": blocking},
                 request_id=str(request.request_id),
             )
         proposal_type = ProposalType(proposal.proposal_type)
@@ -763,6 +1507,20 @@ class ProposalService:
             )
             for item in self._governance.list_changes(proposal.id)
         ]
+        reviews = [
+            self._to_semantic_review_response(item)
+            for item in self._governance.list_semantic_reviews(proposal.id)
+        ]
+        effective = None
+        if proposal.effective_semantic_review_id is not None:
+            effective = next(
+                (item for item in reviews if item.id == proposal.effective_semantic_review_id),
+                None,
+            )
+            if effective is None:
+                row = self._governance.get_semantic_review(proposal.effective_semantic_review_id)
+                if row is not None:
+                    effective = self._to_semantic_review_response(row)
         return ProposalResponse(
             id=proposal.id,
             proposal_type=ProposalType(proposal.proposal_type),
@@ -774,6 +1532,101 @@ class ProposalService:
             decision_reason=proposal.decision_reason,
             gate_results=gates,
             changes=changes,
+            effective_semantic_review_id=proposal.effective_semantic_review_id,
+            effective_semantic_review=effective,
+            semantic_reviews=reviews,
             created_at=proposal.created_at,
             updated_at=proposal.updated_at,
         )
+
+    def _to_semantic_review_response(
+        self, row: OntologySemanticReview
+    ) -> SemanticReviewResponse:
+        details = row.details or {}
+        clarification_id = _optional_uuid(details.get("clarification_request_id"))
+        if clarification_id is None:
+            linked = self._governance.get_clarification_for_review(row.id)
+            if linked is not None:
+                clarification_id = linked.id
+        return SemanticReviewResponse(
+            id=row.id,
+            proposal_id=row.proposal_id,
+            review_stage=SemanticReviewStage(row.review_stage),
+            previous_review_id=row.previous_review_id,
+            challenge_id=row.challenge_id,
+            clarification_request_id=clarification_id,
+            provider=row.provider,
+            model=row.model,
+            model_version=row.model_version,
+            prompt_template_version=row.prompt_template_version,
+            context_builder_version=row.context_builder_version,
+            input_hash=row.input_hash,
+            context_concept_keys=[str(x) for x in row.context_concept_keys or []],
+            candidate_selection_trace=list(details.get("candidate_selection_trace") or []),
+            decision=SemanticDecision(row.decision),
+            confidence=None if row.confidence is None else float(row.confidence),
+            summary=row.summary,
+            reasons=[ReviewReason.model_validate(item) for item in row.reasons or []],
+            related_existing_concepts=[
+                RelatedExistingConcept.model_validate(item)
+                for item in row.related_existing_concepts or []
+            ],
+            recommended_actions=[str(x) for x in row.recommended_actions or []],
+            required_clarification=[
+                str(x) for x in details.get("required_clarification") or []
+            ],
+            context_sufficient=bool(row.context_sufficient),
+            challengeable=bool(row.challengeable),
+            authoritative=bool(row.authoritative),
+            previous_decision=(
+                None
+                if row.previous_decision is None
+                else SemanticDecision(row.previous_decision)
+            ),
+            decision_changed=row.decision_changed,
+            llm_call_log_id=row.llm_call_log_id,
+            details=details,
+            created_at=row.created_at,
+        )
+
+
+def _optional_uuid(value: Any) -> uuid.UUID | None:
+    if value is None or value == "":
+        return None
+    return uuid.UUID(str(value))
+
+
+def _challenge_is_substantive(reason: str) -> bool:
+    cleaned = " ".join(reason.strip().split())
+    if len(cleaned) < 40:
+        return False
+    lowered = cleaned.casefold()
+    trivial = {
+        "please reconsider",
+        "please reconsider.",
+        "reconsider",
+        "try again",
+        "wrong",
+        "i disagree",
+    }
+    return lowered not in trivial
+
+
+def _review_row_to_structured(row: OntologySemanticReview) -> StructuredReviewResult:
+    details = row.details or {}
+    return StructuredReviewResult(
+        decision=SemanticDecision(row.decision),
+        confidence=0.0 if row.confidence is None else float(row.confidence),
+        summary=row.summary,
+        reasons=[ReviewReason.model_validate(item) for item in row.reasons or []],
+        related_existing_concepts=[
+            RelatedExistingConcept.model_validate(item)
+            for item in row.related_existing_concepts or []
+        ],
+        recommended_actions=[str(x) for x in row.recommended_actions or []],
+        required_clarification=[
+            str(x) for x in details.get("required_clarification") or []
+        ],
+        context_sufficient=bool(row.context_sufficient),
+        challengeable=bool(row.challengeable),
+    )
