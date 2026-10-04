@@ -12,7 +12,7 @@ Classes and predicates use namespace/key uniqueness. Revisions are immutable. Pa
 
 `entity`, `entity_type`, `entity_alias`, `statement`, and `statement_qualifier`.
 
-Entities are preserved through merge and deprecation states. Statements have a subject, predicate, exactly one typed object, temporal fields, lifecycle status, and actor. Historical statement references are not rewritten by entity merge in v1.
+Entities are preserved through merge and deprecation states. Statements have a subject, predicate, exactly one typed object, temporal fields, lifecycle status, and actor. Historical statement references are not rewritten by entity merge in v1; read paths (neighborhood, timeline, entity-scoped search) follow `merged_into_entity_id` so survivors include merged-source edges and neighbors resolve to the surviving entity.
 
 ## Provenance
 

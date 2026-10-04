@@ -32,6 +32,28 @@ class EntityRepository:
     def get(self, entity_id: uuid.UUID, *, populate_existing: bool = False) -> Entity | None:
         return self._session.get(Entity, entity_id, populate_existing=populate_existing)
 
+    def resolve_survivor_id(self, entity_id: uuid.UUID) -> uuid.UUID:
+        """Follow merged_into links to the surviving active entity id."""
+        current_id = entity_id
+        seen: set[uuid.UUID] = set()
+        while current_id not in seen:
+            seen.add(current_id)
+            entity = self.get(current_id)
+            if entity is None or entity.merged_into_entity_id is None:
+                return current_id
+            current_id = entity.merged_into_entity_id
+        return current_id
+
+    def identity_group_ids(self, entity_id: uuid.UUID) -> list[uuid.UUID]:
+        """Survivor plus every entity merged into it (for read-side graph views)."""
+        survivor_id = self.resolve_survivor_id(entity_id)
+        merged_ids = list(
+            self._session.scalars(
+                select(Entity.id).where(Entity.merged_into_entity_id == survivor_id)
+            ).all()
+        )
+        return [survivor_id, *merged_ids]
+
     def create(
         self,
         *,

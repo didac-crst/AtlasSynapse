@@ -261,6 +261,48 @@ def test_add_entity_alias_enables_reuse(db_session: Session) -> None:
     assert reused.entity.id == created.entity.id
 
 
+def test_neighborhood_follows_merge_redirect(db_session: Session) -> None:
+    """Statement FKs stay on the merged row; neighborhood resolves to the survivor."""
+    from semantic_memory.schemas.statements import AssertStatementRequest
+    from semantic_memory.services.retrieval import RetrievalService
+    from semantic_memory.services.statements import StatementService
+
+    _ensure_writer(db_session)
+    entities = EntityService(db_session)
+    statements = StatementService(db_session)
+    keeper = entities.create_entity(_create_request(name="Keeper", class_key="Person"))
+    duplicate = entities.create_entity(_create_request(name="Other Person", class_key="Person"))
+    peer = entities.create_entity(_create_request(name="Peer", class_key="Person"))
+    assert keeper.entity and duplicate.entity and peer.entity
+
+    statements.assert_statement(
+        AssertStatementRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            subject_entity_id=duplicate.entity.id,
+            predicate_key="relatedTo",
+            object_entity_id=peer.entity.id,
+        )
+    )
+    entities.merge_entity(
+        MergeEntityRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            source_entity_id=duplicate.entity.id,
+            target_entity_id=keeper.entity.id,
+        )
+    )
+
+    neighborhood = RetrievalService(db_session).get_entity_neighborhood(keeper.entity.id)
+    neighbor_ids = {edge.neighbor_entity_id for edge in neighborhood.edges}
+    assert peer.entity.id in neighbor_ids
+
+    peer_view = RetrievalService(db_session).get_entity_neighborhood(peer.entity.id)
+    assert any(edge.neighbor_entity_id == keeper.entity.id for edge in peer_view.edges)
+
+
 def test_merge_transfers_aliases_for_redirect(db_session: Session) -> None:
     _ensure_writer(db_session)
     service = EntityService(db_session)

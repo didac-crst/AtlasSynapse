@@ -63,16 +63,21 @@ class StatementRepository:
             ).all()
         )
 
-    def list_for_entity_timeline(self, entity_id: uuid.UUID) -> list[Statement]:
-        """Return statements involving an entity, ordered by validity then assertion."""
+    def list_for_entity_timeline(
+        self, entity_id: uuid.UUID | list[uuid.UUID]
+    ) -> list[Statement]:
+        """Return statements involving an entity (or identity group), ordered by time."""
+        entity_ids = [entity_id] if isinstance(entity_id, uuid.UUID) else list(entity_id)
+        if not entity_ids:
+            return []
         sort_time = func.coalesce(Statement.valid_from, Statement.asserted_at)
         return list(
             self._session.scalars(
                 select(Statement)
                 .where(
                     or_(
-                        Statement.subject_entity_id == entity_id,
-                        Statement.object_entity_id == entity_id,
+                        Statement.subject_entity_id.in_(entity_ids),
+                        Statement.object_entity_id.in_(entity_ids),
                     )
                 )
                 .order_by(sort_time.asc(), Statement.asserted_at.asc(), Statement.created_at.asc())
