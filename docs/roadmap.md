@@ -98,7 +98,21 @@ Status: Done.
 
 Implement database-backed retrieval with transparent ranking signals, and durable `llm_call_log` observability for provider calls (separate from `operation_log`; one begin/complete row per call). Retrieval must work without an LLM or vector provider. Every semantic-review call must be measurable.
 
-## Phase 14+ — Ingestion policy, administration, and advanced semantic capabilities
+## Phase 14 — Production readiness
+
+Status: Done.
+
+Package the application for deployment before connecting real users or agents:
+
+- Docker image and Compose `api` / `migrate` (and optional `mcp`) services
+- Production configuration and secret fail-closed checks
+- HTTP authentication boundary for non-health routes
+- Migration job behavior separate from API startup
+- Real MCP stdio transport over thin tool adapters
+- Backup/restore, TLS/proxy, and observability documentation
+- Deployment smoke tests and a committed dependency lockfile
+
+## Phase 15+ — Ingestion policy, administration, and advanced semantic capabilities
 
 Decide what becomes durable memory, add inspection UI if justified, and consider exports, inference, and ontology health tooling.
 
@@ -107,7 +121,8 @@ Decide what becomes durable memory, add inspection UI if justified, and consider
 - Milestone A: phases 0–5, usable deterministic memory. — Done.
 - Milestone B: phases 6–9, semantic graph memory. — Done.
 - Milestone C: phases 10–12, governed self-evolving ontology. — Done.
-- Milestone D: phases 13+, mature personal knowledge substrate. — Starts at phase 13.
+- Milestone D: phase 13 retrieval/LLM observability. — Done.
+- Milestone E: phase 14 production readiness. — Done.
 
 ## Stop conditions
 

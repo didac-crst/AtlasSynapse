@@ -383,6 +383,8 @@ AtlasSynapse owns storage integrity.
 - [Ontology model](docs/ontology-model.md)
 - [Invariants](docs/invariants.md)
 - [MCP contract](docs/mcp-contract.md)
+- [Operations](docs/operations.md)
+- [Deployment](docs/deployment.md)
 - [Error catalog](docs/error-catalog.md)
 - [Development roadmap](docs/roadmap.md)
 - [Cursor implementation guide](docs/cursor-implementation.md)
@@ -410,10 +412,18 @@ make ci
 make seed
 ```
 
-Start the service:
+Start the HTTP API:
 
 ```bash
 semantic-memory
+# or full stack:
+# docker compose up --build
+```
+
+MCP stdio transport:
+
+```bash
+semantic-memory-mcp
 ```
 
 Health endpoints:
@@ -422,6 +432,8 @@ Health endpoints:
 GET /health/live
 GET /health/ready
 ```
+
+Non-health HTTP routes accept `Authorization: Bearer <HTTP_API_TOKEN>` or `X-API-Token` when that token is configured (required in production). See [deployment.md](docs/deployment.md).
 
 ## Project status
 

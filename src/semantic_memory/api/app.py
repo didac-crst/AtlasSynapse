@@ -6,6 +6,7 @@ from fastapi import FastAPI
 
 from semantic_memory import __version__
 from semantic_memory.api.actors import router as actors_router
+from semantic_memory.api.auth import HttpApiTokenMiddleware
 from semantic_memory.api.batches import router as batches_router
 from semantic_memory.api.conflicts import router as conflicts_router
 from semantic_memory.api.entities import router as entities_router
@@ -24,6 +25,7 @@ from semantic_memory.observability.logging import configure_logging
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Create and configure the FastAPI application."""
     cfg = settings or get_settings()
+    cfg.validate_production_secrets()
     configure_logging(cfg.log_level)
     configure_engine(cfg)
 
@@ -34,6 +36,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         redoc_url=None,
     )
     app.state.settings = cfg
+    app.add_middleware(HttpApiTokenMiddleware, settings=cfg)
     register_exception_handlers(app)
     app.include_router(health_router)
     app.include_router(actors_router)

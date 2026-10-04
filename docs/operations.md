@@ -47,3 +47,11 @@ Retrieval (`search_entities`, `search_statements`, `search_semantic_memory`, `ge
 ## Health behavior
 
 `/health/live` reports process liveness. `/health/ready` verifies database connectivity and migration compatibility. The readiness check must not require an external LLM or embedding provider.
+
+## HTTP authentication
+
+Non-health HTTP routes require a shared API token (`Authorization: Bearer` or `X-API-Token`) when `HTTP_API_TOKEN` is configured, and always when `APP_ENV=production`. `actor_key` remains an audit/capability identifier, not the authentication secret. Actor provisioning additionally requires `X-Admin-Token`.
+
+## Deployment
+
+See [deployment.md](deployment.md) for Compose packaging, migration jobs, MCP stdio transport, backup/restore, TLS/reverse-proxy expectations, and smoke checks.
