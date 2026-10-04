@@ -727,6 +727,7 @@ def make_semantic_review_gate(
             details["candidate_selection_trace"] = list(
                 review_context.candidate_selection_trace
             )
+            details["derivation_hints"] = list(review_context.derivation_hints)
         return GateOutcome(
             "semantic_review",
             gate_decision,

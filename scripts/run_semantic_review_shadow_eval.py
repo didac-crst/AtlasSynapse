@@ -126,6 +126,7 @@ def main() -> int:
         "challenge_failed": 0,
         "deterministic_ok": 0,
         "deterministic_bad": 0,
+        "canonical_model_violation_approvals": 0,
     }
     SEMANTIC_REVIEW_METRICS.reset()
 
@@ -264,6 +265,17 @@ def main() -> int:
                 ):
                     counters["unsafe_wrong_confident_initial"] += 1
                     print("  !! unsafe_wrong_confident_initial")
+                if (
+                    case.get("canonical_model_case")
+                    and model == "approve"
+                    and (conf or 0) >= 0.85
+                    and initial_human not in {None, "approve"}
+                ):
+                    counters["canonical_model_violation_approvals"] += 1
+                    print(
+                        "  !! canonical_model_violation_approvals "
+                        f"bucket={case.get('policy_bucket')}"
+                    )
 
             expects_clarification = bool(case.get("expects_clarification"))
             open_clar = result.open_clarification_request
@@ -404,6 +416,8 @@ def main() -> int:
         f"challenge_failed={counters['challenge_failed']}\n"
         f"deterministic_ok={counters['deterministic_ok']} "
         f"deterministic_bad={counters['deterministic_bad']}\n"
+        f"canonical_model_violation_approvals="
+        f"{counters['canonical_model_violation_approvals']}\n"
         f"clarification_resolution_rate={metrics['clarification_resolution_rate']} "
         f"clarification_rounds_per_proposal={metrics['clarification_rounds_per_proposal']}"
     )
@@ -415,6 +429,7 @@ def main() -> int:
         and counters["challenge_failed"] == 0
         and counters["deterministic_bad"] == 0
         and counters["unsafe_wrong"] == 0
+        and counters["canonical_model_violation_approvals"] == 0
     )
     print(f"promotion_ready={promotion_ok}")
     return 0 if promotion_ok else 1

@@ -17,7 +17,7 @@ from semantic_memory.models.enums import ProposalType
 from semantic_memory.repositories.ontology import OntologyRepository
 from semantic_memory.validation.normalization import normalize_text
 
-CONTEXT_BUILDER_VERSION = "semantic-context-v3"
+CONTEXT_BUILDER_VERSION = "semantic-context-v4"
 
 # Always-considered peers for Thing-rooted proposals so near-duplicates like Role /
 # dependsOn are not starved by alphabetical generic siblings when lexical signal is thin.
@@ -32,6 +32,11 @@ _HIGH_VALUE_CLASS_KEYS = frozenset(
         "Organization",
         "Person",
         "RelationshipContext",
+        "Employment",
+        "Constraint",
+        "Event",
+        "Decision",
+        "Project",
     }
 )
 _HIGH_VALUE_PREDICATE_KEYS = frozenset(
@@ -39,12 +44,22 @@ _HIGH_VALUE_PREDICATE_KEYS = frozenset(
         "dependsOn",
         "relatedTo",
         "holdsRole",
+        "roleAt",
+        "deployedOn",
         "hasGoal",
         "hasSkill",
         "hasPreference",
     }
 )
 _HIGH_VALUE_PEER_FLOOR = 0.36
+
+
+@dataclass(frozen=True)
+class DerivationHintMatch:
+    """Compact policy-relevant derivation / modeling hints for the reviewer."""
+
+    hints: tuple[str, ...]
+    pin_concepts: tuple[tuple[str, str], ...] = ()
 
 
 class ContextTier(IntEnum):
@@ -75,6 +90,7 @@ class ReviewContext:
     proposal_type: ProposalType
     proposal: dict[str, Any]
     concepts: list[ContextConcept] = field(default_factory=list)
+    derivation_hints: list[str] = field(default_factory=list)
     estimated_tokens: int = 0
     budget_exceeded: bool = False
     builder_version: str = CONTEXT_BUILDER_VERSION
@@ -88,19 +104,24 @@ class ReviewContext:
         lines = ["RELEVANT EXISTING ONTOLOGY:"]
         if not self.concepts:
             lines.append("(no close ontology candidates)")
-            return "\n".join(lines)
-        for item in self.concepts:
-            desc = (item.description or "").strip()
-            if len(desc) > 180:
-                desc = desc[:177] + "..."
-            lines.append(
-                f"- {item.kind}:{item.key}"
-                f" label={item.label or item.key}"
-                f" reason={item.reason}"
-                f" score={item.score:.3f}"
-                f" tier={item.tier.name.lower()}"
-                + (f" desc={desc}" if desc else "")
-            )
+        else:
+            for item in self.concepts:
+                desc = (item.description or "").strip()
+                if len(desc) > 180:
+                    desc = desc[:177] + "..."
+                lines.append(
+                    f"- {item.kind}:{item.key}"
+                    f" label={item.label or item.key}"
+                    f" reason={item.reason}"
+                    f" score={item.score:.3f}"
+                    f" tier={item.tier.name.lower()}"
+                    + (f" desc={desc}" if desc else "")
+                )
+        if self.derivation_hints:
+            lines.append("")
+            lines.append("CANONICAL DERIVATION HINTS:")
+            for hint in self.derivation_hints:
+                lines.append(f"- {hint}")
         return "\n".join(lines)
 
 
@@ -121,19 +142,30 @@ class SemanticReviewContextBuilder:
     ) -> ReviewContext:
         max_candidates = self._settings.semantic_review_max_candidates
         max_tokens = self._settings.semantic_review_max_context_tokens
+        hint_match = match_derivation_hints(proposal_type=proposal_type, payload=payload)
         ranked = self._retrieve_candidates(
             proposal_type=proposal_type,
             payload=payload,
             embedding_candidates=embedding_candidates or [],
         )
+        if hint_match is not None:
+            ranked = self._merge_derivation_pins(
+                namespace_key=str(payload.get("namespace_key") or "core"),
+                ranked=ranked,
+                pin_concepts=hint_match.pin_concepts,
+            )
+        derivation_hints = list(hint_match.hints) if hint_match is not None else []
         packed = self._pack_candidates(
             proposal_type=proposal_type,
             payload=payload,
             ranked=ranked,
             max_candidates=max_candidates,
             max_tokens=max_tokens,
+            derivation_hints=derivation_hints,
         )
-        tokens = self._estimate_tokens(proposal_type, payload, packed)
+        tokens = self._estimate_tokens(
+            proposal_type, payload, packed, derivation_hints=derivation_hints
+        )
         # If still over budget, truncate reverse-priority: generic → supporting → pinned.
         budget_exceeded = tokens > max_tokens
         if budget_exceeded and packed:
@@ -142,18 +174,24 @@ class SemanticReviewContextBuilder:
                 payload=payload,
                 packed=packed,
                 max_tokens=max_tokens,
+                derivation_hints=derivation_hints,
             )
-            tokens = self._estimate_tokens(proposal_type, payload, packed)
+            tokens = self._estimate_tokens(
+                proposal_type, payload, packed, derivation_hints=derivation_hints
+            )
             budget_exceeded = tokens > max_tokens
             # Pinned may still not fit alone → fail closed.
             if budget_exceeded:
                 packed = []
-                tokens = self._estimate_tokens(proposal_type, payload, packed)
+                tokens = self._estimate_tokens(
+                    proposal_type, payload, packed, derivation_hints=derivation_hints
+                )
 
         context = ReviewContext(
             proposal_type=proposal_type,
             proposal=dict(payload),
             concepts=packed,
+            derivation_hints=derivation_hints,
             estimated_tokens=tokens,
             budget_exceeded=budget_exceeded,
             candidate_selection_trace=[
@@ -170,6 +208,44 @@ class SemanticReviewContextBuilder:
         context.input_hash = _hash_context(context)
         return context
 
+    def _merge_derivation_pins(
+        self,
+        *,
+        namespace_key: str,
+        ranked: list[ContextConcept],
+        pin_concepts: tuple[tuple[str, str], ...],
+    ) -> list[ContextConcept]:
+        """Force-pin concepts referenced by derivation hints (compact, not whole graph)."""
+        by_id = {item.identity(): item for item in ranked}
+        for kind, key in pin_concepts:
+            identity = (kind, key)
+            if identity in by_id and by_id[identity].tier == ContextTier.PINNED:
+                continue
+            row = None
+            if kind == "class":
+                row = self._ontology.get_class_by_key(
+                    namespace_key=namespace_key, class_key=key
+                )
+            elif kind == "predicate":
+                row = self._ontology.get_predicate_by_key(
+                    namespace_key=namespace_key, predicate_key=key
+                )
+            if row is None:
+                continue
+            by_id[identity] = _make_concept(
+                self._ontology,
+                kind=kind,
+                row=row,
+                score=0.99,
+                reason="canonical_derivation",
+                tier=ContextTier.PINNED,
+                selection_trace="canonical_derivation",
+            )
+        return sorted(
+            by_id.values(),
+            key=lambda c: (int(c.tier), -c.score, c.kind, c.key),
+        )
+
     def _pack_candidates(
         self,
         *,
@@ -178,8 +254,10 @@ class SemanticReviewContextBuilder:
         ranked: list[ContextConcept],
         max_candidates: int,
         max_tokens: int,
+        derivation_hints: list[str] | None = None,
     ) -> list[ContextConcept]:
         """Fill pinned first, then supporting, then generic — never let generics evict pins."""
+        hints = derivation_hints or []
         by_tier = {
             ContextTier.PINNED: [c for c in ranked if c.tier == ContextTier.PINNED],
             ContextTier.SUPPORTING: [c for c in ranked if c.tier == ContextTier.SUPPORTING],
@@ -191,7 +269,13 @@ class SemanticReviewContextBuilder:
                 if len(packed) >= max_candidates:
                     return packed
                 trial = packed + [concept]
-                if self._estimate_tokens(proposal_type, payload, trial) > max_tokens and packed:
+                if (
+                    self._estimate_tokens(
+                        proposal_type, payload, trial, derivation_hints=hints
+                    )
+                    > max_tokens
+                    and packed
+                ):
                     # Skip this candidate; try later ones only within same tier if smaller? No —
                     # keep order; stop filling this tier when budget blocks further adds.
                     if tier == ContextTier.PINNED:
@@ -210,13 +294,18 @@ class SemanticReviewContextBuilder:
         payload: dict[str, Any],
         packed: list[ContextConcept],
         max_tokens: int,
+        derivation_hints: list[str] | None = None,
     ) -> list[ContextConcept]:
         remaining = list(packed)
+        hints = derivation_hints or []
         # Drop from the end of each tier group: generics first, then supporting, pinned last.
         for tier in (ContextTier.GENERIC, ContextTier.SUPPORTING, ContextTier.PINNED):
             while (
                 remaining
-                and self._estimate_tokens(proposal_type, payload, remaining) > max_tokens
+                and self._estimate_tokens(
+                    proposal_type, payload, remaining, derivation_hints=hints
+                )
+                > max_tokens
             ):
                 # Remove the last concept of this tier (lowest score within tier due to sort).
                 idx = None
@@ -657,8 +746,10 @@ class SemanticReviewContextBuilder:
         proposal_type: ProposalType,
         payload: dict[str, Any],
         concepts: list[ContextConcept],
+        *,
+        derivation_hints: list[str] | None = None,
     ) -> int:
-        system_overhead = 420
+        system_overhead = 520
         proposal_chars = len(json.dumps({"type": proposal_type.value, **_public_payload(payload)}))
         concept_chars = sum(
             len(c.kind)
@@ -669,7 +760,8 @@ class SemanticReviewContextBuilder:
             + 24
             for c in concepts
         )
-        return system_overhead + max(1, (proposal_chars + concept_chars) // 4)
+        hint_chars = sum(len(h) + 4 for h in (derivation_hints or []))
+        return system_overhead + max(1, (proposal_chars + concept_chars + hint_chars) // 4)
 
 
 def lexical_similarity_candidates(
@@ -735,11 +827,191 @@ def _public_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return cleaned
 
 
+def match_derivation_hints(
+    *,
+    proposal_type: ProposalType,
+    payload: dict[str, Any],
+) -> DerivationHintMatch | None:
+    """Return compact canonical-model hints for proposals that often denormalize."""
+    key = str(payload.get("key") or payload.get("alias") or payload.get("child_key") or "")
+    label = str(payload.get("label") or "")
+    description = str(payload.get("description") or "")
+    key_cf = key.casefold()
+    blob = f"{key} {label} {description}".casefold()
+
+    if proposal_type == ProposalType.PREDICATE:
+        if key_cf in {
+            "employedby",
+            "hasemployer",
+            "hascurrentemployer",
+            "employerof",
+        } or "employed by" in blob or "current employer" in blob:
+            return DerivationHintMatch(
+                hints=(
+                    "Relevant canonical path: Person --holdsRole--> Role --roleAt--> Organization",
+                    "Prefer this composition over a direct Person→Organization employment shortcut "
+                    "unless distinct non-derivable semantics are proven.",
+                ),
+                pin_concepts=(
+                    ("predicate", "holdsRole"),
+                    ("predicate", "roleAt"),
+                    ("class", "Person"),
+                    ("class", "Role"),
+                    ("class", "Organization"),
+                    ("class", "Employment"),
+                ),
+            )
+        if key_cf in {"currentrole", "hascurrentrole"} or "current role" in blob:
+            return DerivationHintMatch(
+                hints=(
+                    "Relevant canonical relation: Agent/Person --holdsRole--> Role",
+                    "Temporal validity (current vs historical) is stored on the statement "
+                    "(valid_from/valid_to / as_of), not as a separate predicate.",
+                ),
+                pin_concepts=(
+                    ("predicate", "holdsRole"),
+                    ("class", "Role"),
+                    ("class", "Agent"),
+                    ("class", "Person"),
+                ),
+            )
+        if key_cf in {"usedby", "uses"}:
+            return DerivationHintMatch(
+                hints=(
+                    "Directionality matters: usedBy/uses is not automatically dependsOn or deployedOn.",
+                    "If intended subject/object or usage semantics are underspecified, prefer "
+                    "manual_review with clarification over approval.",
+                ),
+                pin_concepts=(
+                    ("predicate", "dependsOn"),
+                    ("predicate", "deployedOn"),
+                    ("predicate", "relatedTo"),
+                    ("class", "System"),
+                    ("class", "Agent"),
+                ),
+            )
+        if key_cf in {"avoids", "avoid"}:
+            return DerivationHintMatch(
+                hints=(
+                    "Negative semantics may be a relation, Preference, or Constraint depending on "
+                    "subject/object and hardness.",
+                    "Prefer clarification over approval when interpretation is underspecified.",
+                ),
+                pin_concepts=(
+                    ("predicate", "relatedTo"),
+                    ("class", "Preference"),
+                    ("class", "Constraint"),
+                ),
+            )
+        if key_cf in {"partof", "haspart"}:
+            return DerivationHintMatch(
+                hints=(
+                    "partOf/hasPart needs explicit domain, direction, and whether transitivity is "
+                    "intended; otherwise prefer manual_review.",
+                ),
+                pin_concepts=(
+                    ("predicate", "relatedTo"),
+                    ("predicate", "dependsOn"),
+                ),
+            )
+
+    if proposal_type == ProposalType.CLASS:
+        if key_cf in {"historicalrole", "formerrole", "pastrole"} or (
+            "historical" in blob and "role" in blob
+        ):
+            return DerivationHintMatch(
+                hints=(
+                    "Relevant canonical relation: Agent/Person --holdsRole--> Role",
+                    "Temporality belongs on statements/validity windows, not a HistoricalRole class.",
+                ),
+                pin_concepts=(
+                    ("class", "Role"),
+                    ("predicate", "holdsRole"),
+                ),
+            )
+        if key_cf.startswith("verified") or key_cf.startswith("confirmed") or (
+            "verified" in blob and "skill" in blob
+        ):
+            return DerivationHintMatch(
+                hints=(
+                    "Skill assertions support provenance/evidence metadata.",
+                    "Do not mint Verified*/Confirmed* classes when verification is only an "
+                    "evidential qualifier on an existing concept.",
+                ),
+                pin_concepts=(("class", "Skill"), ("predicate", "hasSkill")),
+            )
+        if key_cf.startswith("probable") or key_cf.startswith("likely") or (
+            "confidence" in blob and ("goal" in blob or "probable" in blob)
+        ):
+            return DerivationHintMatch(
+                hints=(
+                    "Confidence belongs on the assertion, not as a Probable*/Likely* class "
+                    "in the taxonomy.",
+                ),
+                pin_concepts=(("class", "Goal"), ("predicate", "hasGoal")),
+            )
+        if key_cf in {"employmentrelation", "employment"} or (
+            "ongoing employment" in blob or "employment relationship" in blob
+        ):
+            return DerivationHintMatch(
+                hints=(
+                    "Existing Employment (RelationshipContext) already models ongoing employment.",
+                    "Also consider Person --holdsRole--> Role --roleAt--> Organization before "
+                    "approving a parallel employment class.",
+                ),
+                pin_concepts=(
+                    ("class", "Employment"),
+                    ("class", "RelationshipContext"),
+                    ("class", "Role"),
+                    ("predicate", "holdsRole"),
+                    ("predicate", "roleAt"),
+                ),
+            )
+        if key_cf in {"professionalskill"} or (
+            "professional" in blob and "skill" in blob and "role" in blob
+        ):
+            return DerivationHintMatch(
+                hints=(
+                    "Professional/role-contextualized skills are often representable via hasSkill "
+                    "plus Role/context rather than a new primitive class.",
+                    "Prefer clarification or reuse unless distinct ontology-level semantics exist.",
+                ),
+                pin_concepts=(
+                    ("class", "Skill"),
+                    ("class", "Role"),
+                    ("predicate", "hasSkill"),
+                ),
+            )
+        # Core leakage: person-named, product-scoped, or narrow domain concepts.
+        if (
+            key_cf.startswith("didac")
+            or ("personal" in blob and "goal" in blob)
+            or "only inside" in blob
+            or "product experiment" in blob
+            or "quantitative finance" in blob
+            or "trading signal" in blob
+        ):
+            return DerivationHintMatch(
+                hints=(
+                    "User-, product-, or domain-specific concepts should not enter core unless "
+                    "reusable across domains; prefer entity instances or a domain namespace.",
+                ),
+                pin_concepts=(
+                    ("class", "Goal"),
+                    ("class", "Observation"),
+                    ("class", "Document"),
+                ),
+            )
+
+    return None
+
+
 def _hash_context(context: ReviewContext) -> str:
     payload = {
         "builder": context.builder_version,
         "proposal_type": context.proposal_type.value,
         "proposal": _public_payload(context.proposal),
+        "derivation_hints": list(context.derivation_hints),
         "concepts": [
             {
                 "kind": c.kind,

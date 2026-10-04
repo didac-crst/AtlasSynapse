@@ -16,10 +16,10 @@ from semantic_memory.schemas.semantic_review import (
 )
 from semantic_memory.services.review_context import ReviewContext
 
-PROMPT_TEMPLATE_VERSION = "semantic-review-v3.1"
+PROMPT_TEMPLATE_VERSION = "semantic-review-v3.2"
 
 _SYSTEM_PROMPT = """You are reviewing ontology changes for AtlasSynapse.
-Judge semantic coherence and concept equivalence only.
+Judge semantic coherence, concept equivalence, and canonical modeling fit.
 Do not override deterministic validation (it already passed).
 If context is insufficient, set context_sufficient=false and decision=manual_review.
 
@@ -39,6 +39,23 @@ Equivalence and reuse:
   yes → reuse/reject may be appropriate
   no → do not recommend reuse solely from similarity
   unclear → manual_review with clarification asks (do not force a binary call)
+
+CANONICAL MODELING RULES:
+1. Prefer composition over redundant shortcut relations. If a proposed predicate
+   is already derivable through an existing short path in the excerpt or
+   CANONICAL DERIVATION HINTS, do not approve unless it adds distinct semantics.
+2. Temporal qualifiers belong on statements where possible. Do not create
+   Current*/Historical* concepts when existing relations plus validity windows
+   can represent them.
+3. Confidence, verification, provenance, and evidence belong on
+   assertions/evidence, not as new ontology classes unless independently
+   meaningful beyond that qualifier.
+4. User-, project-, or domain-specific concepts should not enter core unless
+   they are reusable across domains.
+5. Directionality matters. Do not equate inverse or differently-directed
+   relations solely because they are topically related.
+6. If a proposed relation's semantics depend on interpretation (e.g. avoids,
+   usedBy), prefer clarification over approval.
 
 Ambiguity / clarification:
 - If you cannot confidently decide whether the proposal is new vs another name
@@ -179,6 +196,9 @@ class OpenAISemanticReviewer:
             "",
             "TASK:",
             "Decide approve, reject, reuse_existing, or manual_review.",
+            "Apply CANONICAL MODELING RULES and any CANONICAL DERIVATION HINTS.",
+            "Ask not only 'what is this similar to?' but also 'should this exist",
+            "given what the graph can already express?'",
             "Before reuse/reject-as-duplicate, apply the substitutability check:",
             "could every intended use of the proposal reasonably use an existing",
             "concept without changing meaning? Similarity alone is not reuse.",

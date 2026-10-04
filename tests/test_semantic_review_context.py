@@ -196,3 +196,41 @@ def test_candidate_selection_trace_present(db_session: Session) -> None:
     assert ctx.candidate_selection_trace
     depends = next(t for t in ctx.candidate_selection_trace if t["key"] == "dependsOn")
     assert "lexical" in depends["trace"] or depends["tier"] in {"pinned", "supporting"}
+
+
+def test_employed_by_gets_canonical_derivation_hints(db_session: Session) -> None:
+    _ensure_calibration(db_session)
+    ctx = SemanticReviewContextBuilder(db_session).build(
+        proposal_type=ProposalType.PREDICATE,
+        payload={
+            "namespace_key": "core",
+            "key": "employedBy",
+            "description": "Direct Person→Organization employment link.",
+            "value_kind": ValueKind.ENTITY.value,
+            "cardinality": Cardinality.MANY.value,
+            "domain_keys": ["Person"],
+            "range_keys": ["Organization"],
+        },
+    )
+    block = ctx.to_prompt_block()
+    assert "CANONICAL DERIVATION HINTS:" in block
+    assert "holdsRole" in block
+    assert "roleAt" in block
+    assert "predicate:holdsRole" in ctx.concept_keys()
+    assert "predicate:roleAt" in ctx.concept_keys()
+    assert any("canonical_derivation" == t["trace"] for t in ctx.candidate_selection_trace)
+
+
+def test_verified_skill_gets_provenance_hint(db_session: Session) -> None:
+    _ensure_calibration(db_session)
+    ctx = SemanticReviewContextBuilder(db_session).build(
+        proposal_type=ProposalType.CLASS,
+        payload={
+            "namespace_key": "core",
+            "key": "VerifiedSkill",
+            "description": "A Skill that has been verified by evidence or a trusted source.",
+            "parent_keys": ["Thing"],
+        },
+    )
+    assert any("provenance" in h.casefold() or "evidence" in h.casefold() for h in ctx.derivation_hints)
+    assert "class:Skill" in ctx.concept_keys()
