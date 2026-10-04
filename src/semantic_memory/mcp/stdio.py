@@ -1,8 +1,8 @@
-"""Minimal MCP JSON-RPC stdio transport (Content-Length framing).
+"""Minimal MCP JSON-RPC stdio transport (newline-delimited JSON).
 
-Keeps business logic out of the transport: handlers are plain callables that
-return JSON-serializable dicts. Compatible with MCP tool list/call flows used
-by agent hosts.
+Per MCP 2024-11-05 stdio transport, messages are delimited by newlines and must
+not contain embedded newlines. Handlers remain plain callables that return
+JSON-serializable dicts.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ class ToolSpec:
 
 
 class StdioMCPServer:
-    """Very small MCP server over binary stdin/stdout."""
+    """Very small MCP server over newline-delimited JSON stdio."""
 
     def __init__(
         self,
@@ -70,33 +70,23 @@ class StdioMCPServer:
                 self._write_message(response)
 
     def _read_message(self) -> dict[str, Any] | None:
-        headers: dict[str, str] = {}
         while True:
             line = self._stdin.readline()
             if line == b"":
                 return None
-            if line in {b"\n", b"\r\n"}:
-                break
-            decoded = line.decode("utf-8")
-            key, _, value = decoded.partition(":")
-            headers[key.strip().lower()] = value.strip()
-        length_raw = headers.get("content-length")
-        if not length_raw:
-            return None
-        length = int(length_raw)
-        payload = self._stdin.read(length)
-        if not payload or len(payload) < length:
-            return None
-        data = json.loads(payload.decode("utf-8"))
-        if not isinstance(data, dict):
-            raise TypeError("MCP message must be a JSON object")
-        return data
+            stripped = line.strip()
+            if not stripped:
+                continue
+            data = json.loads(stripped.decode("utf-8"))
+            if not isinstance(data, dict):
+                raise TypeError("MCP message must be a JSON object")
+            return data
 
     def _write_message(self, message: dict[str, Any]) -> None:
-        body = json.dumps(message, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-        header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
-        self._stdout.write(header)
-        self._stdout.write(body)
+        # Compact JSON with no literal newlines (NDJSON-safe).
+        body = json.dumps(message, separators=(",", ":"), ensure_ascii=False)
+        self._stdout.write(body.encode("utf-8"))
+        self._stdout.write(b"\n")
         self._stdout.flush()
 
     def _dispatch(self, message: dict[str, Any]) -> dict[str, Any] | None:

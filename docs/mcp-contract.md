@@ -2,7 +2,7 @@
 
 The MCP adapter exposes semantic operations only. It must not expose raw SQL, DDL, hard-delete operations, or ORM objects.
 
-The production transport is stdio via `semantic-memory-mcp` (Content-Length JSON-RPC). Tool handlers stay thin translations over services; HTTP MCP transport is not implemented yet.
+The production transport is stdio via `semantic-memory-mcp` (MCP 2024-11-05 newline-delimited JSON-RPC). Tool handlers stay thin translations over services; HTTP MCP transport is not implemented yet.
 
 ## Read tools
 

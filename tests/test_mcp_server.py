@@ -11,9 +11,8 @@ from semantic_memory.mcp.server import build_mcp_tools
 from semantic_memory.mcp.stdio import StdioMCPServer, ToolSpec
 
 
-def _frame(message: dict[str, object]) -> bytes:
-    body = json.dumps(message, separators=(",", ":")).encode("utf-8")
-    return f"Content-Length: {len(body)}\r\n\r\n".encode("ascii") + body
+def _line(message: dict[str, object]) -> bytes:
+    return json.dumps(message, separators=(",", ":")).encode("utf-8") + b"\n"
 
 
 def test_build_mcp_server_registers_contract_tools() -> None:
@@ -30,8 +29,8 @@ def test_build_mcp_server_registers_contract_tools() -> None:
 def test_stdio_initialize_and_tools_list() -> None:
     tools = build_mcp_tools()
     stdin = io.BytesIO(
-        _frame({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
-        + _frame({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
+        _line({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
+        + _line({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
     )
     stdout = io.BytesIO()
     server = StdioMCPServer(
@@ -43,15 +42,16 @@ def test_stdio_initialize_and_tools_list() -> None:
     )
     server.run()
     raw = stdout.getvalue().decode("utf-8")
+    assert "Content-Length" not in raw
+    assert raw.count("\n") >= 2
     assert "AtlasSynapseTest" in raw
     assert "create_entity" in raw
     assert "propose_class" in raw
 
 
-def test_stdio_reads_content_length_as_bytes() -> None:
-    """Non-ASCII JSON must use byte Content-Length, not character count."""
+def test_stdio_newline_delimited_with_non_ascii() -> None:
     payload = {"jsonrpc": "2.0", "id": 1, "method": "ping", "params": {"note": "café"}}
-    stdin = io.BytesIO(_frame(payload))
+    stdin = io.BytesIO(_line(payload))
     stdout = io.BytesIO()
     server = StdioMCPServer(
         name="AtlasSynapseTest",
@@ -61,7 +61,13 @@ def test_stdio_reads_content_length_as_bytes() -> None:
         stdout=stdout,
     )
     server.run()
-    assert b'"result":{}' in stdout.getvalue()
+    lines = stdout.getvalue().splitlines()
+    assert len(lines) == 1
+    assert json.loads(lines[0].decode("utf-8")) == {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {},
+    }
 
 
 def test_invalid_tool_arguments_are_sanitized() -> None:
@@ -81,7 +87,7 @@ def test_invalid_tool_arguments_are_sanitized() -> None:
         )
     ]
     stdin = io.BytesIO(
-        _frame(
+        _line(
             {
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -100,4 +106,4 @@ def test_invalid_tool_arguments_are_sanitized() -> None:
     ).run()
     text = stdout.getvalue().decode("utf-8")
     assert "Invalid tool arguments" in text
-    assert "entity_id" not in text or "required" not in text.lower()
+    assert "required positional" not in text

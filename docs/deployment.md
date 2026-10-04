@@ -60,7 +60,7 @@ semantic-memory-mcp
 docker compose --profile mcp run --rm -T mcp
 ```
 
-The stdio server registers the typed tools from `docs/mcp-contract.md` and delegates to services. It does not expose SQL, DDL, or hard deletes. HTTP MCP transport remains unimplemented; set `MCP_TRANSPORT=stdio`.
+The stdio server speaks MCP 2024-11-05 newline-delimited JSON-RPC, registers the typed tools from `docs/mcp-contract.md`, and delegates to services. It does not expose SQL, DDL, or hard deletes. HTTP MCP transport remains unimplemented; set `MCP_TRANSPORT=stdio`.
 
 ## Backup and restore
 
