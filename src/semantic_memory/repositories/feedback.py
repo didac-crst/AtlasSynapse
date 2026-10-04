@@ -20,8 +20,10 @@ class FeedbackRepository:
     def get(self, feedback_id: uuid.UUID) -> AgentFeedback | None:
         return self._session.get(AgentFeedback, feedback_id)
 
-    def find_open_by_fingerprint(self, fingerprint: str) -> AgentFeedback | None:
-        return self._session.scalar(
+    def find_open_by_fingerprint(
+        self, fingerprint: str, *, for_update: bool = False
+    ) -> AgentFeedback | None:
+        stmt = (
             select(AgentFeedback)
             .where(
                 AgentFeedback.fingerprint == fingerprint,
@@ -30,6 +32,9 @@ class FeedbackRepository:
             .order_by(AgentFeedback.created_at.asc())
             .limit(1)
         )
+        if for_update:
+            stmt = stmt.with_for_update()
+        return self._session.scalar(stmt)
 
     def list(
         self,

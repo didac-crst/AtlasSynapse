@@ -173,7 +173,7 @@ class FeedbackService:
             proposal_id=request.proposal_id,
             operation_log_id=request.operation_log_id,
         )
-        existing = self._feedback.find_open_by_fingerprint(fingerprint)
+        existing = self._feedback.find_open_by_fingerprint(fingerprint, for_update=True)
         if existing is not None:
             touched = self._feedback.touch_occurrence(existing)
             return ReportFeedbackResponse(
@@ -223,7 +223,7 @@ class FeedbackService:
                     fingerprint=fingerprint,
                 )
         except IntegrityError:
-            raced = self._feedback.find_open_by_fingerprint(fingerprint)
+            raced = self._feedback.find_open_by_fingerprint(fingerprint, for_update=True)
             if raced is None:
                 raise
             touched = self._feedback.touch_occurrence(raced)
