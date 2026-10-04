@@ -114,7 +114,9 @@ Package the application for deployment before connecting real users or agents:
 
 ## Phase 15+ — Ingestion policy, administration, and advanced semantic capabilities
 
-Decide what becomes durable memory, add inspection UI if justified, and consider exports, inference, and ontology health tooling.
+Status: Next.
+
+Decide what becomes durable memory (ingestion policy), add inspection UI if justified, and consider exports, inference, and ontology health tooling. Prefer evidence from dogfooding and agent feedback over speculative automation.
 
 ## Milestones
 
@@ -123,6 +125,7 @@ Decide what becomes durable memory, add inspection UI if justified, and consider
 - Milestone C: phases 10–12, governed self-evolving ontology. — Done.
 - Milestone D: phase 13 retrieval/LLM observability. — Done.
 - Milestone E: phase 14 production readiness. — Done.
+- Milestone F: phase 15+ ingestion policy, administration, and advanced capabilities. — Next.
 
 ## Stop conditions
 

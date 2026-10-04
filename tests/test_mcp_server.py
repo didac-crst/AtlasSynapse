@@ -107,3 +107,5 @@ def test_invalid_tool_arguments_are_sanitized() -> None:
     text = stdout.getvalue().decode("utf-8")
     assert "Invalid tool arguments" in text
     assert "required positional" not in text
+    assert "entity_id" not in text
+    assert "required" not in text.lower()
