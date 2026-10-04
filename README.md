@@ -437,7 +437,7 @@ Non-health HTTP routes accept `Authorization: Bearer <HTTP_API_TOKEN>` or `X-API
 
 ## Project status
 
-Phases 0–14 are implemented: the core substrate is in place (knowledge plane, provenance, conflicts, ontology governance, retrieval, LLM observability, and production packaging).
+Phases 0–15a are implemented: the core substrate is in place (knowledge plane, provenance, conflicts, ontology governance, retrieval, LLM observability, production packaging, and agent feedback).
 
 The next focus is **Phase 15+**: ingestion policy, administration, and advanced semantic capabilities, informed by dogfooding rather than speculative infrastructure.
 
@@ -447,7 +447,8 @@ Already delivered includes:
 - actors, entities, statements, temporal validity, provenance, and idempotent `operation_log` auditing;
 - conflicts, batch ingestion, ontology read plane, and governed proposals with semantic review;
 - database-backed retrieval with transparent ranking signals and `llm_call_log` observability;
-- Docker/Compose packaging, HTTP API authentication, MCP stdio transport, and deployment docs.
+- Docker/Compose packaging, HTTP API authentication, MCP stdio transport, and deployment docs;
+- `agent_feedback` reporting (`report_feedback`) with fingerprint dedupe and admin resolve.
 
 See the [development roadmap](docs/roadmap.md) for the full sequence.
 

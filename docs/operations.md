@@ -12,10 +12,13 @@ knowledge.write
 ontology.read
 ontology.propose
 ontology.apply
+feedback.create
+feedback.read
+feedback.manage
 admin
 ```
 
-The normal ChatGPT integration receives the first four except `ontology.apply`.
+The normal ChatGPT integration receives knowledge/ontology read-write/propose plus `feedback.create`. Direct ontology application and feedback administration are reserved for privileged actors.
 
 ## Mutation envelope
 
@@ -43,6 +46,10 @@ Every semantic-review invocation is recorded in `llm_call_log` (not `operation_l
 ## Retrieval behavior
 
 Retrieval (`search_entities`, `search_statements`, `search_semantic_memory`, `get_relevant_context`, neighborhood/timeline/explain/conflicts) is database-backed and must succeed without an LLM or embedding provider. Ranking exposes transparent signals (lexical, temporal, recency, evidence, reliability, proximity, ontology specificity) and must not collapse into an unexplained truth score. Vector search remains optional.
+
+## Agent feedback
+
+Agents may report quality observations via `report_feedback` / `POST /v1/feedback` without treating a successful operation as a failure. Feedback lives in `agent_feedback`, separate from `operation_log`, `llm_call_log`, and ontology proposals. Open rows with the same fingerprint are deduplicated by incrementing `occurrence_count`. Context payloads follow the same retention/redaction policy as operation audits. Listing and resolution require `feedback.read` / `feedback.manage` (or `admin`).
 
 ## Health behavior
 

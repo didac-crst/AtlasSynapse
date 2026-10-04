@@ -9,6 +9,9 @@ class Capability(StrEnum):
     ONTOLOGY_READ = "ontology.read"
     ONTOLOGY_PROPOSE = "ontology.propose"
     ONTOLOGY_APPLY = "ontology.apply"
+    FEEDBACK_CREATE = "feedback.create"
+    FEEDBACK_READ = "feedback.read"
+    FEEDBACK_MANAGE = "feedback.manage"
     ADMIN = "admin"
 
 
@@ -17,4 +20,5 @@ DEFAULT_AGENT_CAPABILITIES: tuple[Capability, ...] = (
     Capability.KNOWLEDGE_WRITE,
     Capability.ONTOLOGY_READ,
     Capability.ONTOLOGY_PROPOSE,
+    Capability.FEEDBACK_CREATE,
 )

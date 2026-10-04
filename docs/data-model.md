@@ -36,6 +36,10 @@ Mutation operation logs distinguish started, success, rejected, and failed. Idem
 
 `llm_call_log` is a durable provider-call audit table, separate from `operation_log`. Each call is one row: created when the call starts (`started`) and updated in place on completion with final status, outcome, tokens, duration, and cost. Rows are retained (not hard-deleted in normal operation); this is not a multi-event append stream that keeps a separate immutable start snapshot. Records include correlation IDs, provider/model/purpose, pricing snapshot/version, and redacted metadata. Raw prompts and responses are not stored by default.
 
+## Agent feedback
+
+`agent_feedback` stores actionable quality observations from agents (errors, ontology gaps, usability, etc.). It is not an operation failure log and not an ontology proposal. Rows link optionally to operation/proposal/entity/statement/source, carry a fingerprint for open-row dedupe, and track resolution status separately from mutation outcomes.
+
 ## Reasoning and derived data
 
 `conflict` is authoritative reasoning metadata. `embedding` is optional derived data and may be deferred until after the base migration. It must not be required for startup or correctness.

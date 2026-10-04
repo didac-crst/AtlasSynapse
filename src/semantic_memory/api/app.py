@@ -11,6 +11,7 @@ from semantic_memory.api.batches import router as batches_router
 from semantic_memory.api.conflicts import router as conflicts_router
 from semantic_memory.api.entities import router as entities_router
 from semantic_memory.api.errors import register_exception_handlers
+from semantic_memory.api.feedback import router as feedback_router
 from semantic_memory.api.health import router as health_router
 from semantic_memory.api.ontology import router as ontology_router
 from semantic_memory.api.proposals import router as proposals_router
@@ -49,6 +50,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(batches_router)
     app.include_router(ontology_router)
     app.include_router(proposals_router)
+    app.include_router(feedback_router)
     return app
 
 

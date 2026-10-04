@@ -96,6 +96,10 @@ class UnknownProposalError(DomainError):
     error_code = "UNKNOWN_PROPOSAL"
 
 
+class UnknownFeedbackError(DomainError):
+    error_code = "UNKNOWN_FEEDBACK"
+
+
 class InvalidLiteralTypeError(DomainError):
     error_code = "INVALID_LITERAL_TYPE"
 

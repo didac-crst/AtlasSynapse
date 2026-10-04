@@ -5,6 +5,7 @@ from semantic_memory.services.batches import BatchService
 from semantic_memory.services.conflicts import ConflictService
 from semantic_memory.services.embeddings import EmbeddingService
 from semantic_memory.services.entities import EntityService
+from semantic_memory.services.feedback import FeedbackService
 from semantic_memory.services.identity import IdentityService
 from semantic_memory.services.ontology import OntologyService
 from semantic_memory.services.proposals import ProposalService
@@ -24,6 +25,7 @@ __all__ = [
     "DisabledSemanticReviewer",
     "EmbeddingService",
     "EntityService",
+    "FeedbackService",
     "IdentityService",
     "MockSemanticReviewer",
     "OntologyService",
