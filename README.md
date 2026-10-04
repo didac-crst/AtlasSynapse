@@ -332,7 +332,7 @@ Those are very different guarantees.
 - Explicit ambiguity and conflict handling.
 - Idempotent writes so retries remain safe.
 - No arbitrary SQL or dynamic table creation through MCP.
-- Optional `pgvector`.
+- Optional vector similarity support; `pgvector` is not required.
 - Embeddings are derived indexes, never authoritative knowledge.
 
 ## MCP surface
@@ -437,36 +437,17 @@ Non-health HTTP routes accept `Authorization: Bearer <HTTP_API_TOKEN>` or `X-API
 
 ## Project status
 
-AtlasSynapse is being built incrementally.
+Phases 0–14 are implemented: the core substrate is in place (knowledge plane, provenance, conflicts, ontology governance, retrieval, LLM observability, and production packaging).
 
-### Foundation
+The next focus is **Phase 15+**: ingestion policy, administration, and advanced semantic capabilities, informed by dogfooding rather than speculative infrastructure.
 
-- repository and service architecture;
-- PostgreSQL schema;
-- ontology bootstrap;
-- migrations;
-- health checks;
-- testing infrastructure.
+Already delivered includes:
 
-### Knowledge plane
-
-- actors;
-- entities;
-- identity resolution;
-- statements;
-- temporal validity;
-- provenance;
-- evidence;
-- idempotency;
-- operation logging.
-
-### Semantic evolution
-
-- ontology proposals;
-- deterministic quality gates;
-- conflict handling;
-- governed semantic review;
-- optional similarity search.
+- PostgreSQL schema, migrations, ontology bootstrap, health checks, and CI;
+- actors, entities, statements, temporal validity, provenance, and idempotent operation logging;
+- conflicts, batch ingestion, ontology read plane, and governed proposals with semantic review;
+- database-backed retrieval with transparent ranking signals and `llm_call_log` observability;
+- Docker/Compose packaging, HTTP API authentication, MCP stdio transport, and deployment docs.
 
 See the [development roadmap](docs/roadmap.md) for the full sequence.
 
