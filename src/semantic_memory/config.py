@@ -45,11 +45,26 @@ class Settings(BaseSettings):
     mcp_transport: Literal["stdio", "http"] = Field(default="stdio", alias="MCP_TRANSPORT")
     http_host: str = Field(default="0.0.0.0", alias="HTTP_HOST")
     http_port: int = Field(default=8000, alias="HTTP_PORT", ge=1, le=65535)
+    http_api_token: str = Field(default="", alias="HTTP_API_TOKEN")
     admin_api_token: str = Field(default="", alias="ADMIN_API_TOKEN")
     default_actor_capabilities: list[str] = Field(
         default_factory=lambda: [cap.value for cap in DEFAULT_AGENT_CAPABILITIES],
         alias="DEFAULT_ACTOR_CAPABILITIES",
     )
+
+    def validate_production_secrets(self) -> None:
+        """Fail closed when production is missing required shared secrets."""
+        if self.app_env != "production":
+            return
+        missing: list[str] = []
+        if not self.http_api_token:
+            missing.append("HTTP_API_TOKEN")
+        if not self.admin_api_token:
+            missing.append("ADMIN_API_TOKEN")
+        if "semantic_memory:semantic_memory@" in self.database_url:
+            missing.append("DATABASE_URL (development default credentials)")
+        if missing:
+            raise ValueError("Production configuration is incomplete: " + ", ".join(missing))
 
     @field_validator("database_url")
     @classmethod

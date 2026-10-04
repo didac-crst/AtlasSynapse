@@ -28,7 +28,9 @@ dev = [
 ]
 
 [project.scripts]
-semantic-memory = "semantic_memory.api.app:run"
+semantic-memory = "semantic_memory.cli:run_api"
+semantic-memory-migrate = "semantic_memory.cli:run_migrate"
+semantic-memory-mcp = "semantic_memory.cli:run_mcp"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

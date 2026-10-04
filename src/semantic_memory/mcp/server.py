@@ -1,55 +1,426 @@
-"""Thin MCP transport placeholder with registered knowledge-plane tools."""
+"""MCP transport server (stdio) over thin tool adapters."""
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
+from typing import Any
+
+from sqlalchemy.orm import Session
 
 from semantic_memory.config import Settings, get_settings
+from semantic_memory.db import configure_engine, get_session_factory
+from semantic_memory.mcp.stdio import StdioMCPServer, ToolSpec
+from semantic_memory.mcp.tools import (
+    EntityMCPTools,
+    OntologyMCPTools,
+    RetrievalMCPTools,
+    StatementMCPTools,
+)
+
+REGISTERED_TOOL_NAMES: tuple[str, ...] = (
+    "create_entity",
+    "get_entity",
+    "search_entities",
+    "get_entity_neighborhood",
+    "merge_entity",
+    "assert_statement",
+    "get_statement",
+    "search_statements",
+    "explain_statement",
+    "add_evidence",
+    "supersede_statement",
+    "retract_statement",
+    "get_timeline",
+    "find_conflicts",
+    "assert_batch",
+    "search_semantic_memory",
+    "get_relevant_context",
+    "get_class",
+    "get_predicate",
+    "search_ontology",
+    "get_ontology_context",
+    "get_proposal",
+    "propose_class",
+    "propose_predicate",
+    "propose_constraint",
+    "propose_alias",
+    "propose_class_parent",
+)
+
+_PAYLOAD_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "payload": {"type": "object", "additionalProperties": True},
+    },
+    "required": ["payload"],
+    "additionalProperties": False,
+}
 
 
 @dataclass(frozen=True)
-class MCPPlaceholder:
-    """Placeholder describing the configured MCP transport and registered tools."""
+class MCPServerInfo:
+    """Describes the configured MCP transport and registered tool names."""
 
     transport: str
     ready: bool = True
     message: str = (
-        "Exposes entity, statement, provenance, conflict, merge, "
-        "supersession, retraction, timeline, retrieval, ontology read, and proposal tools."
+        "Stdio MCP transport exposing entity, statement, provenance, conflict, "
+        "merge, supersession, retraction, timeline, retrieval, ontology read, "
+        "and proposal tools."
     )
-    tools: tuple[str, ...] = field(
-        default_factory=lambda: (
-            "create_entity",
-            "get_entity",
-            "search_entities",
-            "get_entity_neighborhood",
-            "merge_entity",
-            "assert_statement",
-            "get_statement",
-            "search_statements",
-            "explain_statement",
-            "add_evidence",
-            "supersede_statement",
-            "retract_statement",
-            "get_timeline",
-            "find_conflicts",
-            "assert_batch",
-            "search_semantic_memory",
-            "get_relevant_context",
-            "get_class",
-            "get_predicate",
-            "search_ontology",
-            "get_ontology_context",
-            "get_proposal",
-            "propose_class",
-            "propose_predicate",
-            "propose_constraint",
-            "propose_alias",
-            "propose_class_parent",
+    tools: tuple[str, ...] = field(default_factory=lambda: REGISTERED_TOOL_NAMES)
+
+    @classmethod
+    def from_settings(cls, settings: Settings | None = None) -> MCPServerInfo:
+        cfg = settings or get_settings()
+        return cls(transport=cfg.mcp_transport)
+
+
+# Backward-compatible alias used by older imports/tests.
+MCPPlaceholder = MCPServerInfo
+
+
+@contextmanager
+def _session() -> Iterator[Session]:
+    session = get_session_factory()()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+def _call(operation: Any) -> dict[str, Any]:
+    with _session() as session:
+        result = operation(session)
+        if not isinstance(result, dict):
+            raise TypeError("MCP tool handlers must return a dict")
+        return result
+
+
+def _get_class(
+    class_key: str | None = None,
+    class_id: str | None = None,
+    alias: str | None = None,
+    namespace_key: str = "core",
+) -> dict[str, Any]:
+    return _call(
+        lambda s: OntologyMCPTools(s).get_class(
+            class_key=class_key,
+            class_id=class_id,
+            alias=alias,
+            namespace_key=namespace_key,
         )
     )
 
-    @classmethod
-    def from_settings(cls, settings: Settings | None = None) -> MCPPlaceholder:
-        cfg = settings or get_settings()
-        return cls(transport=cfg.mcp_transport)
+
+def _get_predicate(
+    predicate_key: str | None = None,
+    predicate_id: str | None = None,
+    alias: str | None = None,
+    namespace_key: str = "core",
+) -> dict[str, Any]:
+    return _call(
+        lambda s: OntologyMCPTools(s).get_predicate(
+            predicate_key=predicate_key,
+            predicate_id=predicate_id,
+            alias=alias,
+            namespace_key=namespace_key,
+        )
+    )
+
+
+def _get_ontology_context(
+    class_key: str | None = None,
+    class_id: str | None = None,
+    alias: str | None = None,
+    namespace_key: str = "core",
+) -> dict[str, Any]:
+    return _call(
+        lambda s: OntologyMCPTools(s).get_ontology_context(
+            class_key=class_key,
+            class_id=class_id,
+            alias=alias,
+            namespace_key=namespace_key,
+        )
+    )
+
+
+def _payload_tool(name: str, description: str, call: Any) -> ToolSpec:
+    def handler(*, payload: dict[str, Any]) -> dict[str, Any]:
+        with _session() as session:
+            result = call(session, payload)
+            if not isinstance(result, dict):
+                raise TypeError("MCP tool handlers must return a dict")
+            return result
+
+    return ToolSpec(
+        name=name,
+        description=description,
+        handler=handler,
+        input_schema=_PAYLOAD_SCHEMA,
+    )
+
+
+def build_mcp_tools() -> list[ToolSpec]:
+    """Build tool specs bound to per-call database sessions."""
+    return [
+        _payload_tool(
+            "create_entity",
+            "Create a typed knowledge entity.",
+            lambda session, payload: EntityMCPTools(session).create_entity(payload),
+        ),
+        ToolSpec(
+            name="get_entity",
+            description="Fetch an entity by id.",
+            handler=lambda entity_id: _call(lambda s: EntityMCPTools(s).get_entity(entity_id)),
+            input_schema={
+                "type": "object",
+                "properties": {"entity_id": {"type": "string"}},
+                "required": ["entity_id"],
+            },
+        ),
+        _payload_tool(
+            "search_entities",
+            "Search entities with ranking signals.",
+            lambda session, payload: RetrievalMCPTools(session).search_entities(payload),
+        ),
+        ToolSpec(
+            name="get_entity_neighborhood",
+            description="List neighboring entities.",
+            handler=lambda entity_id, limit=50: _call(
+                lambda s: RetrievalMCPTools(s).get_entity_neighborhood(entity_id, limit=limit)
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "entity_id": {"type": "string"},
+                    "limit": {"type": "integer", "default": 50},
+                },
+                "required": ["entity_id"],
+            },
+        ),
+        _payload_tool(
+            "merge_entity",
+            "Explicitly merge two entities.",
+            lambda session, payload: EntityMCPTools(session).merge_entity(payload),
+        ),
+        _payload_tool(
+            "assert_statement",
+            "Assert a typed statement.",
+            lambda session, payload: StatementMCPTools(session).assert_statement(payload),
+        ),
+        ToolSpec(
+            name="get_statement",
+            description="Fetch a statement by id.",
+            handler=lambda statement_id: _call(
+                lambda s: StatementMCPTools(s).get_statement(statement_id)
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {"statement_id": {"type": "string"}},
+                "required": ["statement_id"],
+            },
+        ),
+        _payload_tool(
+            "search_statements",
+            "Search statements with ranking signals.",
+            lambda session, payload: RetrievalMCPTools(session).search_statements(payload),
+        ),
+        ToolSpec(
+            name="explain_statement",
+            description="Explain a statement with evidence.",
+            handler=lambda statement_id: _call(
+                lambda s: StatementMCPTools(s).explain_statement(statement_id)
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {"statement_id": {"type": "string"}},
+                "required": ["statement_id"],
+            },
+        ),
+        _payload_tool(
+            "add_evidence",
+            "Attach evidence to a statement.",
+            lambda session, payload: StatementMCPTools(session).add_evidence(payload),
+        ),
+        _payload_tool(
+            "supersede_statement",
+            "Supersede a statement.",
+            lambda session, payload: StatementMCPTools(session).supersede_statement(payload),
+        ),
+        _payload_tool(
+            "retract_statement",
+            "Retract a statement.",
+            lambda session, payload: StatementMCPTools(session).retract_statement(payload),
+        ),
+        ToolSpec(
+            name="get_timeline",
+            description="Get an entity timeline.",
+            handler=lambda entity_id: _call(lambda s: StatementMCPTools(s).get_timeline(entity_id)),
+            input_schema={
+                "type": "object",
+                "properties": {"entity_id": {"type": "string"}},
+                "required": ["entity_id"],
+            },
+        ),
+        ToolSpec(
+            name="find_conflicts",
+            description="Find conflicts for an entity or statement.",
+            handler=lambda entity_id=None, statement_id=None, status="open": _call(
+                lambda s: StatementMCPTools(s).find_conflicts(
+                    entity_id=entity_id,
+                    statement_id=statement_id,
+                    status=status,
+                )
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "entity_id": {"type": "string"},
+                    "statement_id": {"type": "string"},
+                    "status": {"type": "string", "default": "open"},
+                },
+            },
+        ),
+        _payload_tool(
+            "assert_batch",
+            "Atomically assert a batch of statements.",
+            lambda session, payload: StatementMCPTools(session).assert_batch(payload),
+        ),
+        _payload_tool(
+            "search_semantic_memory",
+            "Search semantic memory.",
+            lambda session, payload: RetrievalMCPTools(session).search_semantic_memory(payload),
+        ),
+        _payload_tool(
+            "get_relevant_context",
+            "Compose relevant context for an entity.",
+            lambda session, payload: RetrievalMCPTools(session).get_relevant_context(payload),
+        ),
+        ToolSpec(
+            name="get_class",
+            description="Look up an ontology class.",
+            handler=_get_class,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "class_key": {"type": "string"},
+                    "class_id": {"type": "string"},
+                    "alias": {"type": "string"},
+                    "namespace_key": {"type": "string", "default": "core"},
+                },
+            },
+        ),
+        ToolSpec(
+            name="get_predicate",
+            description="Look up an ontology predicate.",
+            handler=_get_predicate,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "predicate_key": {"type": "string"},
+                    "predicate_id": {"type": "string"},
+                    "alias": {"type": "string"},
+                    "namespace_key": {"type": "string", "default": "core"},
+                },
+            },
+        ),
+        ToolSpec(
+            name="search_ontology",
+            description="Search ontology classes and predicates.",
+            handler=lambda query, namespace_key="core", limit=25: _call(
+                lambda s: OntologyMCPTools(s).search_ontology(
+                    query=query,
+                    namespace_key=namespace_key,
+                    limit=limit,
+                )
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "namespace_key": {"type": "string"},
+                    "limit": {"type": "integer", "default": 25},
+                },
+                "required": ["query"],
+            },
+        ),
+        ToolSpec(
+            name="get_ontology_context",
+            description="Get conservative ontology context.",
+            handler=_get_ontology_context,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "class_key": {"type": "string"},
+                    "class_id": {"type": "string"},
+                    "alias": {"type": "string"},
+                    "namespace_key": {"type": "string", "default": "core"},
+                },
+            },
+        ),
+        ToolSpec(
+            name="get_proposal",
+            description="Fetch an ontology proposal.",
+            handler=lambda proposal_id: _call(
+                lambda s: OntologyMCPTools(s).get_proposal(proposal_id)
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {"proposal_id": {"type": "string"}},
+                "required": ["proposal_id"],
+            },
+        ),
+        _payload_tool(
+            "propose_class",
+            "Propose a new ontology class.",
+            lambda session, payload: OntologyMCPTools(session).propose_class(payload),
+        ),
+        _payload_tool(
+            "propose_predicate",
+            "Propose a new ontology predicate.",
+            lambda session, payload: OntologyMCPTools(session).propose_predicate(payload),
+        ),
+        _payload_tool(
+            "propose_constraint",
+            "Propose an ontology constraint.",
+            lambda session, payload: OntologyMCPTools(session).propose_constraint(payload),
+        ),
+        _payload_tool(
+            "propose_alias",
+            "Propose an ontology alias.",
+            lambda session, payload: OntologyMCPTools(session).propose_alias(payload),
+        ),
+        _payload_tool(
+            "propose_class_parent",
+            "Propose a class parent link.",
+            lambda session, payload: OntologyMCPTools(session).propose_class_parent(payload),
+        ),
+    ]
+
+
+def build_mcp_server(settings: Settings | None = None) -> StdioMCPServer:
+    """Construct the stdio MCP server with thin adapters over domain services."""
+    cfg = settings or get_settings()
+    cfg.validate_production_secrets()
+    configure_engine(cfg)
+    return StdioMCPServer(
+        name=cfg.app_name,
+        instructions=(
+            "AtlasSynapse semantic memory tools. Mutations require actor_key, "
+            "request_id, and idempotency_key. No raw SQL or DDL."
+        ),
+        tools=build_mcp_tools(),
+    )
+
+
+def run_mcp_server(settings: Settings | None = None) -> None:
+    """Run the configured MCP transport (stdio by default)."""
+    cfg = settings or get_settings()
+    if cfg.mcp_transport != "stdio":
+        raise RuntimeError(
+            f"MCP transport '{cfg.mcp_transport}' is not implemented; use MCP_TRANSPORT=stdio"
+        )
+    build_mcp_server(cfg).run()
