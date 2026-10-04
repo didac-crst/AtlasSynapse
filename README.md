@@ -6,27 +6,44 @@
   <img src="assets/wordmark.svg" alt="AtlasSynapse" width="420" />
 </p>
 
-**AtlasSynapse gives AI agents structured memory they can reason about, trace, and safely evolve over time.**
+<br>
 
-Instead of remembering only text, it stores people, projects, events, relationships, dates, evidence and provenance as explicit knowledge.
+<h2 align="center">
+AI can remember text.<br>
+AtlasSynapse gives it a world model.
+</h2>
 
-When the knowledge model itself needs to evolve, AtlasSynapse uses deterministic quality gates first, bounded LLM semantic review second, and clarification when the meaning is ambiguous.
+<p align="center">
+<strong>Structured, temporal and traceable knowledge for AI agents.</strong>
+</p>
 
-## Your life already has a data model. It is just scattered everywhere.
+<br>
 
-Imagine using an AI assistant for the boring parts of everyday life.
+---
 
-You send it a receipt for a new laptop.
+## Memory is not the same as knowledge
 
-A few months later, you upload the warranty.
+An assistant can remember:
 
-Later still, there is an email confirming that the manufacturer extended the warranty by another year.
+> The laptop was bought in 2026 and has an extended warranty.
 
-The laptop also appears on an invoice from the shop, a bank transaction, and perhaps eventually in an insurance claim.
+Useful. But eventually you need to know:
 
-Each individual piece of information is easy to understand.
+> Where was it bought?
+>
+> Which receipt proves it?
+>
+> When does the warranty expire?
+>
+> Which email changed that expiry date?
+>
+> Which source should we trust?
 
-The useful part is everything connecting them:
+Those questions are not about remembering more text.
+
+They are about **entities, relationships, time and evidence**.
+
+AtlasSynapse makes that structure explicit:
 
 ```text
 Laptop
@@ -39,23 +56,17 @@ Laptop
  └── owned_by → Person
 ```
 
-Now imagine the same thing happening across years of:
+Instead of preserving only what was said, AtlasSynapse preserves what exists, how things relate, when facts were true, and where those facts came from.
 
-- receipts and invoices;
-- taxes and reimbursements;
-- insurance policies;
-- subscriptions and contracts;
-- warranties;
-- vehicles and travel bookings;
-- administrative deadlines.
+The result is knowledge an agent can query, connect, trace, challenge and evolve.
 
-An AI agent can remember useful information about all of this.
+And this is not just about laptops.
 
-But memory is often deliberately compact: important details are summarized into text so they remain useful within a limited context.
+Your life already has a data model. It is just scattered everywhere.
 
-That is very different from preserving the underlying structure.
+Receipts, taxes, insurance, subscriptions, warranties, vehicles, travel, projects and deadlines all form the same kind of connected information.
 
-Eventually, questions appear such as:
+Eventually the questions become:
 
 > Do I still have proof of purchase for the washing machine?
 >
@@ -196,8 +207,6 @@ Entity      A concrete thing
 Statement   A claim about that thing
 Source      Why that claim exists
 ```
-
-From here the README becomes more technical. The value proposition above is the whole pitch; what follows is how the system is engineered.
 
 The same substrate can represent people, companies, projects, documents, equipment, contracts, experiments, decisions, expenses, properties, events, and places — because domain meaning lives above the storage layer, not inside a growing set of specialty tables.
 
