@@ -51,8 +51,8 @@ def _seed_graph(session: Session) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
     statements = StatementService(session)
     provenance = ProvenanceService(session)
 
-    # Document inherits Thing directly; relatedTo domain is Thing (Agent→Thing
-    # requires ensure_rich_event_models, which these tests intentionally skip).
+    # Document inherits Thing directly; relatedTo domain/range is Thing.
+    # Person also works via core Agent→Thing (no rich-event seed required).
     subject = entities.create_entity(
         CreateEntityRequest(
             actor_key=writer,

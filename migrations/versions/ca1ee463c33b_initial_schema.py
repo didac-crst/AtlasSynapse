@@ -39,6 +39,8 @@ _CORE_CLASSES: tuple[str, ...] = (
 )
 
 _CORE_INHERITANCE: tuple[tuple[str, str], ...] = (
+    ("Agent", "Thing"),
+    ("Place", "Thing"),
     ("Person", "Agent"),
     ("Organization", "Agent"),
     ("Event", "Thing"),
