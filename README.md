@@ -444,7 +444,7 @@ The next focus is **Phase 15+**: ingestion policy, administration, and advanced 
 Already delivered includes:
 
 - PostgreSQL schema, migrations, ontology bootstrap, health checks, and CI;
-- actors, entities, statements, temporal validity, provenance, and idempotent operation logging;
+- actors, entities, statements, temporal validity, provenance, and idempotent `operation_log` auditing;
 - conflicts, batch ingestion, ontology read plane, and governed proposals with semantic review;
 - database-backed retrieval with transparent ranking signals and `llm_call_log` observability;
 - Docker/Compose packaging, HTTP API authentication, MCP stdio transport, and deployment docs.
