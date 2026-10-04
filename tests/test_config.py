@@ -48,6 +48,7 @@ def test_mcp_server_info() -> None:
     assert "get_relevant_context" in info.tools
     assert "get_entity_neighborhood" in info.tools
     assert "report_feedback" in info.tools
+    assert "get_runtime_config" in info.tools
     assert info.transport in {"stdio", "http"}
 
 

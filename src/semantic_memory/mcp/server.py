@@ -19,8 +19,10 @@ from semantic_memory.mcp.tools import (
     RetrievalMCPTools,
     StatementMCPTools,
 )
+from semantic_memory.runtime_info import runtime_config
 
 REGISTERED_TOOL_NAMES: tuple[str, ...] = (
+    "get_runtime_config",
     "create_entity",
     "get_entity",
     "search_entities",
@@ -170,6 +172,15 @@ def _payload_tool(name: str, description: str, call: Any) -> ToolSpec:
 def build_mcp_tools() -> list[ToolSpec]:
     """Build tool specs bound to per-call database sessions."""
     return [
+        ToolSpec(
+            name="get_runtime_config",
+            description=(
+                "Return non-secret AtlasSynapse runtime config for deploy parity checks "
+                "(semantic_review_mode, version, model thresholds)."
+            ),
+            handler=lambda: runtime_config(),
+            input_schema={"type": "object", "properties": {}, "additionalProperties": False},
+        ),
         _payload_tool(
             "create_entity",
             "Create a typed knowledge entity.",

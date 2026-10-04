@@ -17,12 +17,19 @@ from semantic_memory.models.enums import (
 )
 from semantic_memory.repositories.governance import GovernanceRepository
 from semantic_memory.repositories.ontology import OntologyRepository
+from semantic_memory.validation.normalization import (
+    is_lower_camel_case_key,
+    is_pascal_case_key,
+    suggest_class_key,
+    suggest_predicate_key,
+)
 
 DETERMINISTIC_GATE_NAMES = frozenset(
     {
         "schema",
         "authorization",
         "existing_key",
+        "key_shape",
         "alias",
         "structural",
         "cycle",
@@ -60,6 +67,7 @@ class DeterministicGatePipeline:
         """
         outcomes = [
             self._existing_key(proposal_type, payload),
+            self._key_shape(proposal_type, payload),
             self._alias(proposal_type, payload),
             self._structural(proposal_type, payload),
             self._cycle(proposal_type, payload),
@@ -79,6 +87,7 @@ class DeterministicGatePipeline:
             self._schema(proposal_type, payload),
             self._authorization(),
             self._existing_key(proposal_type, payload),
+            self._key_shape(proposal_type, payload),
             self._alias(proposal_type, payload),
             self._structural(proposal_type, payload),
             self._cycle(proposal_type, payload),
@@ -131,23 +140,62 @@ class DeterministicGatePipeline:
     def _existing_key(self, proposal_type: ProposalType, payload: dict[str, Any]) -> GateOutcome:
         namespace_key = str(payload["namespace_key"])
         if proposal_type == ProposalType.CLASS:
+            key = str(payload["key"])
             existing = self._ontology.get_class_by_key(
-                namespace_key=namespace_key, class_key=str(payload["key"])
+                namespace_key=namespace_key, class_key=key
             )
+            if existing is None:
+                existing = self._ontology.find_class_by_normalized_key(
+                    namespace_key=namespace_key, class_key=key
+                )
+                if existing is not None and existing.key != key:
+                    return GateOutcome(
+                        "existing_key",
+                        GateDecision.REUSE_RECOMMENDED,
+                        {
+                            "namespace_key": namespace_key,
+                            "key": key,
+                            "existing_key": existing.key,
+                            "existing_class_id": str(existing.id),
+                            "reason": "canonical_key_equivalent",
+                        },
+                    )
             if existing is not None:
                 return GateOutcome(
                     "existing_key",
                     GateDecision.REUSE_RECOMMENDED,
                     {
                         "namespace_key": namespace_key,
-                        "key": payload["key"],
+                        "key": key,
+                        "existing_key": existing.key,
                         "existing_class_id": str(existing.id),
                     },
                 )
         if proposal_type == ProposalType.PREDICATE:
+            key = str(payload["key"])
             existing_p = self._ontology.get_predicate_by_key(
-                namespace_key=namespace_key, predicate_key=str(payload["key"])
+                namespace_key=namespace_key, predicate_key=key
             )
+            if existing_p is None:
+                existing_p = self._ontology.find_predicate_by_normalized_key(
+                    namespace_key=namespace_key, predicate_key=key
+                )
+                if (
+                    existing_p is not None
+                    and existing_p.key != key
+                    and payload.get("base_revision_number") is None
+                ):
+                    return GateOutcome(
+                        "existing_key",
+                        GateDecision.REUSE_RECOMMENDED,
+                        {
+                            "namespace_key": namespace_key,
+                            "key": key,
+                            "existing_key": existing_p.key,
+                            "existing_predicate_id": str(existing_p.id),
+                            "reason": "canonical_key_equivalent",
+                        },
+                    )
             if existing_p is not None:
                 # Updates supply base_revision_number; bare duplicates recommend reuse.
                 if payload.get("base_revision_number") is None:
@@ -156,11 +204,64 @@ class DeterministicGatePipeline:
                         GateDecision.REUSE_RECOMMENDED,
                         {
                             "namespace_key": namespace_key,
-                            "key": payload["key"],
+                            "key": key,
+                            "existing_key": existing_p.key,
                             "existing_predicate_id": str(existing_p.id),
                         },
                     )
         return GateOutcome("existing_key", GateDecision.PASS)
+
+    def _key_shape(self, proposal_type: ProposalType, payload: dict[str, Any]) -> GateOutcome:
+        """Enforce canonical ontology identifier shapes for new concepts."""
+        namespace_key = str(payload.get("namespace_key") or "core")
+        if proposal_type == ProposalType.CLASS:
+            key = str(payload.get("key") or "")
+            # Reuse/collision is owned by existing_key; do not also fail shape.
+            if (
+                self._ontology.get_class_by_key(namespace_key=namespace_key, class_key=key)
+                is not None
+                or self._ontology.find_class_by_normalized_key(
+                    namespace_key=namespace_key, class_key=key
+                )
+                is not None
+            ):
+                return GateOutcome("key_shape", GateDecision.PASS)
+            if is_pascal_case_key(key):
+                return GateOutcome("key_shape", GateDecision.PASS)
+            return GateOutcome(
+                "key_shape",
+                GateDecision.FAIL,
+                {
+                    "key": key,
+                    "expected_shape": "PascalCase",
+                    "suggested_key": suggest_class_key(key),
+                    "reason": "class_keys_must_be_pascal_case",
+                },
+            )
+        if proposal_type == ProposalType.PREDICATE:
+            key = str(payload.get("key") or "")
+            if (
+                self._ontology.get_predicate_by_key(namespace_key=namespace_key, predicate_key=key)
+                is not None
+                or self._ontology.find_predicate_by_normalized_key(
+                    namespace_key=namespace_key, predicate_key=key
+                )
+                is not None
+            ):
+                return GateOutcome("key_shape", GateDecision.PASS)
+            if is_lower_camel_case_key(key):
+                return GateOutcome("key_shape", GateDecision.PASS)
+            return GateOutcome(
+                "key_shape",
+                GateDecision.FAIL,
+                {
+                    "key": key,
+                    "expected_shape": "lowerCamelCase",
+                    "suggested_key": suggest_predicate_key(key),
+                    "reason": "predicate_keys_must_be_lower_camel_case",
+                },
+            )
+        return GateOutcome("key_shape", GateDecision.PASS)
 
     def _alias(self, proposal_type: ProposalType, payload: dict[str, Any]) -> GateOutcome:
         if proposal_type != ProposalType.ALIAS:

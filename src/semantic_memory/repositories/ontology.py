@@ -19,6 +19,7 @@ from semantic_memory.models import (
     OntologyPredicateRange,
     OntologyPredicateRevision,
 )
+from semantic_memory.validation.normalization import normalize_text
 
 
 class OntologyRepository:
@@ -35,6 +36,46 @@ class OntologyRepository:
                 OntologyClass.is_deprecated.is_(False),
             )
         )
+
+    def find_class_by_normalized_key(
+        self, *, namespace_key: str, class_key: str
+    ) -> OntologyClass | None:
+        """Return a class whose key matches after casefold/whitespace normalization."""
+        target = normalize_text(class_key)
+        if not target:
+            return None
+        rows = self._session.scalars(
+            select(OntologyClass)
+            .join(OntologyNamespace, OntologyNamespace.id == OntologyClass.namespace_id)
+            .where(
+                OntologyNamespace.key == namespace_key,
+                OntologyClass.is_deprecated.is_(False),
+            )
+        ).all()
+        for row in rows:
+            if normalize_text(row.key) == target:
+                return row
+        return None
+
+    def find_predicate_by_normalized_key(
+        self, *, namespace_key: str, predicate_key: str
+    ) -> OntologyPredicate | None:
+        """Return a predicate whose key matches after casefold/whitespace normalization."""
+        target = normalize_text(predicate_key)
+        if not target:
+            return None
+        rows = self._session.scalars(
+            select(OntologyPredicate)
+            .join(OntologyNamespace, OntologyNamespace.id == OntologyPredicate.namespace_id)
+            .where(
+                OntologyNamespace.key == namespace_key,
+                OntologyPredicate.is_deprecated.is_(False),
+            )
+        ).all()
+        for row in rows:
+            if normalize_text(row.key) == target:
+                return row
+        return None
 
     def get_class(self, class_id: uuid.UUID) -> OntologyClass | None:
         return self._session.get(OntologyClass, class_id)
