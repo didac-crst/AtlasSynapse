@@ -457,6 +457,7 @@ def apply_confidence_policy(
     challenge: bool = False,
     proposal_key: str = "",
     proposal_description: str = "",
+    prefer_clarification: bool = False,
 ) -> StructuredReviewResult:
     """Map model output through application-side confidence / sufficiency policy."""
     from semantic_memory.schemas.semantic_review import CLARIFICATION_REASON_CODE
@@ -517,6 +518,38 @@ def apply_confidence_policy(
                         ),
                     )
                 ],
+            }
+        )
+    elif (
+        not challenge
+        and prefer_clarification
+        and decision
+        in {
+            SemanticDecision.APPROVE,
+            SemanticDecision.REJECT,
+            SemanticDecision.REUSE_EXISTING,
+        }
+        and structured.related_existing_concepts
+    ):
+        # Composition-vs-primitive cases: ask whether existing graph already suffices.
+        related_keys = ", ".join(c.key for c in structured.related_existing_concepts[:3])
+        structured = structured.model_copy(
+            update={
+                "decision": SemanticDecision.MANUAL_REVIEW,
+                "reasons": list(structured.reasons)
+                + [
+                    ReviewReason(
+                        code=CLARIFICATION_REASON_CODE,
+                        message=(
+                            "Proposal may be representable via existing composition involving "
+                            f"{related_keys}; confirm whether a new concept is required."
+                        ),
+                    )
+                ],
+                "summary": (
+                    f"The proposal may already be expressible using {related_keys}; "
+                    "clarification is required before an authoritative decision."
+                ),
             }
         )
     elif (
@@ -689,11 +722,17 @@ def make_semantic_review_gate(
         proposal_key = str(
             payload.get("key") or payload.get("alias") or payload.get("child_key") or ""
         )
+        prefer_clarification = bool(
+            getattr(review_context, "prefer_clarification", False)
+            if review_context is not None
+            else False
+        )
         structured = apply_confidence_policy(
             structured,
             settings=settings,
             proposal_key=proposal_key,
             proposal_description=str(payload.get("description") or ""),
+            prefer_clarification=prefer_clarification,
         )
         model_decision = ReviewDecision(structured.decision.value)
         shadow = settings.semantic_review_mode == "shadow"
@@ -728,6 +767,7 @@ def make_semantic_review_gate(
                 review_context.candidate_selection_trace
             )
             details["derivation_hints"] = list(review_context.derivation_hints)
+            details["prefer_clarification"] = bool(review_context.prefer_clarification)
         return GateOutcome(
             "semantic_review",
             gate_decision,

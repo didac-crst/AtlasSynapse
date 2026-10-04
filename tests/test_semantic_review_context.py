@@ -234,3 +234,201 @@ def test_verified_skill_gets_provenance_hint(db_session: Session) -> None:
     )
     assert any("provenance" in h.casefold() or "evidence" in h.casefold() for h in ctx.derivation_hints)
     assert "class:Skill" in ctx.concept_keys()
+    assert ctx.prefer_clarification is False
+
+
+def test_professional_skill_prefers_clarification_not_reuse(db_session: Session) -> None:
+    """Composition-vs-primitive residual: do not accept confident Skill reuse."""
+    _ensure_calibration(db_session)
+    ActorService(db_session).ensure(
+        ActorEnsureRequest(
+            key="composition-proposer",
+            actor_type=ActorType.AGENT,
+            capabilities=[cap.value for cap in DEFAULT_AGENT_CAPABILITIES],
+        )
+    )
+    ctx = SemanticReviewContextBuilder(db_session).build(
+        proposal_type=ProposalType.CLASS,
+        payload={
+            "namespace_key": "core",
+            "key": "ProfessionalSkill",
+            "description": "A skill used in a professional Role context.",
+            "parent_keys": ["Thing"],
+        },
+    )
+    assert ctx.prefer_clarification is True
+    assert "class:Skill" in ctx.concept_keys()
+
+    service = ProposalService(db_session, reviewer=MockSemanticReviewer())
+    result = service.propose_class(
+        ProposeClassRequest(
+            actor_key="composition-proposer",
+            request_id=uuid.uuid4(),
+            idempotency_key=f"idem-{uuid.uuid4()}",
+            key="ProfessionalSkill",
+            description="A skill used in a professional Role context.",
+            parent_keys=["Thing"],
+            metadata={
+                "review_decision": ReviewDecision.REUSE_EXISTING.value,
+                "review_confidence": 0.93,
+                "related_existing_concepts": [
+                    {
+                        "kind": "class",
+                        "key": "Skill",
+                        "reason": "Covered by Skill plus role context",
+                    }
+                ],
+            },
+        )
+    )
+    review = result.proposal.effective_semantic_review
+    assert review is not None
+    assert review.decision.value == "manual_review"
+    assert result.open_clarification_request is not None
+
+
+def test_verified_skill_confident_reuse_not_redirected_to_clarification(
+    db_session: Session,
+) -> None:
+    """Metadata-as-ontology stays reject/reuse; not a prefer_clarification case."""
+    _ensure_calibration(db_session)
+    ActorService(db_session).ensure(
+        ActorEnsureRequest(
+            key="verified-proposer",
+            actor_type=ActorType.AGENT,
+            capabilities=[cap.value for cap in DEFAULT_AGENT_CAPABILITIES],
+        )
+    )
+    service = ProposalService(db_session, reviewer=MockSemanticReviewer())
+    result = service.propose_class(
+        ProposeClassRequest(
+            actor_key="verified-proposer",
+            request_id=uuid.uuid4(),
+            idempotency_key=f"idem-{uuid.uuid4()}",
+            key="VerifiedSkill",
+            description="A Skill that has been verified by evidence or a trusted source.",
+            parent_keys=["Thing"],
+            metadata={
+                "review_decision": ReviewDecision.REUSE_EXISTING.value,
+                "review_confidence": 0.94,
+                "related_existing_concepts": [
+                    {"kind": "class", "key": "Skill", "reason": "Verification is metadata"}
+                ],
+            },
+        )
+    )
+    review = result.proposal.effective_semantic_review
+    assert review is not None
+    assert review.decision.value == "reuse_existing"
+    assert result.open_clarification_request is None
+
+
+def test_skill_grouping_distinct_approve_not_forced_to_clarification(
+    db_session: Session,
+) -> None:
+    """Clear distinct grouping concept may approve; not prefer_clarification."""
+    _ensure_calibration(db_session)
+    ActorService(db_session).ensure(
+        ActorEnsureRequest(
+            key="grouping-proposer",
+            actor_type=ActorType.AGENT,
+            capabilities=[cap.value for cap in DEFAULT_AGENT_CAPABILITIES],
+        )
+    )
+    ctx = SemanticReviewContextBuilder(db_session).build(
+        proposal_type=ProposalType.CLASS,
+        payload={
+            "namespace_key": "core",
+            "key": "SkillGrouping",
+            "label": "Skill",
+            "description": (
+                "A strategic domain grouping of competencies, not a concrete "
+                "agent-held competence."
+            ),
+            "parent_keys": ["Thing"],
+        },
+    )
+    assert ctx.prefer_clarification is False
+
+    service = ProposalService(db_session, reviewer=MockSemanticReviewer())
+    result = service.propose_class(
+        ProposeClassRequest(
+            actor_key="grouping-proposer",
+            request_id=uuid.uuid4(),
+            idempotency_key=f"idem-{uuid.uuid4()}",
+            key="SkillGrouping",
+            label="Skill",
+            description=(
+                "A strategic domain grouping of competencies, not a concrete "
+                "agent-held competence."
+            ),
+            parent_keys=["Thing"],
+            metadata={
+                "review_decision": ReviewDecision.APPROVE.value,
+                "review_confidence": 0.94,
+                "related_existing_concepts": [
+                    {"kind": "class", "key": "Skill", "reason": "Related but distinct"}
+                ],
+            },
+        )
+    )
+    review = result.proposal.effective_semantic_review
+    assert review is not None
+    assert review.decision.value == "approve"
+
+
+def test_historical_role_confident_reuse_not_redirected_to_clarification(
+    db_session: Session,
+) -> None:
+    """Temporal metadata leak stays reject/reuse; not prefer_clarification."""
+    _ensure_calibration(db_session)
+    ActorService(db_session).ensure(
+        ActorEnsureRequest(
+            key="historical-proposer",
+            actor_type=ActorType.AGENT,
+            capabilities=[cap.value for cap in DEFAULT_AGENT_CAPABILITIES],
+        )
+    )
+    ctx = SemanticReviewContextBuilder(db_session).build(
+        proposal_type=ProposalType.CLASS,
+        payload={
+            "namespace_key": "core",
+            "key": "HistoricalRole",
+            "description": (
+                "A Role that was held in the past. Used to distinguish former "
+                "roles from current ones."
+            ),
+            "parent_keys": ["Thing"],
+        },
+    )
+    assert ctx.prefer_clarification is False
+
+    service = ProposalService(db_session, reviewer=MockSemanticReviewer())
+    result = service.propose_class(
+        ProposeClassRequest(
+            actor_key="historical-proposer",
+            request_id=uuid.uuid4(),
+            idempotency_key=f"idem-{uuid.uuid4()}",
+            key="HistoricalRole",
+            description=(
+                "A Role that was held in the past. Used to distinguish former "
+                "roles from current ones."
+            ),
+            parent_keys=["Thing"],
+            metadata={
+                "review_decision": ReviewDecision.REUSE_EXISTING.value,
+                "review_confidence": 0.95,
+                "related_existing_concepts": [
+                    {
+                        "kind": "class",
+                        "key": "Role",
+                        "reason": "Temporality belongs on statements",
+                    }
+                ],
+            },
+        )
+    )
+    review = result.proposal.effective_semantic_review
+    assert review is not None
+    assert review.decision.value == "reuse_existing"
+    assert result.open_clarification_request is None

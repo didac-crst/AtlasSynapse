@@ -17,7 +17,7 @@ from semantic_memory.models.enums import ProposalType
 from semantic_memory.repositories.ontology import OntologyRepository
 from semantic_memory.validation.normalization import normalize_text
 
-CONTEXT_BUILDER_VERSION = "semantic-context-v4"
+CONTEXT_BUILDER_VERSION = "semantic-context-v4.1"
 
 # Always-considered peers for Thing-rooted proposals so near-duplicates like Role /
 # dependsOn are not starved by alphabetical generic siblings when lexical signal is thin.
@@ -60,6 +60,9 @@ class DerivationHintMatch:
 
     hints: tuple[str, ...]
     pin_concepts: tuple[tuple[str, str], ...] = ()
+    # When True, AtlasSynapse should not accept assertive approve/reject/reuse
+    # on the first pass — ask the proposer whether composition already suffices.
+    prefer_clarification: bool = False
 
 
 class ContextTier(IntEnum):
@@ -91,6 +94,7 @@ class ReviewContext:
     proposal: dict[str, Any]
     concepts: list[ContextConcept] = field(default_factory=list)
     derivation_hints: list[str] = field(default_factory=list)
+    prefer_clarification: bool = False
     estimated_tokens: int = 0
     budget_exceeded: bool = False
     builder_version: str = CONTEXT_BUILDER_VERSION
@@ -155,6 +159,9 @@ class SemanticReviewContextBuilder:
                 pin_concepts=hint_match.pin_concepts,
             )
         derivation_hints = list(hint_match.hints) if hint_match is not None else []
+        prefer_clarification = bool(
+            hint_match.prefer_clarification if hint_match is not None else False
+        )
         packed = self._pack_candidates(
             proposal_type=proposal_type,
             payload=payload,
@@ -192,6 +199,7 @@ class SemanticReviewContextBuilder:
             proposal=dict(payload),
             concepts=packed,
             derivation_hints=derivation_hints,
+            prefer_clarification=prefer_clarification,
             estimated_tokens=tokens,
             budget_exceeded=budget_exceeded,
             candidate_selection_trace=[
@@ -974,13 +982,15 @@ def match_derivation_hints(
                 hints=(
                     "Professional/role-contextualized skills are often representable via hasSkill "
                     "plus Role/context rather than a new primitive class.",
-                    "Prefer clarification or reuse unless distinct ontology-level semantics exist.",
+                    "Ask whether hasSkill + Role/context already suffices. Prefer manual_review "
+                    "with clarification over approve or reuse_existing on the first pass.",
                 ),
                 pin_concepts=(
                     ("class", "Skill"),
                     ("class", "Role"),
                     ("predicate", "hasSkill"),
                 ),
+                prefer_clarification=True,
             )
         # Core leakage: person-named, product-scoped, or narrow domain concepts.
         if (
@@ -1012,6 +1022,7 @@ def _hash_context(context: ReviewContext) -> str:
         "proposal_type": context.proposal_type.value,
         "proposal": _public_payload(context.proposal),
         "derivation_hints": list(context.derivation_hints),
+        "prefer_clarification": context.prefer_clarification,
         "concepts": [
             {
                 "kind": c.kind,
