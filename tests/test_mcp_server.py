@@ -8,12 +8,12 @@ import json
 from semantic_memory.config import Settings
 from semantic_memory.mcp import MCPServerInfo, build_mcp_server
 from semantic_memory.mcp.server import build_mcp_tools
-from semantic_memory.mcp.stdio import StdioMCPServer
+from semantic_memory.mcp.stdio import StdioMCPServer, ToolSpec
 
 
-def _frame(message: dict[str, object]) -> str:
-    body = json.dumps(message, separators=(",", ":"))
-    return f"Content-Length: {len(body.encode('utf-8'))}\r\n\r\n{body}"
+def _frame(message: dict[str, object]) -> bytes:
+    body = json.dumps(message, separators=(",", ":")).encode("utf-8")
+    return f"Content-Length: {len(body)}\r\n\r\n".encode("ascii") + body
 
 
 def test_build_mcp_server_registers_contract_tools() -> None:
@@ -29,11 +29,11 @@ def test_build_mcp_server_registers_contract_tools() -> None:
 
 def test_stdio_initialize_and_tools_list() -> None:
     tools = build_mcp_tools()
-    stdin = io.StringIO(
+    stdin = io.BytesIO(
         _frame({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
         + _frame({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
     )
-    stdout = io.StringIO()
+    stdout = io.BytesIO()
     server = StdioMCPServer(
         name="AtlasSynapseTest",
         instructions="test",
@@ -42,7 +42,62 @@ def test_stdio_initialize_and_tools_list() -> None:
         stdout=stdout,
     )
     server.run()
-    raw = stdout.getvalue()
+    raw = stdout.getvalue().decode("utf-8")
     assert "AtlasSynapseTest" in raw
     assert "create_entity" in raw
     assert "propose_class" in raw
+
+
+def test_stdio_reads_content_length_as_bytes() -> None:
+    """Non-ASCII JSON must use byte Content-Length, not character count."""
+    payload = {"jsonrpc": "2.0", "id": 1, "method": "ping", "params": {"note": "café"}}
+    stdin = io.BytesIO(_frame(payload))
+    stdout = io.BytesIO()
+    server = StdioMCPServer(
+        name="AtlasSynapseTest",
+        instructions="test",
+        tools=[],
+        stdin=stdin,
+        stdout=stdout,
+    )
+    server.run()
+    assert b'"result":{}' in stdout.getvalue()
+
+
+def test_invalid_tool_arguments_are_sanitized() -> None:
+    def _needs_id(*, entity_id: str) -> dict[str, object]:
+        return {"entity_id": entity_id}
+
+    tools = [
+        ToolSpec(
+            name="get_entity",
+            description="Fetch an entity by id.",
+            handler=_needs_id,
+            input_schema={
+                "type": "object",
+                "properties": {"entity_id": {"type": "string"}},
+                "required": ["entity_id"],
+            },
+        )
+    ]
+    stdin = io.BytesIO(
+        _frame(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {"name": "get_entity", "arguments": {}},
+            }
+        )
+    )
+    stdout = io.BytesIO()
+    StdioMCPServer(
+        name="AtlasSynapseTest",
+        instructions="test",
+        tools=tools,
+        stdin=stdin,
+        stdout=stdout,
+    ).run()
+    text = stdout.getvalue().decode("utf-8")
+    assert "Invalid tool arguments" in text
+    assert "entity_id" not in text or "required" not in text.lower()

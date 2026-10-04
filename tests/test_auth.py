@@ -56,6 +56,10 @@ def test_http_api_token_required_when_configured(authed_client: TestClient) -> N
     live = authed_client.get("/health/live")
     assert live.status_code == 200
 
+    # Prefix match must not treat unrelated /health* paths as probes.
+    healthish = authed_client.get("/healthcare")
+    assert healthish.status_code == 401
+
     ok = authed_client.get(
         "/v1/ontology/classes",
         params={"class_key": "Person"},

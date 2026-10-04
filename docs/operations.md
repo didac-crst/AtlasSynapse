@@ -50,7 +50,7 @@ Retrieval (`search_entities`, `search_statements`, `search_semantic_memory`, `ge
 
 ## HTTP authentication
 
-Non-health HTTP routes require a shared API token (`Authorization: Bearer` or `X-API-Token`) when `HTTP_API_TOKEN` is configured, and always when `APP_ENV=production`. `actor_key` remains an audit/capability identifier, not the authentication secret. Actor provisioning additionally requires `X-Admin-Token`.
+Application HTTP routes require a shared API token (`Authorization: Bearer` or `X-API-Token`) when `HTTP_API_TOKEN` is configured, and always when `APP_ENV=production`. Health probes (`/health`, `/health/*`) and documentation routes (`/docs`, `/openapi.json`, `/redoc`, when enabled) stay public. `actor_key` remains an audit/capability identifier, not the authentication secret. Actor provisioning additionally requires `X-Admin-Token`.
 
 ## Deployment
 

@@ -1,5 +1,8 @@
 # Local / compose-based deployment.
 # Copy .env.example to .env and replace development secrets before any shared use.
+#
+# Compose services always reach Postgres via hostname "postgres", built from
+# POSTGRES_* (not host-side DATABASE_URL, which uses localhost for local tools).
 services:
   postgres:
     image: postgres:16
@@ -25,7 +28,7 @@ services:
     build: .
     command: ["migrate"]
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://semantic_memory:semantic_memory@postgres:5432/semantic_memory}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-semantic_memory}:${POSTGRES_PASSWORD:-semantic_memory}@postgres:5432/${POSTGRES_DB:-semantic_memory}
       APP_ENV: ${APP_ENV:-development}
     depends_on:
       postgres:
@@ -39,7 +42,7 @@ services:
       APP_NAME: ${APP_NAME:-AtlasSynapse}
       APP_ENV: ${APP_ENV:-development}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://semantic_memory:semantic_memory@postgres:5432/semantic_memory}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-semantic_memory}:${POSTGRES_PASSWORD:-semantic_memory}@postgres:5432/${POSTGRES_DB:-semantic_memory}
       RAW_PAYLOAD_RETENTION: ${RAW_PAYLOAD_RETENTION:-redacted}
       SEMANTIC_REVIEW_MODE: ${SEMANTIC_REVIEW_MODE:-disabled}
       HTTP_HOST: ${HTTP_HOST:-0.0.0.0}
@@ -47,7 +50,7 @@ services:
       HTTP_API_TOKEN: ${HTTP_API_TOKEN:-}
       ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:-}
     ports:
-      - "${HTTP_PORT:-8000}:8000"
+      - "${HTTP_PORT:-8000}:${HTTP_PORT:-8000}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -57,13 +60,14 @@ services:
       test:
         [
           "CMD-SHELL",
-          "curl -fsS http://127.0.0.1:8000/health/live >/dev/null",
+          "curl -fsS http://127.0.0.1:$${HTTP_PORT:-8000}/health/live >/dev/null",
         ]
       interval: 10s
       timeout: 5s
       retries: 6
 
   # Optional stdio MCP sidecar for local agent wiring (not exposed as HTTP).
+  # Pipe-based stdin/stdout only — do not attach a TTY (breaks Content-Length frames).
   mcp:
     profiles: ["mcp"]
     build: .
@@ -71,16 +75,18 @@ services:
     environment:
       APP_ENV: ${APP_ENV:-development}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://semantic_memory:semantic_memory@postgres:5432/semantic_memory}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-semantic_memory}:${POSTGRES_PASSWORD:-semantic_memory}@postgres:5432/${POSTGRES_DB:-semantic_memory}
       MCP_TRANSPORT: stdio
       SEMANTIC_REVIEW_MODE: ${SEMANTIC_REVIEW_MODE:-disabled}
+      HTTP_API_TOKEN: ${HTTP_API_TOKEN:-}
+      ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:-}
     depends_on:
       postgres:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
     stdin_open: true
-    tty: true
+    tty: false
 
 volumes:
   postgres-data:

@@ -48,7 +48,7 @@ class HttpApiTokenMiddleware(BaseHTTPMiddleware):
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
         path = request.url.path
-        if path.startswith("/health"):
+        if path == "/health" or path.startswith("/health/"):
             return await call_next(request)
         if path in {"/docs", "/openapi.json", "/redoc"}:
             return await call_next(request)

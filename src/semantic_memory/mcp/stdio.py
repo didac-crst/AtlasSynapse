@@ -8,12 +8,14 @@ by agent hosts.
 from __future__ import annotations
 
 import json
+import logging
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, TextIO
+from typing import Any, BinaryIO
 
 ToolHandler = Callable[..., dict[str, Any]]
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -31,7 +33,7 @@ class ToolSpec:
 
 
 class StdioMCPServer:
-    """Very small MCP server over stdin/stdout."""
+    """Very small MCP server over binary stdin/stdout."""
 
     def __init__(
         self,
@@ -39,18 +41,28 @@ class StdioMCPServer:
         name: str,
         instructions: str,
         tools: list[ToolSpec],
-        stdin: TextIO | None = None,
-        stdout: TextIO | None = None,
+        stdin: BinaryIO | None = None,
+        stdout: BinaryIO | None = None,
     ) -> None:
         self._name = name
         self._instructions = instructions
         self._tools = {tool.name: tool for tool in tools}
-        self._stdin = stdin or sys.stdin
-        self._stdout = stdout or sys.stdout
+        self._stdin: BinaryIO = stdin or sys.stdin.buffer
+        self._stdout: BinaryIO = stdout or sys.stdout.buffer
 
     def run(self) -> None:
         while True:
-            message = self._read_message()
+            try:
+                message = self._read_message()
+            except (json.JSONDecodeError, TypeError, UnicodeDecodeError, ValueError):
+                self._write_message(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": None,
+                        "error": {"code": -32700, "message": "Parse error"},
+                    }
+                )
+                continue
             if message is None:
                 return
             response = self._dispatch(message)
@@ -61,28 +73,30 @@ class StdioMCPServer:
         headers: dict[str, str] = {}
         while True:
             line = self._stdin.readline()
-            if line == "":
+            if line == b"":
                 return None
-            if line in {"\n", "\r\n"}:
+            if line in {b"\n", b"\r\n"}:
                 break
-            key, _, value = line.partition(":")
+            decoded = line.decode("utf-8")
+            key, _, value = decoded.partition(":")
             headers[key.strip().lower()] = value.strip()
         length_raw = headers.get("content-length")
         if not length_raw:
             return None
-        payload = self._stdin.read(int(length_raw))
-        if not payload:
+        length = int(length_raw)
+        payload = self._stdin.read(length)
+        if not payload or len(payload) < length:
             return None
-        data = json.loads(payload)
+        data = json.loads(payload.decode("utf-8"))
         if not isinstance(data, dict):
             raise TypeError("MCP message must be a JSON object")
         return data
 
     def _write_message(self, message: dict[str, Any]) -> None:
-        body = json.dumps(message, separators=(",", ":"), ensure_ascii=False)
-        encoded = body.encode("utf-8")
-        self._stdout.write(f"Content-Length: {len(encoded)}\r\n\r\n")
-        self._stdout.write(encoded.decode("utf-8"))
+        body = json.dumps(message, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
+        self._stdout.write(header)
+        self._stdout.write(body)
         self._stdout.flush()
 
     def _dispatch(self, message: dict[str, Any]) -> dict[str, Any] | None:
@@ -136,12 +150,32 @@ class StdioMCPServer:
                 }
             try:
                 result = tool.handler(**arguments)
-            except Exception as exc:
+            except TypeError:
                 return {
                     "jsonrpc": "2.0",
                     "id": msg_id,
                     "result": {
-                        "content": [{"type": "text", "text": str(exc)}],
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "Invalid tool arguments",
+                            }
+                        ],
+                        "isError": True,
+                    },
+                }
+            except Exception:
+                logger.exception("MCP tool %s failed", name)
+                return {
+                    "jsonrpc": "2.0",
+                    "id": msg_id,
+                    "result": {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "Tool execution failed",
+                            }
+                        ],
                         "isError": True,
                     },
                 }

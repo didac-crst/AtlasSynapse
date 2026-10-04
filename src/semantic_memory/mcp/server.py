@@ -404,6 +404,7 @@ def build_mcp_tools() -> list[ToolSpec]:
 def build_mcp_server(settings: Settings | None = None) -> StdioMCPServer:
     """Construct the stdio MCP server with thin adapters over domain services."""
     cfg = settings or get_settings()
+    cfg.validate_production_secrets()
     configure_engine(cfg)
     return StdioMCPServer(
         name=cfg.app_name,
