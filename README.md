@@ -399,32 +399,30 @@ If the reviewer is unavailable, uncertain, or lacks enough context, AtlasSynapse
 ```mermaid
 flowchart TD
   proposal([Proposal]) --> gates[Deterministic quality gates]
-  gates -->|hard failure| reject([Reject])
+  gates -->|hard failure| rejectInvalid(["Reject (invalid)"])
   gates -->|structurally valid| semantic[Semantic review]
 
   semantic --> approve([Approve])
-  semantic --> reuse([Reuse / reject])
+  semantic --> rejectReuse(["Reject (reuse)"])
   semantic --> clarity[Needs clarity]
 
   clarity --> ask[Clarification request]
   ask --> answer[Proposer answers]
   answer --> rereview[Re-review]
   rereview --> approve
-  rereview --> reuse
+  rereview --> rejectReuse
   rereview --> clarity
 
-  classDef start fill:#FFF1EE,stroke:#E8705C,color:#303030,stroke-width:2px
+  classDef start fill:#E8F7F5,stroke:#2A8F85,color:#0F3F3B,stroke-width:2px
   classDef process fill:#EEF2F6,stroke:#5B6B7C,color:#1F2933,stroke-width:1.5px
   classDef reject fill:#FDECEC,stroke:#C23B3B,color:#5C1414,stroke-width:2px
   classDef approve fill:#E8F7EF,stroke:#2F8F5B,color:#145C32,stroke-width:2px
-  classDef reuse fill:#FFF4E5,stroke:#D4891A,color:#6B4500,stroke-width:2px
   classDef clarify fill:#EAF2FB,stroke:#3B6EA5,color:#163A5F,stroke-width:1.5px
 
   class proposal start
   class gates,semantic,rereview process
-  class reject reject
+  class rejectInvalid,rejectReuse reject
   class approve approve
-  class reuse reuse
   class clarity,ask,answer clarify
 ```
 
