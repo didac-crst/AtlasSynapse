@@ -95,6 +95,82 @@ class StatementRepository:
         self._session.flush()
         return statement
 
+    def reassign_entity_references(
+        self,
+        *,
+        source_entity_id: uuid.UUID,
+        target_entity_id: uuid.UUID,
+    ) -> dict[str, int]:
+        """Point statement endpoints at the merge survivor; retract exact duplicates."""
+        moved_subject = 0
+        moved_object = 0
+        retracted_duplicates = 0
+
+        subject_rows = list(
+            self._session.scalars(
+                select(Statement).where(Statement.subject_entity_id == source_entity_id)
+            ).all()
+        )
+        for statement in subject_rows:
+            duplicate = self._session.scalar(
+                select(Statement.id).where(
+                    Statement.id != statement.id,
+                    Statement.subject_entity_id == target_entity_id,
+                    Statement.predicate_id == statement.predicate_id,
+                    Statement.object_entity_id.is_not_distinct_from(statement.object_entity_id),
+                    Statement.object_string.is_not_distinct_from(statement.object_string),
+                    Statement.object_number.is_not_distinct_from(statement.object_number),
+                    Statement.object_boolean.is_not_distinct_from(statement.object_boolean),
+                    Statement.object_datetime.is_not_distinct_from(statement.object_datetime),
+                    Statement.valid_from.is_not_distinct_from(statement.valid_from),
+                    Statement.valid_to.is_not_distinct_from(statement.valid_to),
+                    Statement.status == StatementStatus.ASSERTED.value,
+                )
+            )
+            if (
+                duplicate is not None
+                and statement.status == StatementStatus.ASSERTED.value
+            ):
+                statement.status = StatementStatus.RETRACTED.value
+                retracted_duplicates += 1
+                continue
+            statement.subject_entity_id = target_entity_id
+            moved_subject += 1
+
+        object_rows = list(
+            self._session.scalars(
+                select(Statement).where(Statement.object_entity_id == source_entity_id)
+            ).all()
+        )
+        for statement in object_rows:
+            duplicate = self._session.scalar(
+                select(Statement.id).where(
+                    Statement.id != statement.id,
+                    Statement.object_entity_id == target_entity_id,
+                    Statement.subject_entity_id == statement.subject_entity_id,
+                    Statement.predicate_id == statement.predicate_id,
+                    Statement.valid_from.is_not_distinct_from(statement.valid_from),
+                    Statement.valid_to.is_not_distinct_from(statement.valid_to),
+                    Statement.status == StatementStatus.ASSERTED.value,
+                )
+            )
+            if (
+                duplicate is not None
+                and statement.status == StatementStatus.ASSERTED.value
+            ):
+                statement.status = StatementStatus.RETRACTED.value
+                retracted_duplicates += 1
+                continue
+            statement.object_entity_id = target_entity_id
+            moved_object += 1
+
+        self._session.flush()
+        return {
+            "moved_subject": moved_subject,
+            "moved_object": moved_object,
+            "retracted_duplicates": retracted_duplicates,
+        }
+
     def create(
         self,
         *,

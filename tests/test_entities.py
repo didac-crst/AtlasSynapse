@@ -302,6 +302,18 @@ def test_neighborhood_follows_merge_redirect(db_session: Session) -> None:
     peer_view = RetrievalService(db_session).get_entity_neighborhood(peer.entity.id)
     assert any(edge.neighbor_entity_id == keeper.entity.id for edge in peer_view.edges)
 
+    # Physical statement FKs are reassigned to the survivor for graph exporters.
+    from semantic_memory.models import Statement
+    from sqlalchemy import select
+
+    moved = db_session.scalars(
+        select(Statement).where(Statement.subject_entity_id == keeper.entity.id)
+    ).all()
+    assert moved
+    assert not db_session.scalars(
+        select(Statement).where(Statement.subject_entity_id == duplicate.entity.id)
+    ).all()
+
 
 def test_merge_transfers_aliases_for_redirect(db_session: Session) -> None:
     _ensure_writer(db_session)

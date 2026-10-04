@@ -17,6 +17,7 @@ from semantic_memory.models import Entity, EntityStatus
 from semantic_memory.models.capabilities import Capability
 from semantic_memory.repositories.entities import EntityRepository
 from semantic_memory.repositories.ontology import OntologyRepository
+from semantic_memory.repositories.statements import StatementRepository
 from semantic_memory.schemas.conflicts import MergeEntityRequest, MergeEntityResponse
 from semantic_memory.schemas.entities import (
     AddEntityAliasRequest,
@@ -39,6 +40,7 @@ class EntityService:
         self._actors = ActorService(session)
         self._entities = EntityRepository(session)
         self._ontology = OntologyRepository(session)
+        self._statements = StatementRepository(session)
         self._identity = IdentityService(session)
         self._mutations = MutationRunner(session)
 
@@ -155,6 +157,12 @@ class EntityService:
             if self._entities.alias_exists_on_other_entity(alias=alias, entity_id=target.id):
                 continue
             self._entities.ensure_alias(entity_id=target.id, alias=alias)
+        # Re-point statement endpoints so graph exporters that ignore merge
+        # metadata do not drop edges (Cytoscape / raw SPO clients).
+        self._statements.reassign_entity_references(
+            source_entity_id=source.id,
+            target_entity_id=target.id,
+        )
         return MergeEntityResponse(
             source=self._to_entity_response(merged),
             target=self._to_entity_response(target),
