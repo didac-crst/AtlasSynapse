@@ -130,6 +130,7 @@ class LlmCallLogRepository:
                     select(func.count()).where(
                         LlmCallLog.cost_status != LlmCostStatus.UNKNOWN.value,
                         LlmCallLog.cost_amount.is_not(None),
+                        LlmCallLog.cost_currency.is_not(None),
                     ),
                     created_after=created_after,
                     created_before=created_before,

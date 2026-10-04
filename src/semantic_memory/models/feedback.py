@@ -15,6 +15,7 @@ from sqlalchemy import (
     String,
     Text,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -45,6 +46,12 @@ class AgentFeedback(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
         Index("ix_agent_feedback_severity", "severity"),
         Index("ix_agent_feedback_status", "status"),
         Index("ix_agent_feedback_fingerprint", "fingerprint"),
+        Index(
+            "uq_agent_feedback_open_fingerprint",
+            "fingerprint",
+            unique=True,
+            postgresql_where=text("status = 'open' AND fingerprint IS NOT NULL"),
+        ),
         Index("ix_agent_feedback_request_id", "request_id"),
         Index("ix_agent_feedback_created_at", "created_at"),
     )

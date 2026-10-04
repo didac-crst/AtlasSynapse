@@ -126,6 +126,13 @@ def upgrade() -> None:
     op.create_index("ix_agent_feedback_severity", "agent_feedback", ["severity"])
     op.create_index("ix_agent_feedback_status", "agent_feedback", ["status"])
     op.create_index("ix_agent_feedback_fingerprint", "agent_feedback", ["fingerprint"])
+    op.create_index(
+        "uq_agent_feedback_open_fingerprint",
+        "agent_feedback",
+        ["fingerprint"],
+        unique=True,
+        postgresql_where=sa.text("status = 'open' AND fingerprint IS NOT NULL"),
+    )
     op.create_index("ix_agent_feedback_request_id", "agent_feedback", ["request_id"])
     op.create_index("ix_agent_feedback_created_at", "agent_feedback", ["created_at"])
 
@@ -133,6 +140,11 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_index("ix_agent_feedback_created_at", table_name="agent_feedback")
     op.drop_index("ix_agent_feedback_request_id", table_name="agent_feedback")
+    op.drop_index(
+        "uq_agent_feedback_open_fingerprint",
+        table_name="agent_feedback",
+        if_exists=True,
+    )
     op.drop_index("ix_agent_feedback_fingerprint", table_name="agent_feedback")
     op.drop_index("ix_agent_feedback_status", table_name="agent_feedback")
     op.drop_index("ix_agent_feedback_severity", table_name="agent_feedback")

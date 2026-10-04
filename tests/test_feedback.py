@@ -81,6 +81,48 @@ def test_fingerprint_is_stable_under_whitespace_and_case() -> None:
     assert left == right
 
 
+def test_report_correlates_operation_log_for_reporting_actor_only(db_session: Session) -> None:
+    from semantic_memory.models.enums import OperationStatus
+    from semantic_memory.models.operations import OperationLog
+    from semantic_memory.repositories.operations import OperationLogRepository
+
+    reporter = _ensure_reporter(db_session, key="corr-reporter")
+    other = _ensure_reporter(db_session, key="corr-other")
+    reporter_actor = ActorService(db_session).find_by_key(reporter)
+    other_actor = ActorService(db_session).find_by_key(other)
+    assert reporter_actor is not None and other_actor is not None
+    shared_request = uuid.uuid4()
+    ops = OperationLogRepository(db_session)
+    foreign = ops.start(
+        actor_id=other_actor.id,
+        operation_name="create_entity",
+        request_id=shared_request,
+        trace_id=uuid.uuid4(),
+        idempotency_key="foreign",
+        request_payload=None,
+    )
+    ops.finish(foreign, status=OperationStatus.SUCCESS)
+
+    reported = FeedbackService(db_session).report_feedback(
+        ReportFeedbackRequest.model_validate(
+            {
+                "actor_key": reporter,
+                "request_id": shared_request,
+                "idempotency_key": f"idem-{uuid.uuid4()}",
+                "feedback_type": "warning",
+                "severity": "low",
+                "title": "Correlation check",
+                "description": "Must bind to reporting actor operation only.",
+            }
+        )
+    )
+    assert reported.feedback.operation_log_id is not None
+    assert reported.feedback.operation_log_id != foreign.id
+    linked = db_session.get(OperationLog, reported.feedback.operation_log_id)
+    assert linked is not None
+    assert linked.actor_id == reporter_actor.id
+
+
 def test_report_create_dedupe_and_redaction(db_session: Session) -> None:
     reporter = _ensure_reporter(db_session)
     service = FeedbackService(db_session, Settings(raw_payload_retention="redacted"))

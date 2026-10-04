@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from semantic_memory.models.enums import FeedbackStatus
@@ -239,9 +239,16 @@ class FeedbackRepository:
         return row
 
     def touch_occurrence(self, row: AgentFeedback) -> AgentFeedback:
-        row.occurrence_count += 1
-        row.last_seen_at = datetime.now(UTC)
-        self._session.flush()
+        now = datetime.now(UTC)
+        self._session.execute(
+            update(AgentFeedback)
+            .where(AgentFeedback.id == row.id)
+            .values(
+                occurrence_count=AgentFeedback.occurrence_count + 1,
+                last_seen_at=now,
+            )
+        )
+        self._session.refresh(row)
         return row
 
     def resolve(

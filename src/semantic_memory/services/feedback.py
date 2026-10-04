@@ -7,6 +7,7 @@ import re
 import uuid
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from semantic_memory.config import Settings, get_settings
@@ -181,33 +182,56 @@ class FeedbackService:
                 request_id=request.request_id,
             )
 
-        # Prefer correlating the current mutation's request/trace.
+        # Prefer correlating the current mutation's request/trace for this actor.
         operation = self._session.scalar(
             select(OperationLog)
-            .where(OperationLog.request_id == request.request_id)
+            .where(
+                OperationLog.actor_id == actor_id,
+                OperationLog.request_id == request.request_id,
+            )
             .order_by(OperationLog.started_at.desc())
             .limit(1)
         )
-        row = self._feedback.create(
-            actor_id=actor_id,
-            feedback_type=request.feedback_type.value,
-            severity=request.severity.value,
-            title=request.title.strip(),
-            description=request.description.strip(),
-            request_id=request.request_id,
-            trace_id=request.trace_id
+        correlated_trace_id = (
+            request.trace_id
             if request.trace_id is not None
-            else (None if operation is None else operation.trace_id),
-            operation_log_id=request.operation_log_id
-            if request.operation_log_id is not None
-            else (None if operation is None else operation.id),
-            proposal_id=request.proposal_id,
-            entity_id=request.entity_id,
-            statement_id=request.statement_id,
-            source_id=request.source_id,
-            context=context,
-            fingerprint=fingerprint,
+            else (None if operation is None else operation.trace_id)
         )
+        correlated_operation_log_id = (
+            request.operation_log_id
+            if request.operation_log_id is not None
+            else (None if operation is None else operation.id)
+        )
+        try:
+            # Nested savepoint so a concurrent open-fingerprint conflict
+            # rolls back only the insert, not the surrounding mutation audit.
+            with self._session.begin_nested():
+                row = self._feedback.create(
+                    actor_id=actor_id,
+                    feedback_type=request.feedback_type.value,
+                    severity=request.severity.value,
+                    title=request.title.strip(),
+                    description=request.description.strip(),
+                    request_id=request.request_id,
+                    trace_id=correlated_trace_id,
+                    operation_log_id=correlated_operation_log_id,
+                    proposal_id=request.proposal_id,
+                    entity_id=request.entity_id,
+                    statement_id=request.statement_id,
+                    source_id=request.source_id,
+                    context=context,
+                    fingerprint=fingerprint,
+                )
+        except IntegrityError:
+            raced = self._feedback.find_open_by_fingerprint(fingerprint)
+            if raced is None:
+                raise
+            touched = self._feedback.touch_occurrence(raced)
+            return ReportFeedbackResponse(
+                outcome=FeedbackOutcome.DEDUPED,
+                feedback=self._to_response(touched),
+                request_id=request.request_id,
+            )
         return ReportFeedbackResponse(
             outcome=FeedbackOutcome.CREATE,
             feedback=self._to_response(row),
