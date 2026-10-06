@@ -104,6 +104,11 @@ class WriteClarificationService:
     ) -> AnswerIdentityClarificationResponse:
         actor = self._actors.require_active_actor(request.actor_key)
         self._actors.require_capability(actor, Capability.KNOWLEDGE_WRITE)
+        # Expire outside the mutation savepoint so TTL transitions survive a rejected answer.
+        row = self._clarifications.get(request.clarification_request_id)
+        if row is not None:
+            self._clarifications.mark_expired_if_needed(row)
+            self._session.flush()
         return self._mutations.run(
             actor=actor,
             operation_name="answer_identity_clarification",
@@ -130,7 +135,6 @@ class WriteClarificationService:
                 details={"clarification_request_id": str(request.clarification_request_id)},
                 request_id=str(request.request_id),
             )
-        self._clarifications.mark_expired_if_needed(row)
         if row.status == WriteClarificationStatus.SUPERSEDED.value:
             raise ClarificationRequestSupersededError(
                 "Write clarification request was superseded",
@@ -175,12 +179,14 @@ class WriteClarificationService:
 
         frozen = AssertStatementRequest.model_validate(row.frozen_request)
         # Resume always uses a fresh request_id / idempotency key (nested under answer).
+        # A dry-run clarification can never resume into an execute write.
         frozen = frozen.model_copy(
             update={
                 "request_id": uuid.uuid4(),
                 "idempotency_key": f"{request.idempotency_key}:write-clarification-resume",
                 "actor_key": request.actor_key,
                 "trace_id": request.trace_id,
+                "dry_run": row.operation_mode == OperationMode.DRY_RUN.value,
             }
         )
 
@@ -287,6 +293,7 @@ class WriteClarificationService:
             update={
                 "request_id": uuid.uuid4(),
                 "idempotency_key": f"{request_id}:stale-recheck",
+                "dry_run": row.operation_mode == OperationMode.DRY_RUN.value,
             }
         )
         actor = self._actors.require_active_actor(frozen.actor_key)

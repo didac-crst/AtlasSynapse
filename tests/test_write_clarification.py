@@ -5,9 +5,11 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from semantic_memory.exceptions import ClarificationRequestAlreadyResolvedError
 from semantic_memory.models import ActorType, Entity, Statement
 from semantic_memory.models.enums import (
     EntityStatus,
@@ -288,11 +290,7 @@ def test_expired_clarification_rejects_answer(db_session: Session) -> None:
     row.expires_at = datetime.now(UTC) - timedelta(minutes=1)
     db_session.flush()
 
-    import pytest
-
-    from semantic_memory.exceptions import ClarificationRequestAlreadyResolvedError
-
-    with pytest.raises(ClarificationRequestAlreadyResolvedError):
+    with pytest.raises(ClarificationRequestAlreadyResolvedError) as exc_info:
         WriteClarificationService(db_session).answer(
             AnswerIdentityClarificationRequest(
                 actor_key="writer",
@@ -300,5 +298,152 @@ def test_expired_clarification_rejects_answer(db_session: Session) -> None:
                 idempotency_key=str(uuid.uuid4()),
                 clarification_request_id=clarified.clarification_request_id,
                 resolution=WriteClarificationResolution.REJECT,
+            )
+        )
+    assert "expired" in exc_info.value.message.lower()
+    row = db_session.get(WriteClarificationRequest, clarified.clarification_request_id)
+    assert row is not None
+    assert row.status == WriteClarificationStatus.EXPIRED.value
+
+
+def test_dry_run_clarification_answer_never_persists(db_session: Session) -> None:
+    """Answering a dry-run clarification must remain dry-run (preview ≠ write)."""
+    _ensure_writer(db_session)
+    suffix = uuid.uuid4().hex[:8]
+    person_id = _create(db_session, name=f"ZZDryAnsPerson-{suffix}", class_key="Person")
+    project_id = _create(db_session, name=f"ZZDryAnsProject-{suffix}", class_key="Project")
+    before_entities = db_session.scalar(select(func.count()).select_from(Entity)) or 0
+    before_statements = db_session.scalar(select(func.count()).select_from(Statement)) or 0
+
+    clarified = StatementService(db_session).assert_statement(
+        AssertStatementRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            dry_run=True,
+            subject=EntityInput(
+                canonical_name=f"ZZDryAnsPerson-{suffix}",
+                class_key="Person",
+            ),
+            predicate_key="relatedTo",
+            object_entity_id=project_id,
+        )
+    )
+    assert clarified.clarification_request_id is not None
+    row = db_session.get(WriteClarificationRequest, clarified.clarification_request_id)
+    assert row is not None
+    assert row.operation_mode == OperationMode.DRY_RUN.value
+    # Even if frozen payload were tampered to dry_run=false, resume must stay dry-run.
+    row.frozen_request = {**row.frozen_request, "dry_run": False}
+    db_session.flush()
+
+    answered = WriteClarificationService(db_session).answer(
+        AnswerIdentityClarificationRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            clarification_request_id=clarified.clarification_request_id,
+            resolution=WriteClarificationResolution.CHOSEN_ENTITY,
+            chosen_entity_id=person_id,
+        )
+    )
+    assert answered.status == WriteClarificationStatus.RESOLVED
+    assert answered.assert_result is not None
+    assert answered.assert_result.dry_run is True
+    assert answered.assert_result.operation_mode == OperationMode.DRY_RUN
+    assert answered.assert_result.would_persist is True
+    assert answered.assert_result.outcome == AssertionOutcome.CREATE
+
+    after_entities = db_session.scalar(select(func.count()).select_from(Entity)) or 0
+    after_statements = db_session.scalar(select(func.count()).select_from(Statement)) or 0
+    assert after_entities == before_entities
+    assert after_statements == before_statements
+
+
+def test_clarification_id_is_one_shot_after_resolve(db_session: Session) -> None:
+    _ensure_writer(db_session)
+    suffix = uuid.uuid4().hex[:8]
+    person_id = _create(db_session, name=f"ZZOncePerson-{suffix}", class_key="Person")
+    project_id = _create(db_session, name=f"ZZOnceProject-{suffix}", class_key="Project")
+
+    clarified = StatementService(db_session).assert_statement(
+        AssertStatementRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            subject=EntityInput(
+                canonical_name=f"ZZOncePerson-{suffix}",
+                class_key="Person",
+            ),
+            predicate_key="relatedTo",
+            object_entity_id=project_id,
+        )
+    )
+    assert clarified.clarification_request_id is not None
+    clar_id = clarified.clarification_request_id
+
+    WriteClarificationService(db_session).answer(
+        AnswerIdentityClarificationRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            clarification_request_id=clar_id,
+            resolution=WriteClarificationResolution.CHOSEN_ENTITY,
+            chosen_entity_id=person_id,
+        )
+    )
+
+    with pytest.raises(ClarificationRequestAlreadyResolvedError):
+        WriteClarificationService(db_session).answer(
+            AnswerIdentityClarificationRequest(
+                actor_key="writer",
+                request_id=uuid.uuid4(),
+                idempotency_key=str(uuid.uuid4()),
+                clarification_request_id=clar_id,
+                resolution=WriteClarificationResolution.REJECT,
+            )
+        )
+
+
+def test_clarification_id_is_one_shot_after_reject(db_session: Session) -> None:
+    _ensure_writer(db_session)
+    suffix = uuid.uuid4().hex[:8]
+    _create(db_session, name=f"ZZOnceRejPerson-{suffix}", class_key="Person")
+    project_id = _create(db_session, name=f"ZZOnceRejProject-{suffix}", class_key="Project")
+
+    clarified = StatementService(db_session).assert_statement(
+        AssertStatementRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            subject=EntityInput(
+                canonical_name=f"ZZOnceRejPerson-{suffix}",
+                class_key="Person",
+            ),
+            predicate_key="relatedTo",
+            object_entity_id=project_id,
+        )
+    )
+    assert clarified.clarification_request_id is not None
+    clar_id = clarified.clarification_request_id
+
+    WriteClarificationService(db_session).answer(
+        AnswerIdentityClarificationRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            clarification_request_id=clar_id,
+            resolution=WriteClarificationResolution.REJECT,
+        )
+    )
+
+    with pytest.raises(ClarificationRequestAlreadyResolvedError):
+        WriteClarificationService(db_session).answer(
+            AnswerIdentityClarificationRequest(
+                actor_key="writer",
+                request_id=uuid.uuid4(),
+                idempotency_key=str(uuid.uuid4()),
+                clarification_request_id=clar_id,
+                resolution=WriteClarificationResolution.CREATE_NEW,
             )
         )

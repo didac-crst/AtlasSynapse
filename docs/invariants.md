@@ -23,6 +23,8 @@ These rules are implementation acceptance criteria. They must be protected by a 
 19. Statement writes resolve unresolved identities server-side; callers must not create or match entities before assert/supersede. Ambiguous identity never silently picks a candidate.
 20. `dry_run=true` executes the same mutation decision path inside a rolled-back savepoint: no durable knowledge, provenance, or idempotency writes. Operational logs may record the dry-run.
 21. Identity/write ambiguity issues a control-plane `clarification_request_id` (TTL, not knowledge). Answers resume the frozen mutation after re-checking current prod; stale situations re-issue rather than commit.
+22. A dry-run clarification can never resume into an execute write. Answering a handle created from `dry_run=true` remains dry-run; production persistence requires a separate explicit execute request.
+23. Write clarification handles are one-shot: once `resolved`, `expired`, or `superseded`, the same `clarification_request_id` cannot be answered again. Expired answers fail cleanly (no silent recreate/resume).
 
 ## Critical database constraints
 

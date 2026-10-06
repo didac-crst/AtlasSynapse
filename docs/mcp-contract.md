@@ -151,6 +151,10 @@ Resume with `answer_identity_clarification`:
 
 AtlasSynapse resumes the frozen operation server-side. Stored candidates are the context of the question; before persisting, safety checks re-run against **current prod**. If the graph changed materially, a fresh `clarification_request_id` is issued (prior handle `superseded`) rather than committing on stale assumptions.
 
+**Dry-run clarifications never upgrade to execute.** Answering a handle created from `dry_run=true` forces `dry_run` on resume. Production writes require a separate explicit execute request (preview ≠ write).
+
+**One-shot + expiry.** Handles are `open` until answered. Answering an `expired` / `resolved` / `superseded` ID fails cleanly; AtlasSynapse does not silently recreate or resume.
+
 ## Error envelope
 
 Every error contains:
