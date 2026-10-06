@@ -46,6 +46,7 @@ from semantic_memory.services.identity_write import (
     identity_clarify_details,
 )
 from semantic_memory.services.mutations import MutationRunner
+from semantic_memory.services.write_clarifications import WriteClarificationService
 from semantic_memory.validation.literals import (
     normalize_confidence,
     normalize_object_identity,
@@ -78,6 +79,7 @@ class StatementService:
         self._statements = StatementRepository(session)
         self._mutations = MutationRunner(session)
         self._conflicts = ConflictService(session)
+        self._write_clarifications = WriteClarificationService(session)
 
     def get(self, statement_id: uuid.UUID) -> StatementResponse:
         statement = self._statements.get(statement_id)
@@ -88,16 +90,57 @@ class StatementService:
             )
         return self._to_response(statement)
 
-    def assert_statement(self, request: AssertStatementRequest) -> AssertStatementResponse:
+    def assert_statement(
+        self,
+        request: AssertStatementRequest,
+        *,
+        force_create_sides: set[str] | None = None,
+        issue_clarification: bool = True,
+    ) -> AssertStatementResponse:
         actor = self._actors.require_active_actor(request.actor_key)
         self._actors.require_capability(actor, Capability.KNOWLEDGE_WRITE)
-        return self._mutations.run(
+        sides = force_create_sides or set()
+        result = self._mutations.run(
             actor=actor,
             operation_name="assert_statement",
             request=request,
             response_model=AssertStatementResponse,
             constraint_name="statement_write",
-            execute=lambda: self._assert_new(request=request, actor_id=actor.id),
+            execute=lambda: self._assert_new(
+                request=request,
+                actor_id=actor.id,
+                force_create_sides=sides,
+            ),
+        )
+        if (
+            issue_clarification
+            and result.outcome == AssertionOutcome.CLARIFY
+            and result.clarification_request_id is None
+        ):
+            clar = self._write_clarifications.issue_for_assert(
+                request=request,
+                result=result,
+                actor_id=actor.id,
+            )
+            result = result.model_copy(update={"clarification_request_id": clar.id})
+        return result
+
+    def assert_statement_resumed(
+        self,
+        *,
+        request: AssertStatementRequest,
+        actor_id: uuid.UUID,
+        force_create_sides: set[str] | None = None,
+    ) -> AssertStatementResponse:
+        """Resume a frozen assert after write clarification.
+
+        Does not issue a clarification handle; the answer path owns supersede/issue.
+        """
+        del actor_id
+        return self.assert_statement(
+            request,
+            force_create_sides=force_create_sides,
+            issue_clarification=False,
         )
 
     def supersede_statement(self, request: SupersedeStatementRequest) -> SupersedeStatementResponse:
@@ -218,10 +261,15 @@ class StatementService:
         )
 
     def _assert_new(
-        self, *, request: AssertStatementRequest, actor_id: uuid.UUID
+        self,
+        *,
+        request: AssertStatementRequest,
+        actor_id: uuid.UUID,
+        force_create_sides: set[str] | None = None,
     ) -> AssertStatementResponse:
         request = self._normalize_request_datetimes(request)
         self._validate_interval(request)
+        sides = force_create_sides or set()
         try:
             confidence = normalize_confidence(request.confidence)
         except ValueError as exc:
@@ -236,10 +284,12 @@ class StatementService:
                 subject_side = self._resolve_subject_side(
                     request=request,
                     actor_id=actor_id,
+                    force_create="subject" in sides,
                 )
                 object_side = self._resolve_object_side(
                     request=request,
                     actor_id=actor_id,
+                    force_create="object" in sides,
                 )
                 if subject_side.clarify or (object_side is not None and object_side.clarify):
                     raise _ClarifySides(
@@ -285,6 +335,7 @@ class StatementService:
         *,
         request: AssertStatementRequest,
         actor_id: uuid.UUID,
+        force_create: bool = False,
     ) -> WriteSideResolution:
         return self._entity_service.resolve_or_clarify_for_write(
             entity_id=request.subject_entity_id,
@@ -292,6 +343,7 @@ class StatementService:
             actor_id=actor_id,
             request_id=request.request_id,
             side="subject",
+            force_create=force_create,
         )
 
     def _resolve_object_side(
@@ -299,6 +351,7 @@ class StatementService:
         *,
         request: AssertStatementRequest,
         actor_id: uuid.UUID,
+        force_create: bool = False,
     ) -> WriteSideResolution | None:
         if request.object is None and request.object_entity_id is None:
             return None
@@ -308,6 +361,7 @@ class StatementService:
             actor_id=actor_id,
             request_id=request.request_id,
             side="object",
+            force_create=force_create,
         )
 
     def _assert_resolved(

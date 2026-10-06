@@ -51,6 +51,7 @@ propose_alias
 propose_class_parent
 challenge_ontology_review
 answer_semantic_clarification
+answer_identity_clarification
 ```
 
 When semantic review cannot decide whether a proposal is new vs overlapping an
@@ -121,21 +122,34 @@ Dry-run runs the full identity / validation / review pipeline inside a savepoint
 
 Invariant: `dry_run=true` produces no durable knowledge, provenance, or idempotency side effects. An `operation_log` row is still written with `operation_mode=dry_run` in the response payload for operational observability (not knowledge history).
 
-Example `assert_statement` dry-run response fields:
+When identity is `AMBIGUOUS`, AtlasSynapse also issues a durable **control-plane** `clarification_request_id` (outside the dry-run rollback). See below.
+
+### Identity/write clarification
+
+On `outcome=CLARIFY` (dry-run or execute), the response includes:
 
 ```json
 {
-  "dry_run": true,
-  "operation_mode": "dry_run",
-  "would_persist": false,
   "outcome": "CLARIFY",
-  "statement_action": "NOT_WRITTEN",
-  "subject_identity": { "resolution": "MATCH", "action": "REUSE", "entity_id": "..." },
-  "object_identity": { "resolution": "AMBIGUOUS", "action": "CLARIFY", "candidates": [] }
+  "clarification_request_id": "uuid",
+  "subject_identity": { "...": "..." },
+  "object_identity": { "...": "..." }
 }
 ```
 
-When the write would succeed, `would_persist` is `true` and `statement_action` is `WOULD_CREATE` or `WOULD_REUSE` (entity creates use `entity_action` similarly). Preview entity/statement IDs in the response are not durable.
+The handle is operational state in Postgres (`write_clarification_request`): frozen mutation payload, ambiguous path, candidate IDs, `expires_at` (~30 minutes), status `open|resolved|expired|superseded`. It is not knowledge. GC removes terminal rows after ~7 days.
+
+Resume with `answer_identity_clarification`:
+
+```json
+{
+  "clarification_request_id": "uuid",
+  "resolution": "chosen_entity" | "create_new" | "reject",
+  "chosen_entity_id": "uuid"
+}
+```
+
+AtlasSynapse resumes the frozen operation server-side. Stored candidates are the context of the question; before persisting, safety checks re-run against **current prod**. If the graph changed materially, a fresh `clarification_request_id` is issued (prior handle `superseded`) rather than committing on stale assumptions.
 
 ## Error envelope
 

@@ -21,8 +21,13 @@ from semantic_memory.schemas.statements import (
     SupersedeStatementResponse,
     TimelineResponse,
 )
+from semantic_memory.schemas.write_clarifications import (
+    AnswerIdentityClarificationRequest,
+    AnswerIdentityClarificationResponse,
+)
 from semantic_memory.services.provenance import ProvenanceService
 from semantic_memory.services.statements import StatementService
+from semantic_memory.services.write_clarifications import WriteClarificationService
 
 router = APIRouter(prefix="/v1", tags=["statements"])
 DbSession = Annotated[Session, Depends(get_db_session)]
@@ -34,6 +39,18 @@ def assert_statement(
 ) -> AssertStatementResponse:
     return run_audited_mutation(
         session, lambda: StatementService(session).assert_statement(request)
+    )
+
+
+@router.post(
+    "/statements/answer-identity-clarification",
+    response_model=AnswerIdentityClarificationResponse,
+)
+def answer_identity_clarification(
+    request: AnswerIdentityClarificationRequest, session: DbSession
+) -> AnswerIdentityClarificationResponse:
+    return run_audited_mutation(
+        session, lambda: WriteClarificationService(session).answer(request)
     )
 
 

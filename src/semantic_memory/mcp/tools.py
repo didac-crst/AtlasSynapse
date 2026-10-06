@@ -62,6 +62,7 @@ from semantic_memory.schemas.statements import (
     SupersedeStatementRequest,
     TimelineResponse,
 )
+from semantic_memory.schemas.write_clarifications import AnswerIdentityClarificationRequest
 from semantic_memory.services.batches import BatchService
 from semantic_memory.services.conflicts import ConflictService
 from semantic_memory.services.entities import EntityService
@@ -71,6 +72,7 @@ from semantic_memory.services.proposals import ProposalService
 from semantic_memory.services.provenance import ProvenanceService
 from semantic_memory.services.retrieval import RetrievalService
 from semantic_memory.services.statements import StatementService
+from semantic_memory.services.write_clarifications import WriteClarificationService
 
 
 def _error(exc: DomainError) -> dict[str, Any]:
@@ -231,6 +233,14 @@ class StatementMCPTools:
             self._session,
             lambda: self._statements.assert_statement(
                 AssertStatementRequest.model_validate(payload)
+            ),
+        )
+
+    def answer_identity_clarification(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return _run_mutation(
+            self._session,
+            lambda: WriteClarificationService(self._session).answer(
+                AnswerIdentityClarificationRequest.model_validate(payload)
             ),
         )
 

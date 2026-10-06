@@ -189,3 +189,20 @@ class SemanticClarificationStatus(StrEnum):
     ANSWERED = "answered"
     SUPERSEDED = "superseded"
     RESOLVED = "resolved"
+
+
+class WriteClarificationStatus(StrEnum):
+    """Control-plane status for identity/write clarification handles."""
+
+    OPEN = "open"
+    RESOLVED = "resolved"
+    EXPIRED = "expired"
+    SUPERSEDED = "superseded"
+
+
+class WriteClarificationResolution(StrEnum):
+    """Structured answer to an identity/write clarification."""
+
+    CHOSEN_ENTITY = "chosen_entity"
+    CREATE_NEW = "create_new"
+    REJECT = "reject"

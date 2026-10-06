@@ -22,6 +22,7 @@ These rules are implementation acceptance criteria. They must be protected by a 
 18. Database constraints protect critical invariants independently of application logic.
 19. Statement writes resolve unresolved identities server-side; callers must not create or match entities before assert/supersede. Ambiguous identity never silently picks a candidate.
 20. `dry_run=true` executes the same mutation decision path inside a rolled-back savepoint: no durable knowledge, provenance, or idempotency writes. Operational logs may record the dry-run.
+21. Identity/write ambiguity issues a control-plane `clarification_request_id` (TTL, not knowledge). Answers resume the frozen mutation after re-checking current prod; stale situations re-issue rather than commit.
 
 ## Critical database constraints
 

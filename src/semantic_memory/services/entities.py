@@ -119,6 +119,7 @@ class EntityService:
         actor_id: uuid.UUID,
         request_id: uuid.UUID,
         side: str = "entity",
+        force_create: bool = False,
     ) -> WriteSideResolution:
         """Resolve-or-clarify primitive for statement subject/object writes.
 
@@ -128,12 +129,14 @@ class EntityService:
 
         This is the only supported path for unresolved identities on statement
         writes. Callers must not resolve or create entities themselves.
+        ``force_create`` is reserved for write-clarification resume (create_new).
         """
         result = self._resolve_or_clarify_for_write(
             entity_id=entity_id,
             entity_input=entity_input,
             actor_id=actor_id,
             request_id=request_id,
+            force_create=force_create,
         )
         identity = result.identity
         log_write_side_resolution(
@@ -155,6 +158,7 @@ class EntityService:
         entity_input: EntityInput | None = None,
         actor_id: uuid.UUID,
         request_id: uuid.UUID,
+        force_create: bool = False,
     ) -> WriteSideResolution:
         if entity_id is not None and entity_input is not None:
             raise ValidationFailedError(
@@ -194,6 +198,14 @@ class EntityService:
                     "class_key": entity_input.class_key,
                 },
                 request_id=str(request_id),
+            )
+
+        if force_create:
+            return self._force_create_from_input(
+                entity_input=entity_input,
+                actor_id=actor_id,
+                request_id=request_id,
+                class_id=ontology_class.id,
             )
 
         primary_ref = entity_input.external_refs[0] if entity_input.external_refs else None
@@ -256,6 +268,66 @@ class EntityService:
                     "action": IdentityAction.CREATE,
                 }
             )
+        return WriteSideResolution(
+            entity_id=entity.id,
+            identity=identity,
+            clarify=False,
+            created=True,
+        )
+
+    def _force_create_from_input(
+        self,
+        *,
+        entity_input: EntityInput,
+        actor_id: uuid.UUID,
+        request_id: uuid.UUID,
+        class_id: uuid.UUID,
+    ) -> WriteSideResolution:
+        assert entity_input.canonical_name is not None
+        assert entity_input.class_key is not None
+        primary_ref = entity_input.external_refs[0] if entity_input.external_refs else None
+        create_request = CreateEntityRequest(
+            actor_key="__write_side__",
+            request_id=request_id,
+            idempotency_key=str(uuid.uuid4()),
+            canonical_name=entity_input.canonical_name,
+            class_key=entity_input.class_key,
+            namespace_key=entity_input.namespace_key,
+            aliases=list(entity_input.aliases),
+            external_reference=primary_ref,
+        )
+        self._entities.acquire_identity_lock(
+            class_id=class_id,
+            canonical_name=entity_input.canonical_name,
+        )
+        entity = self._create_new_entity(
+            request=create_request,
+            actor_id=actor_id,
+            class_id=class_id,
+        )
+        for extra_ref in entity_input.external_refs[1:]:
+            self._entities.add_external_reference(
+                entity_id=entity.id,
+                source_system=extra_ref.source_system,
+                external_id=extra_ref.external_id,
+                uri=extra_ref.uri,
+                label=extra_ref.label,
+            )
+        identity = IdentityResolutionResult(
+            resolution=IdentityResolutionOutcome.NO_MATCH,
+            action=IdentityAction.CREATE,
+            entity_id=entity.id,
+            decision_basis="write_clarification_create_new",
+            no_candidate=True,
+            reasons=[
+                IdentityEvidence(
+                    signal="write_clarification_create_new",
+                    strength=EvidenceStrength.DECISIVE,
+                    value=entity_input.canonical_name,
+                    evidence_refs=[f"entity:{entity.id}"],
+                )
+            ],
+        )
         return WriteSideResolution(
             entity_id=entity.id,
             identity=identity,

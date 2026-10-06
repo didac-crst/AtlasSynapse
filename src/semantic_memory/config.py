@@ -109,6 +109,12 @@ class Settings(BaseSettings):
     identity_review_timeout_seconds: float = Field(
         default=30.0, alias="IDENTITY_REVIEW_TIMEOUT_SECONDS", gt=0
     )
+    write_clarification_ttl_minutes: int = Field(
+        default=30, alias="WRITE_CLARIFICATION_TTL_MINUTES", ge=1, le=24 * 60
+    )
+    write_clarification_gc_days: int = Field(
+        default=7, alias="WRITE_CLARIFICATION_GC_DAYS", ge=1, le=90
+    )
     embedding_mode: Literal["disabled", "mock"] = Field(
         default="disabled",
         alias="EMBEDDING_MODE",

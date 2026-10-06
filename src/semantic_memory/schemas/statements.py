@@ -111,6 +111,7 @@ class AssertStatementResponse(BaseModel):
     operation_mode: OperationMode = OperationMode.EXECUTE
     would_persist: bool | None = None
     statement_action: StatementWriteAction | None = None
+    clarification_request_id: uuid.UUID | None = None
 
 
 class SupersedeStatementRequest(AssertStatementRequest):

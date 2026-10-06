@@ -57,6 +57,7 @@ REGISTERED_TOOL_NAMES: tuple[str, ...] = (
     "propose_class_parent",
     "challenge_ontology_review",
     "answer_semantic_clarification",
+    "answer_identity_clarification",
     "report_feedback",
 )
 
@@ -468,6 +469,15 @@ def build_mcp_tools() -> list[ToolSpec]:
             "Answer an AtlasSynapse clarification_request_id with the intended "
             "semantic distinction and examples; triggers re-review.",
             lambda session, payload: OntologyMCPTools(session).answer_semantic_clarification(
+                payload
+            ),
+        ),
+        _payload_tool(
+            "answer_identity_clarification",
+            "Answer a write/identity clarification_request_id with chosen_entity_id, "
+            "create_new, or reject. AtlasSynapse resumes the frozen operation; "
+            "re-checks current prod state for staleness.",
+            lambda session, payload: StatementMCPTools(session).answer_identity_clarification(
                 payload
             ),
         ),
