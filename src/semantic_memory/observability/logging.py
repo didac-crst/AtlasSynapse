@@ -8,6 +8,31 @@ import sys
 from datetime import UTC, datetime
 from typing import Any
 
+_SKIP_RECORD_KEYS = {
+    "name",
+    "msg",
+    "args",
+    "created",
+    "filename",
+    "funcName",
+    "levelname",
+    "levelno",
+    "lineno",
+    "module",
+    "msecs",
+    "message",
+    "pathname",
+    "process",
+    "processName",
+    "relativeCreated",
+    "thread",
+    "threadName",
+    "exc_info",
+    "exc_text",
+    "stack_info",
+    "taskName",
+}
+
 
 class JsonFormatter(logging.Formatter):
     """Format log records as single-line JSON objects."""
@@ -21,10 +46,10 @@ class JsonFormatter(logging.Formatter):
         }
         if record.exc_info:
             payload["exc_info"] = self.formatException(record.exc_info)
-        for key in ("request_id", "trace_id", "actor_id", "operation"):
-            value = getattr(record, key, None)
-            if value is not None:
-                payload[key] = value
+        for key, value in record.__dict__.items():
+            if key in _SKIP_RECORD_KEYS or key.startswith("_") or value is None:
+                continue
+            payload[key] = value
         return json.dumps(payload, default=str)
 
 

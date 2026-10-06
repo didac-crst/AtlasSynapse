@@ -29,6 +29,11 @@ from semantic_memory.schemas.entities import CreateEntityRequest, ResolutionOutc
 from semantic_memory.schemas.statements import AssertionOutcome, AssertStatementRequest
 from semantic_memory.services.actors import ActorService
 from semantic_memory.services.entities import EntityService
+from semantic_memory.services.identity_write import (
+    CLARIFY_ERROR_CODE,
+    CLARIFY_MESSAGE,
+    identity_clarify_details,
+)
 from semantic_memory.services.mutations import MutationRunner
 from semantic_memory.services.statements import StatementService
 
@@ -134,6 +139,13 @@ class BatchService:
                                 outcome=BatchItemOutcome.AMBIGUOUS,
                                 entity=entity_result,
                                 candidates=entity_result.candidates,
+                                error_code=CLARIFY_ERROR_CODE,
+                                message=CLARIFY_MESSAGE,
+                                details={
+                                    "identity": None
+                                    if entity_result.identity is None
+                                    else entity_result.identity.model_dump(mode="json"),
+                                },
                             )
                         )
                         continue
@@ -250,15 +262,12 @@ class BatchService:
                                 client_item_id=statement_item.client_item_id,
                                 outcome=BatchItemOutcome.AMBIGUOUS,
                                 statement=statement_result,
-                                message="Identity clarification required",
-                                details={
-                                    "subject_identity": None
-                                    if statement_result.subject_identity is None
-                                    else statement_result.subject_identity.model_dump(mode="json"),
-                                    "object_identity": None
-                                    if statement_result.object_identity is None
-                                    else statement_result.object_identity.model_dump(mode="json"),
-                                },
+                                error_code=CLARIFY_ERROR_CODE,
+                                message=CLARIFY_MESSAGE,
+                                details=identity_clarify_details(
+                                    subject_identity=statement_result.subject_identity,
+                                    object_identity=statement_result.object_identity,
+                                ),
                             )
                         )
                         continue

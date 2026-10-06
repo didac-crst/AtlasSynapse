@@ -41,6 +41,7 @@ from semantic_memory.schemas.identity import (
 )
 from semantic_memory.services.actors import ActorService
 from semantic_memory.services.identity import IdentityService, ResolutionResult
+from semantic_memory.services.identity_write import log_write_side_resolution
 from semantic_memory.services.mutations import MutationRunner
 from semantic_memory.validation.normalization import normalize_text
 
@@ -110,7 +111,44 @@ class EntityService:
             execute=lambda: self._add_entity_alias_body(request=request),
         )
 
-    def resolve_write_side(
+    def resolve_or_clarify_for_write(
+        self,
+        *,
+        entity_id: uuid.UUID | None = None,
+        entity_input: EntityInput | None = None,
+        actor_id: uuid.UUID,
+        request_id: uuid.UUID,
+        side: str = "entity",
+    ) -> WriteSideResolution:
+        """Resolve-or-clarify primitive for statement subject/object writes.
+
+        MATCH reuses; AMBIGUOUS returns clarify without insert; NO_MATCH creates
+        when class context is present. Callers that must avoid side effects when
+        another side clarifies should wrap this in a savepoint.
+
+        This is the only supported path for unresolved identities on statement
+        writes. Callers must not resolve or create entities themselves.
+        """
+        result = self._resolve_or_clarify_for_write(
+            entity_id=entity_id,
+            entity_input=entity_input,
+            actor_id=actor_id,
+            request_id=request_id,
+        )
+        identity = result.identity
+        log_write_side_resolution(
+            side=side,
+            resolution=None if identity is None else identity.resolution.value,
+            action=None if identity is None else identity.action.value,
+            clarify=result.clarify,
+            entity_created=result.created,
+            entity_id=result.entity_id,
+            decision_basis=None if identity is None else identity.decision_basis,
+            request_id=request_id,
+        )
+        return result
+
+    def _resolve_or_clarify_for_write(
         self,
         *,
         entity_id: uuid.UUID | None = None,
@@ -118,12 +156,6 @@ class EntityService:
         actor_id: uuid.UUID,
         request_id: uuid.UUID,
     ) -> WriteSideResolution:
-        """Resolve one write-side reference for statement assert.
-
-        MATCH reuses; AMBIGUOUS returns clarify without insert; NO_MATCH creates
-        when class context is present. Callers that must avoid side effects when
-        another side clarifies should wrap this in a savepoint.
-        """
         if entity_id is not None and entity_input is not None:
             raise ValidationFailedError(
                 "Provide only one of entity_id or entity_input",

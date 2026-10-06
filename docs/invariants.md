@@ -20,6 +20,7 @@ These rules are implementation acceptance criteria. They must be protected by a 
 16. Failed and rejected writes are observable.
 17. Ontology mutations use optimistic concurrency.
 18. Database constraints protect critical invariants independently of application logic.
+19. Statement writes resolve unresolved identities server-side; callers must not create or match entities before assert/supersede. Ambiguous identity never silently picks a candidate.
 
 ## Critical database constraints
 

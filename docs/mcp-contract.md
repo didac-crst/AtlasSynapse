@@ -89,6 +89,25 @@ Agents use `report_feedback` to record quality observations. Admin list/resolve 
 
 Every mutation accepts actor context, request ID, and an idempotency key. The adapter validates request schemas and delegates to services. Service results are translated into typed response schemas.
 
+### Statement write identity (server-owned)
+
+`assert_statement`, `assert_batch` statement items, and `supersede_statement` accept either:
+
+- a resolved UUID (`subject_entity_id` / `object_entity_id`), or
+- an unresolved `EntityInput` (`subject` / `object`) with `canonical_name` + `class_key` (and optional aliases / external refs).
+
+**Callers must not resolve or create entities themselves before asserting.** AtlasSynapse runs the resolve-or-clarify primitive on each unresolved side:
+
+| Resolution | Action |
+| --- | --- |
+| `MATCH` | reuse existing entity |
+| `NO_MATCH` | create entity, then assert |
+| `AMBIGUOUS` | clarify; no statement (or entity) is persisted |
+
+Single `assert_statement` returns `outcome=CLARIFY` with `subject_identity` / `object_identity`. Batch rows land in the `ambiguous` bucket with `error_code=AMBIGUOUS_ENTITY` and the same identity details. Multi-side asserts use a savepoint so a later ambiguous side rolls back earlier creates. Atomic `assert_batch` rolls back the whole batch on any ambiguous/rejected/ontology-required item.
+
+`ingest_source_content` is provenance-only; it does not create statements or bypass identity. Predicates are never auto-created from statement writes.
+
 ## Error envelope
 
 Every error contains:

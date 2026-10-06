@@ -9,6 +9,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from semantic_memory.exceptions import (
+    AmbiguousEntityError,
     DomainViolationError,
     InvalidLiteralTypeError,
     InvalidStateTransitionError,
@@ -40,6 +41,10 @@ from semantic_memory.schemas.statements import (
 from semantic_memory.services.actors import ActorService
 from semantic_memory.services.conflicts import ConflictService
 from semantic_memory.services.entities import EntityService, WriteSideResolution
+from semantic_memory.services.identity_write import (
+    CLARIFY_MESSAGE,
+    identity_clarify_details,
+)
 from semantic_memory.services.mutations import MutationRunner
 from semantic_memory.validation.literals import (
     normalize_confidence,
@@ -161,6 +166,15 @@ class StatementService:
         self._session.flush()
 
         created = self._assert_new(request=request, actor_id=actor_id)
+        if created.outcome == AssertionOutcome.CLARIFY:
+            raise AmbiguousEntityError(
+                CLARIFY_MESSAGE,
+                details=identity_clarify_details(
+                    subject_identity=created.subject_identity,
+                    object_identity=created.object_identity,
+                ),
+                request_id=str(request.request_id),
+            )
         if created.outcome != AssertionOutcome.CREATE or created.statement is None:
             raise InvalidStateTransitionError(
                 "Supersession requires creating a replacement statement",
@@ -272,11 +286,12 @@ class StatementService:
         request: AssertStatementRequest,
         actor_id: uuid.UUID,
     ) -> WriteSideResolution:
-        return self._entity_service.resolve_write_side(
+        return self._entity_service.resolve_or_clarify_for_write(
             entity_id=request.subject_entity_id,
             entity_input=request.subject,
             actor_id=actor_id,
             request_id=request.request_id,
+            side="subject",
         )
 
     def _resolve_object_side(
@@ -287,11 +302,12 @@ class StatementService:
     ) -> WriteSideResolution | None:
         if request.object is None and request.object_entity_id is None:
             return None
-        return self._entity_service.resolve_write_side(
+        return self._entity_service.resolve_or_clarify_for_write(
             entity_id=request.object_entity_id,
             entity_input=request.object,
             actor_id=actor_id,
             request_id=request.request_id,
+            side="object",
         )
 
     def _assert_resolved(

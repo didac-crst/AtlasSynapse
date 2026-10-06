@@ -235,7 +235,9 @@ def build_mcp_tools() -> list[ToolSpec]:
         ),
         _payload_tool(
             "assert_statement",
-            "Assert a typed statement.",
+            "Assert a typed statement. Pass subject_entity_id/object_entity_id when "
+            "known, or subject/object EntityInput (canonical_name + class_key) and let "
+            "the server MATCH/CREATE/CLARIFY. Do not resolve or create entities yourself.",
             lambda session, payload: StatementMCPTools(session).assert_statement(payload),
         ),
         ToolSpec(
@@ -337,7 +339,9 @@ def build_mcp_tools() -> list[ToolSpec]:
         ),
         _payload_tool(
             "assert_batch",
-            "Atomically assert a batch of statements.",
+            "Atomically assert a batch of statements. Statement items may use "
+            "EntityInput subject/object; ambiguous identity fails the whole batch "
+            "with AMBIGUOUS_ENTITY and rolls back created rows.",
             lambda session, payload: StatementMCPTools(session).assert_batch(payload),
         ),
         _payload_tool(
