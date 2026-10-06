@@ -9,8 +9,10 @@ from typing import Any
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 
+from semantic_memory.config import get_settings
 from semantic_memory.exceptions import DomainError, ValidationFailedError
-from semantic_memory.models.enums import ConflictStatus
+from semantic_memory.models.enums import ActorType, ConflictStatus
+from semantic_memory.schemas.actors import ActorEnsureRequest
 from semantic_memory.schemas.batches import AssertBatchRequest
 from semantic_memory.schemas.conflicts import (
     DismissConflictRequest,
@@ -63,6 +65,7 @@ from semantic_memory.schemas.statements import (
     TimelineResponse,
 )
 from semantic_memory.schemas.write_clarifications import AnswerIdentityClarificationRequest
+from semantic_memory.services.actors import ActorService
 from semantic_memory.services.batches import BatchService
 from semantic_memory.services.conflicts import ConflictService
 from semantic_memory.services.entities import EntityService
@@ -85,9 +88,32 @@ def _error(exc: DomainError) -> dict[str, Any]:
     ).model_dump(mode="json")
 
 
-def _run_mutation[T: BaseModel](session: Session, operation: Callable[[], T]) -> dict[str, Any]:
+def prepare_mcp_mutation_payload(session: Session, payload: dict[str, Any]) -> dict[str, Any]:
+    """Inject the configured MCP actor and ensure it exists.
+
+    MCP clients must not guess ``actor_key``. HTTP/API callers still supply it
+    explicitly for multi-actor operation.
+    """
+    settings = get_settings()
+    ActorService(session).ensure(
+        ActorEnsureRequest(
+            key=settings.mcp_actor_key,
+            actor_type=ActorType.AGENT,
+        )
+    )
+    prepared = dict(payload)
+    prepared["actor_key"] = settings.mcp_actor_key
+    return prepared
+
+
+def _run_mutation[T: BaseModel](
+    session: Session,
+    payload: dict[str, Any],
+    operation: Callable[[dict[str, Any]], T],
+) -> dict[str, Any]:
     try:
-        result = operation()
+        prepared = prepare_mcp_mutation_payload(session, payload)
+        result = operation(prepared)
         session.commit()
         return result.model_dump(mode="json")
     except DomainError as exc:
@@ -189,7 +215,8 @@ class EntityMCPTools:
     def create_entity(self, payload: dict[str, Any]) -> dict[str, Any]:
         return _run_mutation(
             self._session,
-            lambda: self._entities.create_entity(CreateEntityRequest.model_validate(payload)),
+            payload,
+            lambda p: self._entities.create_entity(CreateEntityRequest.model_validate(p)),
         )
 
     def get_entity(self, entity_id: str) -> dict[str, Any]:
@@ -209,13 +236,15 @@ class EntityMCPTools:
     def merge_entity(self, payload: dict[str, Any]) -> dict[str, Any]:
         return _run_mutation(
             self._session,
-            lambda: self._entities.merge_entity(MergeEntityRequest.model_validate(payload)),
+            payload,
+            lambda p: self._entities.merge_entity(MergeEntityRequest.model_validate(p)),
         )
 
     def add_entity_alias(self, payload: dict[str, Any]) -> dict[str, Any]:
         return _run_mutation(
             self._session,
-            lambda: self._entities.add_entity_alias(AddEntityAliasRequest.model_validate(payload)),
+            payload,
+            lambda p: self._entities.add_entity_alias(AddEntityAliasRequest.model_validate(p)),
         )
 
 
@@ -231,16 +260,16 @@ class StatementMCPTools:
     def assert_statement(self, payload: dict[str, Any]) -> dict[str, Any]:
         return _run_mutation(
             self._session,
-            lambda: self._statements.assert_statement(
-                AssertStatementRequest.model_validate(payload)
-            ),
+            payload,
+            lambda p: self._statements.assert_statement(AssertStatementRequest.model_validate(p)),
         )
 
     def answer_identity_clarification(self, payload: dict[str, Any]) -> dict[str, Any]:
         return _run_mutation(
             self._session,
-            lambda: WriteClarificationService(self._session).answer(
-                AnswerIdentityClarificationRequest.model_validate(payload)
+            payload,
+            lambda p: WriteClarificationService(self._session).answer(
+                AnswerIdentityClarificationRequest.model_validate(p)
             ),
         )
 
@@ -277,20 +306,23 @@ class StatementMCPTools:
     def add_evidence(self, payload: dict[str, Any]) -> dict[str, Any]:
         return _run_mutation(
             self._session,
-            lambda: self._provenance.add_evidence(AddEvidenceRequest.model_validate(payload)),
+            payload,
+            lambda p: self._provenance.add_evidence(AddEvidenceRequest.model_validate(p)),
         )
 
     def ensure_source(self, payload: dict[str, Any]) -> dict[str, Any]:
         return _run_mutation(
             self._session,
-            lambda: self._provenance.ensure_source(EnsureSourceRequest.model_validate(payload)),
+            payload,
+            lambda p: self._provenance.ensure_source(EnsureSourceRequest.model_validate(p)),
         )
 
     def ingest_source_content(self, payload: dict[str, Any]) -> dict[str, Any]:
         return _run_mutation(
             self._session,
-            lambda: self._provenance.ingest_source_content(
-                IngestSourceContentRequest.model_validate(payload)
+            payload,
+            lambda p: self._provenance.ingest_source_content(
+                IngestSourceContentRequest.model_validate(p)
             ),
         )
 
@@ -329,17 +361,17 @@ class StatementMCPTools:
     def supersede_statement(self, payload: dict[str, Any]) -> dict[str, Any]:
         return _run_mutation(
             self._session,
-            lambda: self._statements.supersede_statement(
-                SupersedeStatementRequest.model_validate(payload)
+            payload,
+            lambda p: self._statements.supersede_statement(
+                SupersedeStatementRequest.model_validate(p)
             ),
         )
 
     def retract_statement(self, payload: dict[str, Any]) -> dict[str, Any]:
         return _run_mutation(
             self._session,
-            lambda: self._statements.retract_statement(
-                RetractStatementRequest.model_validate(payload)
-            ),
+            payload,
+            lambda p: self._statements.retract_statement(RetractStatementRequest.model_validate(p)),
         )
 
     def get_timeline(self, entity_id: str) -> dict[str, Any]:
@@ -388,24 +420,23 @@ class StatementMCPTools:
     def resolve_conflict(self, payload: dict[str, Any]) -> dict[str, Any]:
         return _run_mutation(
             self._session,
-            lambda: self._conflicts.resolve_conflict(
-                ResolveConflictRequest.model_validate(payload)
-            ),
+            payload,
+            lambda p: self._conflicts.resolve_conflict(ResolveConflictRequest.model_validate(p)),
         )
 
     def dismiss_conflict(self, payload: dict[str, Any]) -> dict[str, Any]:
         return _run_mutation(
             self._session,
-            lambda: self._conflicts.dismiss_conflict(
-                DismissConflictRequest.model_validate(payload)
-            ),
+            payload,
+            lambda p: self._conflicts.dismiss_conflict(DismissConflictRequest.model_validate(p)),
         )
 
     def assert_batch(self, payload: dict[str, Any]) -> dict[str, Any]:
         return _run_mutation(
             self._session,
-            lambda: BatchService(self._session).assert_batch(
-                AssertBatchRequest.model_validate(payload)
+            payload,
+            lambda p: BatchService(self._session).assert_batch(
+                AssertBatchRequest.model_validate(p)
             ),
         )
 
@@ -523,36 +554,39 @@ class OntologyMCPTools:
     def propose_class(self, payload: dict[str, Any]) -> dict[str, Any]:
         return _run_mutation(
             self._session,
-            lambda: self._proposals.propose_class(ProposeClassRequest.model_validate(payload)),
+            payload,
+            lambda p: self._proposals.propose_class(ProposeClassRequest.model_validate(p)),
         )
 
     def propose_predicate(self, payload: dict[str, Any]) -> dict[str, Any]:
         return _run_mutation(
             self._session,
-            lambda: self._proposals.propose_predicate(
-                ProposePredicateRequest.model_validate(payload)
-            ),
+            payload,
+            lambda p: self._proposals.propose_predicate(ProposePredicateRequest.model_validate(p)),
         )
 
     def propose_constraint(self, payload: dict[str, Any]) -> dict[str, Any]:
         return _run_mutation(
             self._session,
-            lambda: self._proposals.propose_constraint(
-                ProposeConstraintRequest.model_validate(payload)
+            payload,
+            lambda p: self._proposals.propose_constraint(
+                ProposeConstraintRequest.model_validate(p)
             ),
         )
 
     def propose_alias(self, payload: dict[str, Any]) -> dict[str, Any]:
         return _run_mutation(
             self._session,
-            lambda: self._proposals.propose_alias(ProposeAliasRequest.model_validate(payload)),
+            payload,
+            lambda p: self._proposals.propose_alias(ProposeAliasRequest.model_validate(p)),
         )
 
     def propose_class_parent(self, payload: dict[str, Any]) -> dict[str, Any]:
         return _run_mutation(
             self._session,
-            lambda: self._proposals.propose_class_parent(
-                ProposeClassParentRequest.model_validate(payload)
+            payload,
+            lambda p: self._proposals.propose_class_parent(
+                ProposeClassParentRequest.model_validate(p)
             ),
         )
 
@@ -561,8 +595,9 @@ class OntologyMCPTools:
 
         return _run_mutation(
             self._session,
-            lambda: self._proposals.challenge_ontology_review(
-                ChallengeOntologyReviewRequest.model_validate(payload)
+            payload,
+            lambda p: self._proposals.challenge_ontology_review(
+                ChallengeOntologyReviewRequest.model_validate(p)
             ),
         )
 
@@ -571,8 +606,9 @@ class OntologyMCPTools:
 
         return _run_mutation(
             self._session,
-            lambda: self._proposals.answer_semantic_clarification(
-                AnswerSemanticClarificationRequest.model_validate(payload)
+            payload,
+            lambda p: self._proposals.answer_semantic_clarification(
+                AnswerSemanticClarificationRequest.model_validate(p)
             ),
         )
 
@@ -587,5 +623,6 @@ class FeedbackMCPTools:
     def report_feedback(self, payload: dict[str, Any]) -> dict[str, Any]:
         return _run_mutation(
             self._session,
-            lambda: self._feedback.report_feedback(ReportFeedbackRequest.model_validate(payload)),
+            payload,
+            lambda p: self._feedback.report_feedback(ReportFeedbackRequest.model_validate(p)),
         )

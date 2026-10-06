@@ -497,8 +497,10 @@ def build_mcp_server(settings: Settings | None = None) -> StdioMCPServer:
     return StdioMCPServer(
         name=cfg.app_name,
         instructions=(
-            "AtlasSynapse semantic memory tools. Mutations require actor_key, "
-            "request_id, and idempotency_key. No raw SQL or DDL."
+            "AtlasSynapse semantic memory tools. The MCP server injects actor_key "
+            f"('{cfg.mcp_actor_key}'); clients must not guess it. Mutations still need "
+            "request_id and idempotency_key. Prefer dry_run=true to preview writes. "
+            "No raw SQL or DDL."
         ),
         tools=build_mcp_tools(),
     )

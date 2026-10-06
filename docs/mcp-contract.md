@@ -90,6 +90,8 @@ Agents use `report_feedback` to record quality observations. Admin list/resolve 
 
 Every mutation accepts actor context, request ID, and an idempotency key. The adapter validates request schemas and delegates to services. Service results are translated into typed response schemas.
 
+**MCP actor injection:** the MCP transport injects a server-configured `actor_key` (`MCP_ACTOR_KEY`, default `chatgpt`) into every mutation envelope and ensures that actor exists. MCP clients must not guess or supply `actor_key`. HTTP/API callers still pass `actor_key` explicitly for multi-actor operation.
+
 ### Statement write identity (server-owned)
 
 `assert_statement`, `assert_batch` statement items, and `supersede_statement` accept either:

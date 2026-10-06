@@ -120,6 +120,15 @@ class Settings(BaseSettings):
         alias="EMBEDDING_MODE",
     )
     mcp_transport: Literal["stdio", "http"] = Field(default="stdio", alias="MCP_TRANSPORT")
+    mcp_actor_key: str = Field(
+        default="chatgpt",
+        alias="MCP_ACTOR_KEY",
+        min_length=1,
+        description=(
+            "Server-owned actor key injected into all MCP mutation envelopes. "
+            "MCP clients must not guess or supply actor_key."
+        ),
+    )
     http_host: str = Field(default="0.0.0.0", alias="HTTP_HOST")
     http_port: int = Field(default=8000, alias="HTTP_PORT", ge=1, le=65535)
     http_api_token: str = Field(default="", alias="HTTP_API_TOKEN")
