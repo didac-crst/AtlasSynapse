@@ -165,21 +165,39 @@ class EntityRepository:
         return list(self._session.scalars(stmt).all())
 
     def find_by_alias(self, alias: str, *, class_id: uuid.UUID | None = None) -> list[Entity]:
+        return [entity for entity, _alias in self.find_alias_matches(alias, class_id=class_id)]
+
+    def find_alias_matches(
+        self, alias: str, *, class_id: uuid.UUID | None = None
+    ) -> list[tuple[Entity, EntityAlias]]:
+        """Return active entities with the matching alias row (includes strength)."""
         normalized = normalize_text(alias)
         stmt = (
-            select(Entity)
+            select(Entity, EntityAlias)
             .join(EntityAlias, EntityAlias.entity_id == Entity.id)
             .where(
                 EntityAlias.normalized_alias == normalized,
                 Entity.status == EntityStatus.ACTIVE.value,
             )
-            .distinct()
         )
         if class_id is not None:
             stmt = stmt.join(EntityType, EntityType.entity_id == Entity.id).where(
                 EntityType.class_id == class_id
             )
-        return list(self._session.scalars(stmt).all())
+        # Prefer authoritative rows when an entity somehow has duplicates.
+        rows = list(self._session.execute(stmt).all())
+        by_entity: dict[uuid.UUID, tuple[Entity, EntityAlias]] = {}
+        for entity, alias_row in rows:
+            existing = by_entity.get(entity.id)
+            if existing is None:
+                by_entity[entity.id] = (entity, alias_row)
+                continue
+            if (
+                alias_row.identity_strength == AliasIdentityStrength.AUTHORITATIVE.value
+                and existing[1].identity_strength != AliasIdentityStrength.AUTHORITATIVE.value
+            ):
+                by_entity[entity.id] = (entity, alias_row)
+        return list(by_entity.values())
 
     def find_candidates(
         self, *, name: str, class_id: uuid.UUID | None = None
@@ -261,10 +279,13 @@ class EntityRepository:
         alias: str,
         identity_strength: str = AliasIdentityStrength.SUPPORTING.value,
     ) -> EntityAlias | None:
-        """Add alias if missing; return None when it already exists on this entity.
-
-        PR1 does not upgrade strength on existing rows (merge promotion is PR3).
-        """
+        """Add alias if missing; promote supporting→authoritative when requested."""
+        strength = identity_strength or AliasIdentityStrength.SUPPORTING.value
+        if strength not in {
+            AliasIdentityStrength.SUPPORTING.value,
+            AliasIdentityStrength.AUTHORITATIVE.value,
+        }:
+            raise ValueError(f"Invalid identity_strength: {identity_strength!r}")
         normalized = normalize_text(alias)
         if not normalized:
             return None
@@ -275,11 +296,17 @@ class EntityRepository:
             )
         )
         if existing is not None:
-            return None
+            if (
+                strength == AliasIdentityStrength.AUTHORITATIVE.value
+                and existing.identity_strength != AliasIdentityStrength.AUTHORITATIVE.value
+            ):
+                existing.identity_strength = AliasIdentityStrength.AUTHORITATIVE.value
+                self._session.flush()
+            return existing
         return self.add_alias(
             entity_id=entity_id,
             alias=alias.strip(),
-            identity_strength=identity_strength,
+            identity_strength=strength,
         )
 
     def has_type(self, entity_id: uuid.UUID, class_id: uuid.UUID) -> bool:

@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from semantic_memory.models.enums import AliasIdentityStrength, EntityStatus
 from semantic_memory.schemas.common import MutationEnvelope
+from semantic_memory.schemas.identity import IdentityResolutionResult
 
 
 class ResolutionOutcome(StrEnum):
@@ -86,3 +87,4 @@ class CreateEntityResponse(BaseModel):
     candidates: list[EntityCandidate] = Field(default_factory=list)
     request_id: uuid.UUID
     reused: bool = False
+    identity: IdentityResolutionResult | None = None

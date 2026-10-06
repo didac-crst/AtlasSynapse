@@ -1,20 +1,22 @@
 """Identity-resolution contracts (PR1).
 
-These types define the identity layer without changing create/resolve behaviour
-yet. Legacy ResolutionOutcome (REUSE/CREATE/AMBIGUOUS) remains the public
-create_entity response; map via compatibility helpers.
+These types define the identity layer. Legacy ResolutionOutcome
+(REUSE/CREATE/AMBIGUOUS) remains the public create_entity response; map via
+compatibility helpers.
 """
 
 from __future__ import annotations
 
 import uuid
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field, field_validator
 
 from semantic_memory.models.enums import AliasIdentityStrength, EntityStatus
-from semantic_memory.schemas.entities import ResolutionOutcome
+
+if TYPE_CHECKING:
+    from semantic_memory.schemas.entities import ResolutionOutcome
 
 
 class CandidateDecision(StrEnum):
@@ -106,6 +108,8 @@ def to_legacy_resolution_outcome(
     resolution: IdentityResolutionOutcome,
 ) -> ResolutionOutcome:
     """Map new identity outcomes onto the existing create_entity enum."""
+    from semantic_memory.schemas.entities import ResolutionOutcome
+
     if resolution == IdentityResolutionOutcome.MATCH:
         return ResolutionOutcome.REUSE
     if resolution == IdentityResolutionOutcome.NO_MATCH:
@@ -117,9 +121,11 @@ def from_legacy_resolution_outcome(
     outcome: ResolutionOutcome,
 ) -> tuple[IdentityResolutionOutcome, IdentityAction]:
     """Compatibility shim: old create_entity outcomes → new decision + action."""
-    if outcome == ResolutionOutcome.REUSE:
+    from semantic_memory.schemas.entities import ResolutionOutcome as LegacyOutcome
+
+    if outcome == LegacyOutcome.REUSE:
         return IdentityResolutionOutcome.MATCH, IdentityAction.REUSE
-    if outcome == ResolutionOutcome.CREATE:
+    if outcome == LegacyOutcome.CREATE:
         return IdentityResolutionOutcome.NO_MATCH, IdentityAction.CREATE
     return IdentityResolutionOutcome.AMBIGUOUS, IdentityAction.CLARIFY
 

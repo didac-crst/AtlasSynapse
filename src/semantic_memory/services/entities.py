@@ -158,11 +158,16 @@ class EntityService:
             )
         # Mark merged first so source aliases no longer block transfer, then
         # redirect future identity resolution onto the survivor (ADR-007).
+        # Transferred names become authoritative so subsequent resolve can MATCH.
         merged = self._entities.mark_merged(source, target_entity_id=target.id)
         for alias in [source.canonical_name, *self._entities.list_aliases(source.id)]:
             if self._entities.alias_exists_on_other_entity(alias=alias, entity_id=target.id):
                 continue
-            self._entities.ensure_alias(entity_id=target.id, alias=alias)
+            self._entities.ensure_alias(
+                entity_id=target.id,
+                alias=alias,
+                identity_strength=AliasIdentityStrength.AUTHORITATIVE.value,
+            )
         # Re-point statement endpoints so graph exporters that ignore merge
         # metadata do not drop edges (Cytoscape / raw SPO clients).
         self._statements.reassign_entity_references(
@@ -230,6 +235,7 @@ class EntityService:
                 candidates=resolution.candidates,
                 request_id=request.request_id,
                 reused=False,
+                identity=resolution.identity,
             )
 
         if resolution.outcome == ResolutionOutcome.REUSE:
@@ -240,6 +246,7 @@ class EntityService:
                 candidates=[],
                 request_id=request.request_id,
                 reused=True,
+                identity=resolution.identity,
             )
 
         entity = self._create_new_entity(
@@ -253,6 +260,7 @@ class EntityService:
             candidates=[],
             request_id=request.request_id,
             reused=False,
+            identity=resolution.identity,
         )
 
     def _create_new_entity(
