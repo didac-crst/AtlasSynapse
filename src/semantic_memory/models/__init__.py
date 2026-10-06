@@ -5,6 +5,7 @@ from semantic_memory.models.embeddings import Embedding
 from semantic_memory.models.enums import (
     ActorStatus,
     ActorType,
+    AliasIdentityStrength,
     AliasTargetType,
     BatchStatus,
     Cardinality,
@@ -71,6 +72,7 @@ __all__ = [
     "Actor",
     "ActorStatus",
     "ActorType",
+    "AliasIdentityStrength",
     "AliasTargetType",
     "Base",
     "BatchStatus",

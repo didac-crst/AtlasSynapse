@@ -15,6 +15,7 @@ from semantic_memory.exceptions import (
 )
 from semantic_memory.models import Entity, EntityStatus
 from semantic_memory.models.capabilities import Capability
+from semantic_memory.models.enums import AliasIdentityStrength
 from semantic_memory.repositories.entities import EntityRepository
 from semantic_memory.repositories.ontology import OntologyRepository
 from semantic_memory.repositories.statements import StatementRepository
@@ -23,6 +24,7 @@ from semantic_memory.schemas.entities import (
     AddEntityAliasRequest,
     CreateEntityRequest,
     CreateEntityResponse,
+    EntityAliasEntry,
     EntityResponse,
     EntityTypeResponse,
     ExternalReferenceResponse,
@@ -110,7 +112,11 @@ class EntityService:
                 details={"alias": alias, "entity_id": str(entity.id)},
                 request_id=str(request.request_id),
             )
-        self._entities.ensure_alias(entity_id=entity.id, alias=alias)
+        self._entities.ensure_alias(
+            entity_id=entity.id,
+            alias=alias,
+            identity_strength=request.identity_strength.value,
+        )
         return self._to_entity_response(entity)
 
     def _merge_entity_body(self, *, request: MergeEntityRequest) -> MergeEntityResponse:
@@ -278,13 +284,21 @@ class EntityService:
             asserted_by_actor_id=actor_id,
         )
 
-        self._entities.add_alias(entity_id=entity.id, alias=request.canonical_name)
+        self._entities.add_alias(
+            entity_id=entity.id,
+            alias=request.canonical_name,
+            identity_strength=AliasIdentityStrength.SUPPORTING.value,
+        )
         seen_normalized = {normalize_text(request.canonical_name)}
         for alias in request.aliases:
             normalized = normalize_text(alias)
             if not normalized or normalized in seen_normalized:
                 continue
-            self._entities.add_alias(entity_id=entity.id, alias=alias.strip())
+            self._entities.add_alias(
+                entity_id=entity.id,
+                alias=alias.strip(),
+                identity_strength=AliasIdentityStrength.SUPPORTING.value,
+            )
             seen_normalized.add(normalized)
 
         if request.external_reference is not None:
@@ -308,6 +322,13 @@ class EntityService:
             for ontology_class, namespace_key in self._entities.list_types(entity.id)
         ]
         aliases = self._entities.list_aliases(entity.id)
+        alias_entries = [
+            EntityAliasEntry(
+                alias=row.alias,
+                identity_strength=AliasIdentityStrength(row.identity_strength),
+            )
+            for row in self._entities.list_alias_entries(entity.id)
+        ]
         refs = [
             ExternalReferenceResponse(
                 source_system=item.source_system,
@@ -324,6 +345,7 @@ class EntityService:
             merged_into_entity_id=entity.merged_into_entity_id,
             types=types,
             aliases=aliases,
+            alias_entries=alias_entries,
             external_references=refs,
             created_at=entity.created_at,
             updated_at=entity.updated_at,

@@ -17,6 +17,7 @@ from semantic_memory.models import (
     OntologyClass,
     OntologyNamespace,
 )
+from semantic_memory.models.enums import AliasIdentityStrength
 from semantic_memory.validation.normalization import normalize_text
 
 
@@ -94,12 +95,20 @@ class EntityRepository:
         *,
         entity_id: uuid.UUID,
         alias: str,
+        identity_strength: str = AliasIdentityStrength.SUPPORTING.value,
     ) -> EntityAlias:
+        strength = identity_strength or AliasIdentityStrength.SUPPORTING.value
+        if strength not in {
+            AliasIdentityStrength.SUPPORTING.value,
+            AliasIdentityStrength.AUTHORITATIVE.value,
+        }:
+            raise ValueError(f"Invalid identity_strength: {identity_strength!r}")
         row = EntityAlias(
             id=uuid.uuid4(),
             entity_id=entity_id,
             alias=alias,
             normalized_alias=normalize_text(alias),
+            identity_strength=strength,
         )
         self._session.add(row)
         self._session.flush()
@@ -245,8 +254,17 @@ class EntityRepository:
 
         return list(by_id.values())
 
-    def ensure_alias(self, *, entity_id: uuid.UUID, alias: str) -> EntityAlias | None:
-        """Add alias if missing; return None when it already exists on this entity."""
+    def ensure_alias(
+        self,
+        *,
+        entity_id: uuid.UUID,
+        alias: str,
+        identity_strength: str = AliasIdentityStrength.SUPPORTING.value,
+    ) -> EntityAlias | None:
+        """Add alias if missing; return None when it already exists on this entity.
+
+        PR1 does not upgrade strength on existing rows (merge promotion is PR3).
+        """
         normalized = normalize_text(alias)
         if not normalized:
             return None
@@ -258,7 +276,11 @@ class EntityRepository:
         )
         if existing is not None:
             return None
-        return self.add_alias(entity_id=entity_id, alias=alias.strip())
+        return self.add_alias(
+            entity_id=entity_id,
+            alias=alias.strip(),
+            identity_strength=identity_strength,
+        )
 
     def has_type(self, entity_id: uuid.UUID, class_id: uuid.UUID) -> bool:
         row = self._session.scalar(
@@ -273,6 +295,15 @@ class EntityRepository:
         return list(
             self._session.scalars(
                 select(EntityAlias.alias).where(EntityAlias.entity_id == entity_id)
+            ).all()
+        )
+
+    def list_alias_entries(self, entity_id: uuid.UUID) -> list[EntityAlias]:
+        return list(
+            self._session.scalars(
+                select(EntityAlias)
+                .where(EntityAlias.entity_id == entity_id)
+                .order_by(EntityAlias.created_at.asc())
             ).all()
         )
 

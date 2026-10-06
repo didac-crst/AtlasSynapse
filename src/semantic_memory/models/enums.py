@@ -47,6 +47,17 @@ class AliasTargetType(StrEnum):
     PREDICATE = "predicate"
 
 
+class AliasIdentityStrength(StrEnum):
+    """How strongly an entity alias establishes identity.
+
+    supporting: observed/inferred lexical hint; never alone decisive for MATCH.
+    authoritative: confirmed via merge, user confirmation, or authoritative ID.
+    """
+
+    SUPPORTING = "supporting"
+    AUTHORITATIVE = "authoritative"
+
+
 class ConstraintType(StrEnum):
     DOMAIN = "domain"
     RANGE = "range"
