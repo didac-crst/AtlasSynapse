@@ -7,9 +7,11 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
 
-from semantic_memory.models import Entity
+from semantic_memory.models import Entity, OntologyClass
 from semantic_memory.models.enums import AliasIdentityStrength, EntityStatus
 from semantic_memory.repositories.entities import EntityRepository
+from semantic_memory.schemas.identity_adjudication import IdentityAdjudicationRequest
+from semantic_memory.services.identity_adjudication import IdentityAdjudicationService
 from semantic_memory.services.identity_graph_evidence import (
     IdentityGraphEvidenceService,
     sort_candidates_for_explanation,
@@ -50,9 +52,16 @@ class _CandidateAccum:
 class IdentityService:
     """Resolve entity identity without silent merges or false collapses."""
 
-    def __init__(self, session: Session) -> None:
+    def __init__(
+        self,
+        session: Session,
+        *,
+        adjudication: IdentityAdjudicationService | None = None,
+    ) -> None:
+        self._session = session
         self._entities = EntityRepository(session)
         self._graph_evidence = IdentityGraphEvidenceService(session)
+        self._adjudication = adjudication or IdentityAdjudicationService()
 
     def resolve(
         self,
@@ -183,6 +192,22 @@ class IdentityService:
 
         identity_candidates = sort_candidates_for_explanation(identity_candidates)
 
+        preliminary = aggregate_candidate_decisions(identity_candidates)
+        class_key: str | None = None
+        if class_id is not None:
+            ontology_class = self._session.get(OntologyClass, class_id)
+            if ontology_class is not None:
+                class_key = ontology_class.key
+
+        identity_candidates, adjudication_result = self._adjudication.maybe_adjudicate(
+            request=IdentityAdjudicationRequest(
+                incoming_canonical_name=canonical_name,
+                class_key=class_key,
+                candidates=identity_candidates,
+            ),
+            resolution=preliminary,
+            candidates=identity_candidates,
+        )
         resolution = aggregate_candidate_decisions(identity_candidates)
         action = action_for_resolution(resolution)
         matched_entity: Entity | None = None
@@ -227,6 +252,10 @@ class IdentityService:
             ]
             decision_basis = "no_candidate" if not identity_candidates else "all_different"
 
+        metadata: dict[str, object] = {}
+        if adjudication_result is not None:
+            metadata["adjudication"] = adjudication_result.model_dump(mode="json")
+
         identity = IdentityResolutionResult(
             resolution=resolution,
             action=action,
@@ -235,6 +264,7 @@ class IdentityService:
             reasons=top_reasons,
             decision_basis=decision_basis,
             no_candidate=not identity_candidates,
+            metadata=metadata,
         )
 
         legacy_candidates = [

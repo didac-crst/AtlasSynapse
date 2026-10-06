@@ -79,6 +79,36 @@ class Settings(BaseSettings):
     semantic_review_timeout_seconds: float = Field(
         default=45.0, alias="SEMANTIC_REVIEW_TIMEOUT_SECONDS", gt=0
     )
+    identity_review_mode: Literal["disabled", "mock", "shadow", "external"] = Field(
+        default="disabled",
+        alias="IDENTITY_REVIEW_MODE",
+    )
+    identity_review_provider: str = Field(default="openai", alias="IDENTITY_REVIEW_PROVIDER")
+    identity_review_model: str = Field(
+        default="gpt-5.6-terra",
+        alias="IDENTITY_REVIEW_MODEL",
+    )
+    identity_review_api_key: str = Field(default="", alias="IDENTITY_REVIEW_API_KEY")
+    identity_review_api_base: str = Field(
+        default="",
+        alias="IDENTITY_REVIEW_API_BASE",
+    )
+    identity_review_reasoning_effort: Literal["low", "medium", "high"] = Field(
+        default="low",
+        alias="IDENTITY_REVIEW_REASONING_EFFORT",
+    )
+    identity_review_max_candidates: int = Field(
+        default=4, alias="IDENTITY_REVIEW_MAX_CANDIDATES", ge=1, le=8
+    )
+    identity_review_max_evidence_per_candidate: int = Field(
+        default=8, alias="IDENTITY_REVIEW_MAX_EVIDENCE_PER_CANDIDATE", ge=1, le=20
+    )
+    identity_review_max_output_tokens: int = Field(
+        default=400, alias="IDENTITY_REVIEW_MAX_OUTPUT_TOKENS", ge=64, le=2000
+    )
+    identity_review_timeout_seconds: float = Field(
+        default=30.0, alias="IDENTITY_REVIEW_TIMEOUT_SECONDS", gt=0
+    )
     embedding_mode: Literal["disabled", "mock"] = Field(
         default="disabled",
         alias="EMBEDDING_MODE",
