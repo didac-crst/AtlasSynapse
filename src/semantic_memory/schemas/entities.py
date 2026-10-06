@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from semantic_memory.models.enums import AliasIdentityStrength, EntityStatus
 from semantic_memory.schemas.common import MutationEnvelope
@@ -26,6 +26,39 @@ class ExternalReferenceInput(BaseModel):
     external_id: str = Field(min_length=1)
     uri: str | None = None
     label: str | None = None
+
+
+class EntityInput(BaseModel):
+    """Typed unresolved (or already-resolved) entity reference for write paths.
+
+    Prefer this over a bare name string: callers should supply class context and
+    any known aliases / external refs so identity resolve is well-posed.
+    """
+
+    entity_id: uuid.UUID | None = None
+    canonical_name: str | None = None
+    class_key: str | None = None
+    namespace_key: str = Field(default="core")
+    aliases: list[str] = Field(default_factory=list)
+    external_refs: list[ExternalReferenceInput] = Field(default_factory=list)
+
+    @field_validator("canonical_name", "class_key")
+    @classmethod
+    def _strip_optional(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
+
+    @model_validator(mode="after")
+    def _require_identity_context_when_unresolved(self) -> EntityInput:
+        if self.entity_id is not None:
+            return self
+        if self.canonical_name is None:
+            raise ValueError("canonical_name is required when entity_id is omitted")
+        if self.class_key is None:
+            raise ValueError("class_key is required when entity_id is omitted")
+        return self
 
 
 class CreateEntityRequest(MutationEnvelope):

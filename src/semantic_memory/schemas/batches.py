@@ -15,6 +15,7 @@ from semantic_memory.schemas.common import MutationEnvelope
 from semantic_memory.schemas.entities import (
     CreateEntityResponse,
     EntityCandidate,
+    EntityInput,
     ExternalReferenceInput,
 )
 from semantic_memory.schemas.statements import AssertStatementResponse, StatementResponse
@@ -33,10 +34,12 @@ class BatchStatementItem(BaseModel):
     client_item_id: str = Field(min_length=1)
     subject_entity_id: uuid.UUID | None = None
     subject_client_item_id: str | None = None
+    subject: EntityInput | None = None
     predicate_key: str = Field(min_length=1)
     namespace_key: str = Field(default="core")
     object_entity_id: uuid.UUID | None = None
     object_client_item_id: str | None = None
+    object: EntityInput | None = None
     object_string: str | None = None
     object_number: Decimal | None = None
     object_boolean: bool | None = None
@@ -57,17 +60,33 @@ class BatchStatementItem(BaseModel):
 
     @model_validator(mode="after")
     def _subject_and_object(self) -> BatchStatementItem:
-        if self.subject_entity_id is None and self.subject_client_item_id is None:
-            raise ValueError("Provide subject_entity_id or subject_client_item_id")
-        if self.subject_entity_id is not None and self.subject_client_item_id is not None:
-            raise ValueError("Provide only one subject reference")
+        subject_refs = [
+            name
+            for name, value in (
+                ("subject_entity_id", self.subject_entity_id),
+                ("subject_client_item_id", self.subject_client_item_id),
+                ("subject", self.subject),
+            )
+            if value is not None
+        ]
+        if len(subject_refs) != 1:
+            raise ValueError(
+                "Provide exactly one of subject_entity_id, subject_client_item_id, or subject"
+            )
         if self.object_entity_id is not None and self.object_client_item_id is not None:
             raise ValueError("Provide only one object entity reference")
+        if self.object is not None and (
+            self.object_entity_id is not None or self.object_client_item_id is not None
+        ):
+            raise ValueError(
+                "Provide only one of object, object_entity_id, or object_client_item_id"
+            )
         populated = [
             name
             for name, value in (
                 ("object_entity_id", self.object_entity_id),
                 ("object_client_item_id", self.object_client_item_id),
+                ("object", self.object),
                 ("object_string", self.object_string),
                 ("object_number", self.object_number),
                 ("object_boolean", self.object_boolean),

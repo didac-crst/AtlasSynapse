@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
@@ -23,6 +24,7 @@ from semantic_memory.models.enums import Cardinality, StatementStatus, ValueKind
 from semantic_memory.repositories.entities import EntityRepository
 from semantic_memory.repositories.ontology import OntologyRepository
 from semantic_memory.repositories.statements import StatementRepository
+from semantic_memory.schemas.identity import IdentityResolutionResult
 from semantic_memory.schemas.statements import (
     AssertionOutcome,
     AssertStatementRequest,
@@ -37,6 +39,7 @@ from semantic_memory.schemas.statements import (
 )
 from semantic_memory.services.actors import ActorService
 from semantic_memory.services.conflicts import ConflictService
+from semantic_memory.services.entities import EntityService, WriteSideResolution
 from semantic_memory.services.mutations import MutationRunner
 from semantic_memory.validation.literals import (
     normalize_confidence,
@@ -46,11 +49,26 @@ from semantic_memory.validation.literals import (
 )
 
 
+class _ClarifySides(Exception):
+    """Abort the write savepoint when any side needs clarification."""
+
+    def __init__(
+        self,
+        *,
+        subject_identity: IdentityResolutionResult | None,
+        object_identity: IdentityResolutionResult | None,
+    ) -> None:
+        super().__init__("identity clarification required")
+        self.subject_identity = subject_identity
+        self.object_identity = object_identity
+
+
 class StatementService:
     def __init__(self, session: Session) -> None:
         self._session = session
         self._actors = ActorService(session)
         self._entities = EntityRepository(session)
+        self._entity_service = EntityService(session)
         self._ontology = OntologyRepository(session)
         self._statements = StatementRepository(session)
         self._mutations = MutationRunner(session)
@@ -143,7 +161,7 @@ class StatementService:
         self._session.flush()
 
         created = self._assert_new(request=request, actor_id=actor_id)
-        if created.outcome != AssertionOutcome.CREATE:
+        if created.outcome != AssertionOutcome.CREATE or created.statement is None:
             raise InvalidStateTransitionError(
                 "Supersession requires creating a replacement statement",
                 details={"previous_statement_id": str(previous.id)},
@@ -199,6 +217,91 @@ class StatementService:
                 request_id=str(request.request_id),
             ) from exc
 
+        try:
+            with self._session.begin_nested():
+                subject_side = self._resolve_subject_side(
+                    request=request,
+                    actor_id=actor_id,
+                )
+                object_side = self._resolve_object_side(
+                    request=request,
+                    actor_id=actor_id,
+                )
+                if subject_side.clarify or (object_side is not None and object_side.clarify):
+                    raise _ClarifySides(
+                        subject_identity=subject_side.identity,
+                        object_identity=None if object_side is None else object_side.identity,
+                    )
+
+                assert subject_side.entity_id is not None
+                object_entity_id = None if object_side is None else object_side.entity_id
+                resolved = request.model_copy(
+                    update={
+                        "subject_entity_id": subject_side.entity_id,
+                        "subject": None,
+                        "object_entity_id": object_entity_id
+                        if object_side is not None
+                        else request.object_entity_id,
+                        "object": None,
+                    }
+                )
+                response = self._assert_resolved(
+                    request=resolved,
+                    actor_id=actor_id,
+                    confidence=confidence,
+                )
+                return response.model_copy(
+                    update={
+                        "subject_identity": subject_side.identity,
+                        "object_identity": None if object_side is None else object_side.identity,
+                    }
+                )
+        except _ClarifySides as clarify:
+            return AssertStatementResponse(
+                outcome=AssertionOutcome.CLARIFY,
+                statement=None,
+                request_id=request.request_id,
+                reused=False,
+                subject_identity=clarify.subject_identity,
+                object_identity=clarify.object_identity,
+            )
+
+    def _resolve_subject_side(
+        self,
+        *,
+        request: AssertStatementRequest,
+        actor_id: uuid.UUID,
+    ) -> WriteSideResolution:
+        return self._entity_service.resolve_write_side(
+            entity_id=request.subject_entity_id,
+            entity_input=request.subject,
+            actor_id=actor_id,
+            request_id=request.request_id,
+        )
+
+    def _resolve_object_side(
+        self,
+        *,
+        request: AssertStatementRequest,
+        actor_id: uuid.UUID,
+    ) -> WriteSideResolution | None:
+        if request.object is None and request.object_entity_id is None:
+            return None
+        return self._entity_service.resolve_write_side(
+            entity_id=request.object_entity_id,
+            entity_input=request.object,
+            actor_id=actor_id,
+            request_id=request.request_id,
+        )
+
+    def _assert_resolved(
+        self,
+        *,
+        request: AssertStatementRequest,
+        actor_id: uuid.UUID,
+        confidence: Decimal | None,
+    ) -> AssertStatementResponse:
+        assert request.subject_entity_id is not None
         subject = self._entities.get(request.subject_entity_id)
         if subject is None or subject.status != EntityStatus.ACTIVE.value:
             raise UnknownEntityError(
