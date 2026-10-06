@@ -7,6 +7,8 @@ from alembic.config import Config
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session
 
+from semantic_memory.repositories.ontology import OntologyRepository
+from semantic_memory.seeding.bootstrap import bootstrap_system_ontology
 from semantic_memory.seeding.ontology import (
     CORE_CLASSES,
     CORE_INHERITANCE,
@@ -133,3 +135,14 @@ def test_seed_is_deterministic(db_session: Session) -> None:
         ).scalars()
     )
     assert predicate_keys == {item[0] for item in CORE_PREDICATES}
+
+
+def test_bootstrap_installs_identity_graph_predicates(db_session: Session) -> None:
+    first = bootstrap_system_ontology(db_session)
+    ontology = OntologyRepository(db_session)
+    for key in ("employedBy", "spouseOf", "parentOf"):
+        row = ontology.get_predicate_by_key(namespace_key=CORE_NAMESPACE_KEY, predicate_key=key)
+        assert row is not None, f"missing identity graph predicate {key}"
+    assert first["identity_graph"]["created_predicates"] in {0, 3}
+    second = bootstrap_system_ontology(db_session)
+    assert second["identity_graph"]["created_predicates"] == 0

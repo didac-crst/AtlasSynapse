@@ -10,6 +10,10 @@ from sqlalchemy.orm import Session
 from semantic_memory.models import Entity
 from semantic_memory.models.enums import AliasIdentityStrength, EntityStatus
 from semantic_memory.repositories.entities import EntityRepository
+from semantic_memory.services.identity_graph_evidence import (
+    IdentityGraphEvidenceService,
+    sort_candidates_for_explanation,
+)
 from semantic_memory.schemas.entities import EntityCandidate, ResolutionOutcome
 from semantic_memory.schemas.identity import (
     CandidateDecision,
@@ -48,6 +52,7 @@ class IdentityService:
 
     def __init__(self, session: Session) -> None:
         self._entities = EntityRepository(session)
+        self._graph_evidence = IdentityGraphEvidenceService(session)
 
     def resolve(
         self,
@@ -147,6 +152,13 @@ class IdentityService:
                 )
             )
 
+        if by_id:
+            graph_extra = self._graph_evidence.enrich_candidate_reasons(
+                candidate_entity_ids=list(by_id.keys()),
+            )
+            for entity_id, extra_reasons in graph_extra.items():
+                by_id[entity_id].reasons.extend(extra_reasons)
+
         identity_candidates: list[IdentityCandidate] = []
         entity_by_id: dict[uuid.UUID, Entity] = {}
         for entity_id, acc in by_id.items():
@@ -168,6 +180,8 @@ class IdentityService:
                     reasons=list(acc.reasons),
                 )
             )
+
+        identity_candidates = sort_candidates_for_explanation(identity_candidates)
 
         resolution = aggregate_candidate_decisions(identity_candidates)
         action = action_for_resolution(resolution)
