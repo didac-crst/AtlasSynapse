@@ -14,6 +14,8 @@ get_timeline
 search_statements
 get_statement
 explain_statement
+get_source_content
+search_source_content
 find_conflicts
 search_semantic_memory
 get_relevant_context
@@ -33,6 +35,8 @@ assert_statement
 assert_batch
 supersede_statement
 retract_statement
+ensure_source
+ingest_source_content
 add_evidence
 merge_entity
 ```

@@ -39,7 +39,16 @@ from semantic_memory.schemas.proposals import (
     ProposeConstraintRequest,
     ProposePredicateRequest,
 )
-from semantic_memory.schemas.provenance import AddEvidenceRequest, ExplainStatementResponse
+from semantic_memory.schemas.provenance import (
+    AddEvidenceRequest,
+    EnsureSourceRequest,
+    ExplainStatementResponse,
+    GetSourceContentRequest,
+    GetSourceContentResponse,
+    IngestSourceContentRequest,
+    SearchSourceContentRequest,
+    SearchSourceContentResponse,
+)
 from semantic_memory.schemas.retrieval import (
     RelevantContextRequest,
     SearchEntitiesRequest,
@@ -262,6 +271,52 @@ class StatementMCPTools:
             self._session,
             lambda: self._provenance.add_evidence(AddEvidenceRequest.model_validate(payload)),
         )
+
+    def ensure_source(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return _run_mutation(
+            self._session,
+            lambda: self._provenance.ensure_source(EnsureSourceRequest.model_validate(payload)),
+        )
+
+    def ingest_source_content(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return _run_mutation(
+            self._session,
+            lambda: self._provenance.ingest_source_content(
+                IngestSourceContentRequest.model_validate(payload)
+            ),
+        )
+
+    def get_source_content(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            result: GetSourceContentResponse = self._provenance.get_source_content(
+                GetSourceContentRequest.model_validate(payload)
+            )
+            return result.model_dump(mode="json")
+        except (DomainError, ValidationError, ValueError) as exc:
+            if isinstance(exc, DomainError):
+                return _error(exc)
+            return _error(
+                ValidationFailedError(
+                    "Request validation failed",
+                    details={"error": str(exc)},
+                )
+            )
+
+    def search_source_content(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            result: SearchSourceContentResponse = self._provenance.search_source_content(
+                SearchSourceContentRequest.model_validate(payload)
+            )
+            return result.model_dump(mode="json")
+        except (DomainError, ValidationError, ValueError) as exc:
+            if isinstance(exc, DomainError):
+                return _error(exc)
+            return _error(
+                ValidationFailedError(
+                    "Request validation failed",
+                    details={"error": str(exc)},
+                )
+            )
 
     def supersede_statement(self, payload: dict[str, Any]) -> dict[str, Any]:
         return _run_mutation(

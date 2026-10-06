@@ -480,6 +480,8 @@ create_entity
 assert_statement
 assert_batch
 supersede_statement
+ensure_source
+ingest_source_content
 add_evidence
 merge_entity
 
@@ -488,6 +490,8 @@ search_entities
 get_entity_neighborhood
 get_timeline
 explain_statement
+get_source_content
+search_source_content
 find_conflicts
 
 get_class

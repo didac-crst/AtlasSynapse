@@ -33,6 +33,10 @@ REGISTERED_TOOL_NAMES: tuple[str, ...] = (
     "get_statement",
     "search_statements",
     "explain_statement",
+    "ensure_source",
+    "ingest_source_content",
+    "get_source_content",
+    "search_source_content",
     "add_evidence",
     "supersede_statement",
     "retract_statement",
@@ -262,6 +266,30 @@ def build_mcp_tools() -> list[ToolSpec]:
                 "properties": {"statement_id": {"type": "string"}},
                 "required": ["statement_id"],
             },
+        ),
+        _payload_tool(
+            "ensure_source",
+            "Ensure a reusable provenance source (create or reuse by identity).",
+            lambda session, payload: StatementMCPTools(session).ensure_source(payload),
+        ),
+        _payload_tool(
+            "ingest_source_content",
+            "Ingest source content. Prefer content + content_format (html|markdown|text); "
+            "AtlasSynapse preserves the exact original and deterministically canonicalizes "
+            "(HTML→Markdown v1). Optional canonical_format defaults to markdown.",
+            lambda session, payload: StatementMCPTools(session).ingest_source_content(payload),
+        ),
+        _payload_tool(
+            "get_source_content",
+            "Fetch latest or specific source content revision by source_id, "
+            "document_entity_id, or revision_id.",
+            lambda session, payload: StatementMCPTools(session).get_source_content(payload),
+        ),
+        _payload_tool(
+            "search_source_content",
+            "Lexical search over canonical source content; returns passages with "
+            "revision-qualified locators.",
+            lambda session, payload: StatementMCPTools(session).search_source_content(payload),
         ),
         _payload_tool(
             "add_evidence",

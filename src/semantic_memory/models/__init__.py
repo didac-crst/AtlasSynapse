@@ -59,7 +59,12 @@ from semantic_memory.models.ontology import (
     OntologyPredicateRevision,
 )
 from semantic_memory.models.operations import Actor, IdempotencyRecord, IngestionBatch, OperationLog
-from semantic_memory.models.provenance import ExternalReference, Source, StatementEvidence
+from semantic_memory.models.provenance import (
+    ExternalReference,
+    Source,
+    SourceContentRevision,
+    StatementEvidence,
+)
 from semantic_memory.models.reasoning import Conflict
 
 __all__ = [
@@ -116,6 +121,7 @@ __all__ = [
     "SemanticChallengeStatus",
     "SemanticReviewStage",
     "Source",
+    "SourceContentRevision",
     "Statement",
     "StatementEvidence",
     "StatementQualifier",

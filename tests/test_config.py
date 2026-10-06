@@ -29,6 +29,10 @@ def test_mcp_server_info() -> None:
     assert "assert_statement" in info.tools
     assert "explain_statement" in info.tools
     assert "add_evidence" in info.tools
+    assert "ensure_source" in info.tools
+    assert "ingest_source_content" in info.tools
+    assert "get_source_content" in info.tools
+    assert "search_source_content" in info.tools
     assert "get_timeline" in info.tools
     assert "find_conflicts" in info.tools
     assert "merge_entity" in info.tools

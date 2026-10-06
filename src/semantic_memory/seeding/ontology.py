@@ -85,6 +85,14 @@ CORE_PREDICATES: tuple[
     ),
     ("relatedTo", ValueKind.ENTITY, Cardinality.MANY, ("Thing",), ("Thing",)),
     ("source", ValueKind.ENTITY, Cardinality.MANY, ("Thing",), ("Document",)),
+    ("authoredBy", ValueKind.ENTITY, Cardinality.MANY, ("Document",), ("Person",)),
+    (
+        "publicationContext",
+        ValueKind.ENTITY,
+        Cardinality.MANY,
+        ("Document",),
+        ("Organization",),
+    ),
 )
 
 # Data-only extensions for Milestone B Phase 7 proofs. No new SQL tables.
