@@ -1,0 +1,72 @@
+# AtlasSynapse on Satellite — shared Postgres, no bundled DB.
+# Portable local Compose is docker-compose.yml (default).
+#
+# Usage:
+#   cd /srv/satellite/apps/atlas-synapse
+#   docker compose -f docker-compose.satellite.yml up -d --build
+#   docker compose -f docker-compose.satellite.yml run --rm -T mcp
+
+name: atlas-synapse
+
+x-app-env: &app-env
+  env_file:
+    - ./atlas-synapse.env
+    - /srv/satellite/secrets/atlas-synapse.secret.env
+
+services:
+  migrate:
+    build: .
+    image: satellite-atlas-synapse:local
+    container_name: atlas-synapse-migrate
+    <<: *app-env
+    command: ["migrate"]
+    networks:
+      - satellite-databases
+    restart: "no"
+
+  api:
+    build: .
+    image: satellite-atlas-synapse:local
+    container_name: atlas-synapse-api
+    <<: *app-env
+    command: ["api"]
+    ports:
+      - "10.10.0.12:5060:8000"
+    networks:
+      - satellite-databases
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1:8000/health/live >/dev/null",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  # Spawned by OpenAI tunnel-client via stdio (do not allocate a TTY).
+  mcp:
+    profiles: ["mcp"]
+    build: .
+    image: satellite-atlas-synapse:local
+    container_name: atlas-synapse-mcp
+    <<: *app-env
+    command: ["mcp"]
+    networks:
+      - satellite-databases
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    stdin_open: true
+    tty: false
+    restart: "no"
+
+networks:
+  satellite-databases:
+    external: true
+    name: satellite-databases

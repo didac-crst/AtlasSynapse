@@ -8,11 +8,14 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
-from semantic_memory.models.enums import EntityStatus
+from semantic_memory.models.enums import AliasIdentityStrength, EntityStatus
 from semantic_memory.schemas.common import MutationEnvelope
+from semantic_memory.schemas.identity import IdentityResolutionResult
 
 
 class ResolutionOutcome(StrEnum):
+    """Legacy create_entity outcome (action-shaped). Prefer IdentityResolutionOutcome."""
+
     CREATE = "CREATE"
     REUSE = "REUSE"
     AMBIGUOUS = "AMBIGUOUS"
@@ -33,6 +36,12 @@ class CreateEntityRequest(MutationEnvelope):
     external_reference: ExternalReferenceInput | None = None
 
 
+class AddEntityAliasRequest(MutationEnvelope):
+    entity_id: uuid.UUID
+    alias: str = Field(min_length=1)
+    identity_strength: AliasIdentityStrength = AliasIdentityStrength.SUPPORTING
+
+
 class EntityTypeResponse(BaseModel):
     class_id: uuid.UUID
     class_key: str
@@ -44,6 +53,11 @@ class ExternalReferenceResponse(BaseModel):
     external_id: str
     uri: str | None = None
     label: str | None = None
+
+
+class EntityAliasEntry(BaseModel):
+    alias: str
+    identity_strength: AliasIdentityStrength
 
 
 class EntityCandidate(BaseModel):
@@ -61,6 +75,7 @@ class EntityResponse(BaseModel):
     merged_into_entity_id: uuid.UUID | None = None
     types: list[EntityTypeResponse] = Field(default_factory=list)
     aliases: list[str] = Field(default_factory=list)
+    alias_entries: list[EntityAliasEntry] = Field(default_factory=list)
     external_references: list[ExternalReferenceResponse] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
@@ -72,3 +87,4 @@ class CreateEntityResponse(BaseModel):
     candidates: list[EntityCandidate] = Field(default_factory=list)
     request_id: uuid.UUID
     reused: bool = False
+    identity: IdentityResolutionResult | None = None

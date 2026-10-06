@@ -15,12 +15,16 @@ from semantic_memory.exceptions import (
 )
 from semantic_memory.models import Entity, EntityStatus
 from semantic_memory.models.capabilities import Capability
+from semantic_memory.models.enums import AliasIdentityStrength
 from semantic_memory.repositories.entities import EntityRepository
 from semantic_memory.repositories.ontology import OntologyRepository
+from semantic_memory.repositories.statements import StatementRepository
 from semantic_memory.schemas.conflicts import MergeEntityRequest, MergeEntityResponse
 from semantic_memory.schemas.entities import (
+    AddEntityAliasRequest,
     CreateEntityRequest,
     CreateEntityResponse,
+    EntityAliasEntry,
     EntityResponse,
     EntityTypeResponse,
     ExternalReferenceResponse,
@@ -38,6 +42,7 @@ class EntityService:
         self._actors = ActorService(session)
         self._entities = EntityRepository(session)
         self._ontology = OntologyRepository(session)
+        self._statements = StatementRepository(session)
         self._identity = IdentityService(session)
         self._mutations = MutationRunner(session)
 
@@ -73,6 +78,46 @@ class EntityService:
             constraint_name="entity_merge",
             execute=lambda: self._merge_entity_body(request=request),
         )
+
+    def add_entity_alias(self, request: AddEntityAliasRequest) -> EntityResponse:
+        actor = self._actors.require_active_actor(request.actor_key)
+        self._actors.require_capability(actor, Capability.KNOWLEDGE_WRITE)
+        return self._mutations.run(
+            actor=actor,
+            operation_name="add_entity_alias",
+            request=request,
+            response_model=EntityResponse,
+            constraint_name="entity_write",
+            execute=lambda: self._add_entity_alias_body(request=request),
+        )
+
+    def _add_entity_alias_body(self, *, request: AddEntityAliasRequest) -> EntityResponse:
+        entity = self._entities.get(request.entity_id)
+        if entity is None or entity.status != EntityStatus.ACTIVE.value:
+            raise UnknownEntityError(
+                f"Entity {request.entity_id} was not found or is inactive",
+                details={"entity_id": str(request.entity_id)},
+                request_id=str(request.request_id),
+            )
+        alias = request.alias.strip()
+        if not normalize_text(alias):
+            raise ValidationFailedError(
+                "Alias must contain non-whitespace characters",
+                details={"alias": request.alias},
+                request_id=str(request.request_id),
+            )
+        if self._entities.alias_exists_on_other_entity(alias=alias, entity_id=entity.id):
+            raise DuplicateEntityError(
+                f"Alias '{alias}' already belongs to another entity",
+                details={"alias": alias, "entity_id": str(entity.id)},
+                request_id=str(request.request_id),
+            )
+        self._entities.ensure_alias(
+            entity_id=entity.id,
+            alias=alias,
+            identity_strength=request.identity_strength.value,
+        )
+        return self._to_entity_response(entity)
 
     def _merge_entity_body(self, *, request: MergeEntityRequest) -> MergeEntityResponse:
         if request.source_entity_id == request.target_entity_id:
@@ -111,7 +156,34 @@ class EntityService:
                 },
                 request_id=str(request.request_id),
             )
+        # Mark merged first so source aliases no longer block transfer, then
+        # redirect future identity resolution onto the survivor (ADR-007).
+        # Canonical name transfers as authoritative; other aliases keep their
+        # original strength so supporting evidence cannot silently become MATCH.
         merged = self._entities.mark_merged(source, target_entity_id=target.id)
+        canonical_norm = normalize_text(source.canonical_name)
+        transfers: list[tuple[str, str]] = [
+            (source.canonical_name, AliasIdentityStrength.AUTHORITATIVE.value)
+        ]
+        transfers.extend(
+            (row.alias, row.identity_strength)
+            for row in self._entities.list_alias_entries(source.id)
+            if normalize_text(row.alias) != canonical_norm
+        )
+        for alias, strength in transfers:
+            if self._entities.alias_exists_on_other_entity(alias=alias, entity_id=target.id):
+                continue
+            self._entities.ensure_alias(
+                entity_id=target.id,
+                alias=alias,
+                identity_strength=strength,
+            )
+        # Re-point statement endpoints so graph exporters that ignore merge
+        # metadata do not drop edges (Cytoscape / raw SPO clients).
+        self._statements.reassign_entity_references(
+            source_entity_id=source.id,
+            target_entity_id=target.id,
+        )
         return MergeEntityResponse(
             source=self._to_entity_response(merged),
             target=self._to_entity_response(target),
@@ -139,16 +211,17 @@ class EntityService:
             )
 
         external = request.external_reference
-        # Serialize resolve+create for this identity key, then resolve under the lock.
-        self._entities.acquire_identity_lock(
-            class_id=ontology_class.id,
-            canonical_name=request.canonical_name,
-        )
-        resolution = self._identity.resolve(
+        # Provider adjudication runs before the advisory lock; deterministic
+        # re-resolve + write happen under the lock (see IdentityService.resolve_for_create).
+        resolution = self._identity.resolve_for_create(
             canonical_name=request.canonical_name,
             class_id=ontology_class.id,
             external_source_system=None if external is None else external.source_system,
             external_id=None if external is None else external.external_id,
+            acquire_lock=lambda: self._entities.acquire_identity_lock(
+                class_id=ontology_class.id,
+                canonical_name=request.canonical_name,
+            ),
         )
 
         return self._response_for_resolution(
@@ -173,6 +246,7 @@ class EntityService:
                 candidates=resolution.candidates,
                 request_id=request.request_id,
                 reused=False,
+                identity=resolution.identity,
             )
 
         if resolution.outcome == ResolutionOutcome.REUSE:
@@ -183,6 +257,7 @@ class EntityService:
                 candidates=[],
                 request_id=request.request_id,
                 reused=True,
+                identity=resolution.identity,
             )
 
         entity = self._create_new_entity(
@@ -196,6 +271,7 @@ class EntityService:
             candidates=[],
             request_id=request.request_id,
             reused=False,
+            identity=resolution.identity,
         )
 
     def _create_new_entity(
@@ -227,13 +303,21 @@ class EntityService:
             asserted_by_actor_id=actor_id,
         )
 
-        self._entities.add_alias(entity_id=entity.id, alias=request.canonical_name)
+        self._entities.add_alias(
+            entity_id=entity.id,
+            alias=request.canonical_name,
+            identity_strength=AliasIdentityStrength.SUPPORTING.value,
+        )
         seen_normalized = {normalize_text(request.canonical_name)}
         for alias in request.aliases:
             normalized = normalize_text(alias)
             if not normalized or normalized in seen_normalized:
                 continue
-            self._entities.add_alias(entity_id=entity.id, alias=alias.strip())
+            self._entities.add_alias(
+                entity_id=entity.id,
+                alias=alias.strip(),
+                identity_strength=AliasIdentityStrength.SUPPORTING.value,
+            )
             seen_normalized.add(normalized)
 
         if request.external_reference is not None:
@@ -257,6 +341,13 @@ class EntityService:
             for ontology_class, namespace_key in self._entities.list_types(entity.id)
         ]
         aliases = self._entities.list_aliases(entity.id)
+        alias_entries = [
+            EntityAliasEntry(
+                alias=row.alias,
+                identity_strength=AliasIdentityStrength(row.identity_strength),
+            )
+            for row in self._entities.list_alias_entries(entity.id)
+        ]
         refs = [
             ExternalReferenceResponse(
                 source_system=item.source_system,
@@ -273,6 +364,7 @@ class EntityService:
             merged_into_entity_id=entity.merged_into_entity_id,
             types=types,
             aliases=aliases,
+            alias_entries=alias_entries,
             external_references=refs,
             created_at=entity.created_at,
             updated_at=entity.updated_at,

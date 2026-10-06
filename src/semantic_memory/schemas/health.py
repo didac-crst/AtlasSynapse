@@ -1,6 +1,8 @@
 """Health endpoint response schemas."""
 
-from pydantic import BaseModel
+from typing import Any
+
+from pydantic import BaseModel, Field
 
 
 class HealthResponse(BaseModel):
@@ -15,3 +17,10 @@ class ReadyResponse(BaseModel):
     status: str
     database: str
     migrations: str
+
+
+class ConfigHealthResponse(BaseModel):
+    """Non-secret runtime configuration used for deploy parity checks."""
+
+    status: str = "ok"
+    config: dict[str, Any] = Field(default_factory=dict)

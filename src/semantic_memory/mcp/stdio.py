@@ -97,14 +97,24 @@ class StdioMCPServer:
             params = {}
 
         if method == "initialize":
+            from semantic_memory.runtime_info import package_version, runtime_config
+
+            cfg = runtime_config()
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
                 "result": {
                     "protocolVersion": "2024-11-05",
                     "capabilities": {"tools": {}},
-                    "serverInfo": {"name": self._name, "version": "0.1.0"},
-                    "instructions": self._instructions,
+                    "serverInfo": {
+                        "name": self._name,
+                        "version": package_version(),
+                    },
+                    "instructions": (
+                        f"{self._instructions} "
+                        f"semantic_review_mode={cfg.get('semantic_review_mode')} "
+                        f"version={cfg.get('version')}."
+                    ),
                 },
             }
         if method == "notifications/initialized" or method == "initialized":

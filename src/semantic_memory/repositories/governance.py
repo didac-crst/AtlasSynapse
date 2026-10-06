@@ -17,6 +17,16 @@ from semantic_memory.models import (
     OntologyProposal,
     ProposalStatus,
 )
+from semantic_memory.models.enums import (
+    SemanticChallengeStatus,
+    SemanticClarificationStatus,
+    SemanticReviewStage,
+)
+from semantic_memory.models.governance import (
+    OntologySemanticChallenge,
+    OntologySemanticClarificationRequest,
+    OntologySemanticReview,
+)
 
 
 class GovernanceRepository:
@@ -241,3 +251,224 @@ class GovernanceRepository:
                 .order_by(OntologyChange.created_at.asc())
             ).all()
         )
+
+    def create_semantic_review(
+        self,
+        *,
+        proposal_id: uuid.UUID,
+        review_stage: SemanticReviewStage,
+        provider: str,
+        model: str,
+        prompt_template_version: str,
+        context_builder_version: str,
+        input_hash: str,
+        decision: str,
+        summary: str,
+        context_concept_keys: list[Any] | None = None,
+        confidence: Any | None = None,
+        reasons: list[Any] | None = None,
+        related_existing_concepts: list[Any] | None = None,
+        recommended_actions: list[Any] | None = None,
+        context_sufficient: bool = True,
+        challengeable: bool = True,
+        authoritative: bool = True,
+        previous_review_id: uuid.UUID | None = None,
+        challenge_id: uuid.UUID | None = None,
+        previous_decision: str | None = None,
+        decision_changed: bool | None = None,
+        model_version: str | None = None,
+        llm_call_log_id: uuid.UUID | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> OntologySemanticReview:
+        row = OntologySemanticReview(
+            id=uuid.uuid4(),
+            proposal_id=proposal_id,
+            review_stage=review_stage.value,
+            previous_review_id=previous_review_id,
+            challenge_id=challenge_id,
+            provider=provider,
+            model=model,
+            model_version=model_version,
+            prompt_template_version=prompt_template_version,
+            context_builder_version=context_builder_version,
+            input_hash=input_hash,
+            context_concept_keys=context_concept_keys or [],
+            decision=decision,
+            confidence=confidence,
+            summary=summary,
+            reasons=reasons or [],
+            related_existing_concepts=related_existing_concepts or [],
+            recommended_actions=recommended_actions or [],
+            context_sufficient=context_sufficient,
+            challengeable=challengeable,
+            authoritative=authoritative,
+            previous_decision=previous_decision,
+            decision_changed=decision_changed,
+            llm_call_log_id=llm_call_log_id,
+            details=details or {},
+        )
+        self._session.add(row)
+        self._session.flush()
+        return row
+
+    def set_effective_semantic_review(
+        self, proposal: OntologyProposal, review_id: uuid.UUID | None
+    ) -> OntologyProposal:
+        proposal.effective_semantic_review_id = review_id
+        self._session.flush()
+        return proposal
+
+    def get_semantic_review(self, review_id: uuid.UUID) -> OntologySemanticReview | None:
+        return self._session.get(OntologySemanticReview, review_id)
+
+    def list_semantic_reviews(self, proposal_id: uuid.UUID) -> list[OntologySemanticReview]:
+        return list(
+            self._session.scalars(
+                select(OntologySemanticReview)
+                .where(OntologySemanticReview.proposal_id == proposal_id)
+                .order_by(OntologySemanticReview.created_at.asc(), OntologySemanticReview.id.asc())
+            ).all()
+        )
+
+    def create_semantic_challenge(
+        self,
+        *,
+        proposal_id: uuid.UUID,
+        challenge_reason: str,
+        created_by_actor_id: uuid.UUID,
+        against_review_id: uuid.UUID | None = None,
+        evidence_refs: list[Any] | None = None,
+        proposed_revision: dict[str, Any] | None = None,
+        status: SemanticChallengeStatus = SemanticChallengeStatus.ACCEPTED_FOR_REVIEW,
+    ) -> OntologySemanticChallenge:
+        row = OntologySemanticChallenge(
+            id=uuid.uuid4(),
+            proposal_id=proposal_id,
+            against_review_id=against_review_id,
+            challenge_reason=challenge_reason,
+            evidence_refs=evidence_refs or [],
+            proposed_revision=proposed_revision,
+            status=status.value,
+            created_by_actor_id=created_by_actor_id,
+        )
+        self._session.add(row)
+        self._session.flush()
+        return row
+
+    def set_challenge_status(
+        self, challenge: OntologySemanticChallenge, *, status: SemanticChallengeStatus
+    ) -> OntologySemanticChallenge:
+        challenge.status = status.value
+        self._session.flush()
+        return challenge
+
+    def create_clarification_request(
+        self,
+        *,
+        proposal_id: uuid.UUID,
+        review_id: uuid.UUID,
+        reason_code: str,
+        question: str,
+        required_clarification: list[Any] | None = None,
+        related_existing_concepts: list[Any] | None = None,
+        supersedes_clarification_request_id: uuid.UUID | None = None,
+    ) -> OntologySemanticClarificationRequest:
+        row = OntologySemanticClarificationRequest(
+            id=uuid.uuid4(),
+            proposal_id=proposal_id,
+            review_id=review_id,
+            reason_code=reason_code,
+            question=question,
+            required_clarification=required_clarification or [],
+            related_existing_concepts=related_existing_concepts or [],
+            status=SemanticClarificationStatus.OPEN.value,
+            supersedes_clarification_request_id=supersedes_clarification_request_id,
+            evidence_refs=[],
+        )
+        self._session.add(row)
+        self._session.flush()
+        return row
+
+    def get_clarification_request(
+        self, clarification_request_id: uuid.UUID
+    ) -> OntologySemanticClarificationRequest | None:
+        return self._session.get(OntologySemanticClarificationRequest, clarification_request_id)
+
+    def get_open_clarification_for_proposal(
+        self, proposal_id: uuid.UUID
+    ) -> OntologySemanticClarificationRequest | None:
+        return self._session.scalar(
+            select(OntologySemanticClarificationRequest)
+            .where(
+                OntologySemanticClarificationRequest.proposal_id == proposal_id,
+                OntologySemanticClarificationRequest.status
+                == SemanticClarificationStatus.OPEN.value,
+            )
+            .order_by(
+                OntologySemanticClarificationRequest.created_at.desc(),
+                OntologySemanticClarificationRequest.id.desc(),
+            )
+            .limit(1)
+        )
+
+    def get_clarification_for_review(
+        self, review_id: uuid.UUID
+    ) -> OntologySemanticClarificationRequest | None:
+        return self._session.scalar(
+            select(OntologySemanticClarificationRequest)
+            .where(OntologySemanticClarificationRequest.review_id == review_id)
+            .order_by(
+                OntologySemanticClarificationRequest.created_at.desc(),
+                OntologySemanticClarificationRequest.id.desc(),
+            )
+            .limit(1)
+        )
+
+    def supersede_open_clarifications(self, proposal_id: uuid.UUID) -> list[uuid.UUID]:
+        """Mark open asks superseded. Returns IDs newest-first."""
+        rows = list(
+            self._session.scalars(
+                select(OntologySemanticClarificationRequest)
+                .where(
+                    OntologySemanticClarificationRequest.proposal_id == proposal_id,
+                    OntologySemanticClarificationRequest.status
+                    == SemanticClarificationStatus.OPEN.value,
+                )
+                .order_by(
+                    OntologySemanticClarificationRequest.created_at.desc(),
+                    OntologySemanticClarificationRequest.id.desc(),
+                )
+            ).all()
+        )
+        for row in rows:
+            row.status = SemanticClarificationStatus.SUPERSEDED.value
+        if rows:
+            self._session.flush()
+        return [row.id for row in rows]
+
+    def mark_clarification_answered(
+        self,
+        row: OntologySemanticClarificationRequest,
+        *,
+        answer_text: str,
+        answered_by_actor_id: uuid.UUID,
+        evidence_refs: list[Any] | None = None,
+    ) -> OntologySemanticClarificationRequest:
+        row.status = SemanticClarificationStatus.ANSWERED.value
+        row.answer_text = answer_text
+        row.answered_by_actor_id = answered_by_actor_id
+        row.answered_at = datetime.now().astimezone()
+        row.evidence_refs = evidence_refs or []
+        self._session.flush()
+        return row
+
+    def mark_clarification_resolved(
+        self,
+        row: OntologySemanticClarificationRequest,
+        *,
+        resulting_review_id: uuid.UUID,
+    ) -> OntologySemanticClarificationRequest:
+        row.status = SemanticClarificationStatus.RESOLVED.value
+        row.resulting_review_id = resulting_review_id
+        self._session.flush()
+        return row

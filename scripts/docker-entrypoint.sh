@@ -11,7 +11,8 @@ case "$cmd" in
       --port "${HTTP_PORT:-8000}"
     ;;
   migrate)
-    exec alembic upgrade head
+    alembic upgrade head
+    exec python -m semantic_memory.seeding
     ;;
   mcp)
     exec semantic-memory-mcp

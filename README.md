@@ -6,21 +6,44 @@
   <img src="assets/wordmark.svg" alt="AtlasSynapse" width="420" />
 </p>
 
-## Your life already has a data model. It is just scattered everywhere.
+<br>
 
-Imagine using an AI assistant for the boring parts of everyday life.
+<h2 align="center">
+AI can remember text.<br>
+AtlasSynapse gives it a world model.
+</h2>
 
-You send it a receipt for a new laptop.
+<p align="center">
+<strong>Structured, temporal and traceable knowledge for AI agents.</strong>
+</p>
 
-A few months later, you upload the warranty.
+<br>
 
-Later still, there is an email confirming that the manufacturer extended the warranty by another year.
+---
 
-The laptop also appears on an invoice from the shop, a bank transaction, and perhaps eventually in an insurance claim.
+## Memory is not the same as knowledge
 
-Each individual piece of information is easy to understand.
+An assistant can remember:
 
-The useful part is everything connecting them:
+> The laptop was bought in 2026 and has an extended warranty.
+
+Useful. But eventually you need to know:
+
+> Where was it bought?
+>
+> Which receipt proves it?
+>
+> When does the warranty expire?
+>
+> Which email changed that expiry date?
+>
+> Which source should we trust?
+
+Those questions are not about remembering more text.
+
+They are about **entities, relationships, time and evidence**.
+
+AtlasSynapse makes that structure explicit:
 
 ```text
 Laptop
@@ -33,55 +56,41 @@ Laptop
  └── owned_by → Person
 ```
 
-Now imagine the same thing happening across years of:
+Instead of preserving only what was said, AtlasSynapse preserves what exists, how things relate, when facts were true, and where those facts came from.
 
-- receipts;
-- invoices;
-- taxes;
-- insurance policies;
-- subscriptions;
-- contracts;
-- school and childcare expenses;
-- household equipment;
-- warranties;
-- reimbursements;
-- vehicles;
-- travel bookings;
-- administrative deadlines.
+The result is knowledge an agent can query, connect, trace, challenge and evolve.
 
-An AI agent can remember useful information about all of this.
+And this is not just about laptops.
 
-But memory is often deliberately compact: important details are summarized into text so they remain useful within a limited context.
+Your life already has a data model. It is just scattered everywhere.
 
-That is very different from preserving the underlying structure.
+Receipts, taxes, insurance, subscriptions, warranties, vehicles, travel, projects and deadlines all form the same kind of connected information.
 
-Eventually, questions appear such as:
-
-> Which expenses from last year might be relevant when preparing my taxes?
+Eventually the questions become:
 
 > Do I still have proof of purchase for the washing machine?
-
+>
 > When does its warranty expire?
-
+>
 > Which invoice corresponds to this bank payment?
-
-> Did I already receive the reimbursement associated with this expense?
-
+>
 > Which active contracts have a cancellation deadline in the next three months?
-
+>
 > Why do we believe this subscription costs €29.99 rather than €24.99?
 
 At that point, remembering more text is not quite enough.
 
-The problem has become one of **entities, relationships, time, provenance and constraints**.
+The problem has become one of **connected facts, time, evidence and constraints**.
 
 That is what AtlasSynapse is for.
 
 ## What AtlasSynapse is
 
-AtlasSynapse is a **self-hosted semantic memory layer for AI agents**.
+AtlasSynapse is a **self-hosted structured knowledge and memory layer for AI agents**.
 
-It stores knowledge as explicit entities, relationships, events, attributes, dates, evidence and provenance rather than reducing everything to a collection of textual memories.
+It stores knowledge as explicit things, relationships, events, dates, evidence and provenance — not only textual summaries.
+
+Plain text is wonderfully expressive, but much of its structure remains implicit. An ontology makes selected parts of that structure explicit: what something is, how it relates to other things, when a fact is valid, and why we believe it.
 
 A conventional memory might preserve:
 
@@ -111,47 +120,37 @@ The distinction matters.
 
 The information can now be queried independently, connected to new information later, and traced back to its source.
 
-## Memory is useful. Structure is what makes it powerful.
+### Why not just store text?
 
-AtlasSynapse does not try to replace an agent's normal memory.
+Plain text is excellent at preserving nuance, context and explanation — preferences, habits, and compact conversational context.
 
-The two serve different purposes.
+AtlasSynapse does not try to replace that memory.
 
-Textual memory is excellent for things like:
+But text often leaves important structure implicit.
 
-> The user prefers receiving invoices electronically.
-
-or:
-
-> The family usually books summer holidays several months ahead.
-
-Those are compact pieces of context.
-
-But some knowledge naturally has more structure:
+For example:
 
 ```text
-Person
-    ↓ pays
-Invoice
-    ↓ relatesTo
-ChildcareService
-    ↓ occurredDuring
-TaxYear
+Alice became Product Manager at Airbus in 2018.
 ```
 
-or:
+A human immediately understands:
 
 ```text
-Subscription
-    ├── provider
-    ├── price
-    ├── billing_period
-    ├── started_at
-    ├── cancellation_notice
-    └── payment_method
+Alice             → Person
+Product Manager   → Role
+Airbus            → Organization
+
+Alice             → holdsRole → Product Manager
+Product Manager   → roleAt    → Airbus
+valid_from        → 2018
 ```
 
-Once that structure exists, an agent can retrieve exactly the pieces it needs instead of depending entirely on a prose summary.
+Making that structure explicit changes what an agent can reliably do with the information.
+
+It can query it, combine it with other facts, apply temporal reasoning, detect conflicts, preserve provenance, and reuse the same concepts across different domains.
+
+> **Text preserves meaning. Ontology makes selected meaning explicit.**
 
 ## Knowledge accumulates
 
@@ -199,9 +198,7 @@ An agent can then inspect the sources and resolve the discrepancy.
 
 AtlasSynapse does not have a predefined `receipt` database, a `tax` database and a `warranty` database.
 
-Those are semantic concepts.
-
-The underlying model remains generic:
+Those are semantic concepts in one shared model:
 
 ```text
 Class       What kinds of things exist
@@ -211,24 +208,36 @@ Statement   A claim about that thing
 Source      Why that claim exists
 ```
 
-This means the same system can eventually represent:
+The same substrate can represent people, companies, projects, documents, equipment, contracts, experiments, decisions, expenses, properties, events, and places — because domain meaning lives above the storage layer, not inside a growing set of specialty tables.
+
+## Stable physical schema, evolving meaning
+
+A conventional application often hard-codes domain concepts into tables and columns: `persons`, `projects`, `warranties`, `insurance_claims`, and the join tables that connect them.
+
+That approach is appropriate when the domain is known and stable.
+
+AtlasSynapse is designed for a knowledge model that keeps evolving — including concepts that were not anticipated when the database was designed.
+
+In AtlasSynapse, new classes, predicates, entities, and statements are normally added as **data**, not by creating new SQL tables, columns, or join tables.
+
+So a relationship such as:
 
 ```text
-people
-companies
-projects
-documents
-equipment
-contracts
-experiments
-decisions
-expenses
-properties
-events
-places
+Laptop → insuredBy → InsurancePolicy_17
 ```
 
-without creating a new SQL schema for every domain.
+should not require an `ALTER TABLE` or a new application model. If `insuredBy` or `InsurancePolicy` is missing, that is an ontology/data question — not a storage redesign.
+
+Architecturally, AtlasSynapse separates:
+
+1. **Stable physical schema** — PostgreSQL tables for entities, statements, provenance, and ontology records;
+2. **Evolving semantic model** — classes, predicates, and constraints that describe what the knowledge means.
+
+The ontology evolves above the storage substrate. Ordinary semantic expansion should not require a migration.
+
+> **New meaning should usually create new data, not new database structures.**
+
+When an agent needs a concept that does not exist yet, it proposes one. Quality gates and semantic review decide whether to accept it. If accepted, the ontology evolves — still without changing the core PostgreSQL schema.
 
 ## An ontology that can evolve
 
@@ -250,7 +259,7 @@ InsuranceClaim
 CancellationWindow
 ```
 
-AtlasSynapse therefore separates two concerns.
+That is why AtlasSynapse separates routine knowledge writes from governed ontology change.
 
 ### Knowledge plane
 
@@ -277,20 +286,145 @@ For example:
 CancellationWindow
 ```
 
-Before adding it, AtlasSynapse can check:
+Ontology changes pass through a sequence of **quality gates**:
 
-1. whether it already exists;
-2. whether an alias already represents it;
-3. whether another concept is semantically equivalent;
-4. whether the proposal is structurally valid;
-5. whether it conflicts with the existing ontology;
-6. optionally, whether semantic review considers it genuinely useful.
+1. **Deterministic gates** — existence, aliases, structural validity, cycles, domain/range compatibility, and related hard rules;
+2. **Semantic review gate** — optional LLM judgment of meaning, equivalence, and modeling fit;
+3. **Clarification / challenge loop** — when meaning is ambiguous or a negative decision can be overturned with new reasoning;
+4. **Authorized apply** — only then may an approved proposal mutate the ontology.
 
-Only then does the ontology evolve.
+AtlasSynapse can let an LLM review ontology changes, but only inside that deterministic quality-gate system — with clarification, challenge, provenance, cost tracking, and safe fallback.
 
-The physical PostgreSQL schema remains stable.
+Accepted proposals add meaning as ontology data. The core physical schema stays put.
 
-**Meaning evolves as data.**
+> **Meaning evolves as data.**
+
+### How ontology changes are reviewed
+
+Routine knowledge does not need an LLM.
+
+If AtlasSynapse learns:
+
+```text
+Laptop → purchase_price → €1,499
+```
+
+that is a normal deterministic write.
+
+Changing the ontology is different.
+
+Suppose an agent proposes a new concept:
+
+```text
+JobTitle
+```
+
+AtlasSynapse first runs deterministic quality gates:
+
+```text
+Does the key already exist?
+Does an alias already represent it?
+Is the proposed structure valid?
+Would it create an invalid cycle?
+Are its domain and range compatible?
+```
+
+If one of those hard rules fails, the proposal stops there.
+
+The LLM cannot override them.
+
+If the proposal is structurally valid but its meaning is uncertain, AtlasSynapse can ask a semantic reviewer.
+
+For example:
+
+```text
+Proposed: JobTitle
+Existing: Role
+```
+
+The reviewer may conclude:
+
+```text
+reuse Role
+```
+
+because the new concept would not add meaningful semantics.
+
+But another proposal may genuinely be unclear:
+
+```text
+Proposed: CapabilityArea
+Existing: Skill
+```
+
+Instead of guessing, AtlasSynapse can return a clarification request:
+
+> How does CapabilityArea differ from Skill?
+>
+> Give an example that belongs to CapabilityArea but should not be represented as a Skill.
+
+The requesting agent answers that specific question using a clarification ID created by AtlasSynapse.
+
+For example:
+
+```text
+CapabilityArea is a domain grouping such as Data Engineering.
+Skill is a concrete competence such as SQL optimisation.
+```
+
+AtlasSynapse then performs another semantic review using the additional explanation.
+
+The result may become:
+
+```text
+approve
+```
+
+The same mechanism allows a negative semantic decision to be challenged when the proposer has new reasoning or evidence.
+
+The important distinction is:
+
+```text
+deterministic rules decide what is structurally allowed
+LLM review helps judge meaning
+AtlasSynapse owns the lifecycle and identifiers
+```
+
+The LLM cannot directly modify the ontology.
+
+Every review is recorded with its model decision, confidence, selected context, token usage, cost and review lineage.
+
+If the reviewer is unavailable, uncertain, or lacks enough context, AtlasSynapse falls back to manual review rather than silently approving the change.
+
+```mermaid
+flowchart TD
+  proposal([Proposal]) --> gates[Deterministic quality gates]
+  gates -->|hard failure| rejectInvalid(["Reject (invalid)"])
+  gates -->|structurally valid| semantic[Semantic review]
+
+  semantic --> approve([Approve])
+  semantic --> rejectReuse(["Reject (reuse)"])
+  semantic --> clarity[Needs clarity]
+
+  clarity --> ask[Clarification request]
+  ask --> answer[Proposer answers]
+  answer --> rereview[Re-review]
+  rereview --> approve
+  rereview --> rejectReuse
+  rereview --> clarity
+
+  classDef start fill:#E8F7F5,stroke:#2A8F85,color:#0F3F3B,stroke-width:2px
+  classDef process fill:#EEF2F6,stroke:#5B6B7C,color:#1F2933,stroke-width:1.5px
+  classDef reject fill:#FDECEC,stroke:#C23B3B,color:#5C1414,stroke-width:2px
+  classDef approve fill:#E8F7EF,stroke:#2F8F5B,color:#145C32,stroke-width:2px
+  classDef clarify fill:#EAF2FB,stroke:#3B6EA5,color:#163A5F,stroke-width:1.5px
+
+  class proposal start
+  class gates,semantic,rereview process
+  class rejectInvalid,rejectReuse reject
+  class approve approve
+  class clarity,ask,answer clarify
+```
 
 ## Provenance is part of the knowledge
 
@@ -346,6 +480,8 @@ create_entity
 assert_statement
 assert_batch
 supersede_statement
+ensure_source
+ingest_source_content
 add_evidence
 merge_entity
 
@@ -354,6 +490,8 @@ search_entities
 get_entity_neighborhood
 get_timeline
 explain_statement
+get_source_content
+search_source_content
 find_conflicts
 
 get_class
@@ -445,7 +583,7 @@ Already delivered includes:
 
 - PostgreSQL schema, migrations, ontology bootstrap, health checks, and CI;
 - actors, entities, statements, temporal validity, provenance, and idempotent `operation_log` auditing;
-- conflicts, batch ingestion, ontology read plane, and governed proposals with semantic review;
+- conflicts, batch ingestion, ontology read plane, and governed ontology proposals with deterministic quality gates, production LLM semantic review, clarification/challenge workflows, and auditable review lineage;
 - database-backed retrieval with transparent ranking signals and `llm_call_log` observability;
 - Docker/Compose packaging, HTTP API authentication, MCP stdio transport, and deployment docs;
 - `agent_feedback` reporting (`report_feedback`) with fingerprint dedupe and admin resolve;

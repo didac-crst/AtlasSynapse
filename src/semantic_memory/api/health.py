@@ -11,7 +11,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from semantic_memory.db import get_db_session
-from semantic_memory.schemas.health import HealthResponse, ReadyResponse
+from semantic_memory.runtime_info import runtime_config
+from semantic_memory.schemas.health import ConfigHealthResponse, HealthResponse, ReadyResponse
 
 router = APIRouter(tags=["health"])
 logger = logging.getLogger(__name__)
@@ -34,6 +35,12 @@ def _check_migrations(session: Session) -> tuple[bool, str]:
 def live() -> HealthResponse:
     """Process liveness probe."""
     return HealthResponse(status="ok")
+
+
+@router.get("/health/config", response_model=ConfigHealthResponse)
+def config() -> ConfigHealthResponse:
+    """Expose non-secret runtime config for API/MCP deploy parity checks."""
+    return ConfigHealthResponse(status="ok", config=runtime_config())
 
 
 @router.get("/health/ready", response_model=ReadyResponse)

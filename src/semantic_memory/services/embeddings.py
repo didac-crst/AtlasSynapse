@@ -210,21 +210,54 @@ class EmbeddingService:
     def make_similarity_gate(self) -> Any:
         """Advisory gate: similarity never accepts or fails a proposal alone."""
 
-        def _gate(proposal_type: ProposalType, payload: dict[str, Any]) -> GateOutcome | None:
+        def _gate(
+            proposal_type: ProposalType,
+            payload: dict[str, Any],
+            runtime: dict[str, Any] | None = None,
+        ) -> GateOutcome | None:
+            runtime = runtime or {}
+            from semantic_memory.services.review_context import lexical_similarity_candidates
+
+            lexical = lexical_similarity_candidates(
+                self._session, proposal_type=proposal_type, payload=payload, limit=5
+            )
+            # After hard deterministic failure: never spend embedding/API cost.
+            # Cheap local lexical candidates may still enrich rejection feedback.
+            if runtime.get("deterministic_failed") and self.enabled:
+                return GateOutcome(
+                    "similarity",
+                    GateDecision.PASS,
+                    {
+                        "skipped": "deterministic_failure_skip_embeddings",
+                        "lexical_candidates": lexical,
+                    },
+                )
             if not self.enabled:
                 return GateOutcome(
                     "similarity",
                     GateDecision.PASS,
-                    {"enabled": False, "reason": "embeddings_disabled"},
+                    {
+                        "enabled": False,
+                        "reason": "embeddings_disabled",
+                        "lexical_candidates": lexical,
+                    },
                 )
             object_type, text, proposed_key = _proposal_similarity_target(proposal_type, payload)
             if object_type is None or text is None:
-                return GateOutcome("similarity", GateDecision.PASS, {"skipped": True})
+                return GateOutcome(
+                    "similarity",
+                    GateDecision.PASS,
+                    {"skipped": True, "lexical_candidates": lexical},
+                )
             candidates = self.find_similar(object_type=object_type, text=text, limit=5)
             # Ignore self-key collisions handled by existing_key.
             filtered = [item for item in candidates if item.key != proposed_key]
             if not filtered:
-                return GateOutcome("similarity", GateDecision.PASS, {"candidates": []})
+                return GateOutcome(
+                    "similarity",
+                    GateDecision.PASS,
+                    {"candidates": [], "lexical_candidates": lexical},
+                )
             top = filtered[0]
             details = {
                 "candidates": [
@@ -236,7 +269,8 @@ class EmbeddingService:
                         "label": item.label,
                     }
                     for item in filtered
-                ]
+                ],
+                "lexical_candidates": lexical,
             }
             # Similarity is advisory only: never FAIL or REUSE_RECOMMENDED.
             reason = "high_similarity_candidate" if top.score >= 0.95 else "similar_candidates"
@@ -246,6 +280,8 @@ class EmbeddingService:
                 {**details, "reason": reason},
             )
 
+        _gate.gate_name = "similarity"  # type: ignore[attr-defined]
+        _gate.skip_external_on_deterministic_fail = True  # type: ignore[attr-defined]
         return _gate
 
     def _resolve_label(

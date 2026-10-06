@@ -7,6 +7,8 @@ from alembic.config import Config
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session
 
+from semantic_memory.repositories.ontology import OntologyRepository
+from semantic_memory.seeding.bootstrap import bootstrap_system_ontology
 from semantic_memory.seeding.ontology import (
     CORE_CLASSES,
     CORE_INHERITANCE,
@@ -42,6 +44,10 @@ def test_fresh_database_migrates_from_zero(alembic_cfg: Config) -> None:
         "statement",
         "statement_qualifier",
         "source",
+        "source_content_revision",
+        "source_system_registry",
+        "source_system_alias",
+        "source_identity_conflict",
         "statement_evidence",
         "external_reference",
         "ontology_proposal",
@@ -55,12 +61,14 @@ def test_fresh_database_migrates_from_zero(alembic_cfg: Config) -> None:
         "embedding",
         "llm_call_log",
         "agent_feedback",
+        "ontology_semantic_review",
+        "ontology_semantic_challenge",
     }
     assert required_tables.issubset(set(inspector.get_table_names()))
 
     with engine.connect() as conn:
         version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        assert version == "d4b02e8f3c5a"
+        assert version == "a9c4e1f72b8d"
         class_count = conn.execute(
             text(
                 "SELECT COUNT(*) FROM ontology_class c "
@@ -127,3 +135,14 @@ def test_seed_is_deterministic(db_session: Session) -> None:
         ).scalars()
     )
     assert predicate_keys == {item[0] for item in CORE_PREDICATES}
+
+
+def test_bootstrap_installs_identity_graph_predicates(db_session: Session) -> None:
+    first = bootstrap_system_ontology(db_session)
+    ontology = OntologyRepository(db_session)
+    for key in ("employedBy", "spouseOf", "parentOf"):
+        row = ontology.get_predicate_by_key(namespace_key=CORE_NAMESPACE_KEY, predicate_key=key)
+        assert row is not None, f"missing identity graph predicate {key}"
+    assert first["identity_graph"]["created_predicates"] in {0, 3}
+    second = bootstrap_system_ontology(db_session)
+    assert second["identity_graph"]["created_predicates"] == 0

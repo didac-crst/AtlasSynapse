@@ -1,0 +1,68 @@
+{
+  "version": "semantic-review-eval-v3",
+  "prompt_template_version": "semantic-review-v3.1",
+  "model": "gpt-5.6-terra",
+  "mode": "shadow",
+  "captured_at": "2026-10-04T19:45:00Z",
+  "notes": [
+    "Breadth-test baseline before canonical-model rules / derivation hints.",
+    "Do not treat this as a promotion gate; it is the comparison snapshot.",
+    "Main gap: AtlasSynapse modeling policy (derivable shortcuts, metadata-as-ontology), not local similarity."
+  ],
+  "promotion_summary": {
+    "compared": 43,
+    "wrong_confident_e2e": 15,
+    "unsafe_wrong_confident_initial": 13,
+    "unsafe_wrong_confident_e2e": 14,
+    "conservative_wrong_confident_e2e": 1,
+    "ambiguous_with_clarification": 6,
+    "ambiguous_missing_clarification": 6,
+    "clarification_converged": 3,
+    "clarification_failed": 2,
+    "challenge_converged": 2,
+    "challenge_failed": 0,
+    "deterministic_ok": 1,
+    "deterministic_bad": 0,
+    "clarification_resolution_rate": 0.45454545454545453,
+    "clarification_rounds_per_proposal": 1.0,
+    "promotion_ready": false
+  },
+  "policy_buckets": {
+    "derivable_shortcut": [
+      "pred_has_employer_multihop",
+      "pred_employed_by_multihop_redundant",
+      "pred_has_current_employer_denorm",
+      "pred_current_role_temporal_shortcut"
+    ],
+    "metadata_as_ontology": [
+      "historical_role_temporality_leak",
+      "verified_skill_provenance_leak",
+      "probable_goal_confidence_leak"
+    ],
+    "namespace_core_leakage": [
+      "product_specific_alpha_loop_signal",
+      "domain_trade_signal_in_core",
+      "user_specific_didac_career_goal"
+    ],
+    "directionality_semantic_ambiguity": [
+      "pred_used_by_directionality",
+      "pred_avoids_negative_semantics",
+      "composition_professional_skill",
+      "event_vs_state_employment_underspecified"
+    ]
+  },
+  "unsafe_wrong_confident_initial_cases": [
+    "event_vs_state_employment_underspecified",
+    "pred_used_by_directionality",
+    "pred_has_employer_multihop",
+    "verified_skill_provenance_leak",
+    "product_specific_alpha_loop_signal",
+    "domain_trade_signal_in_core",
+    "misleading_label_skill_grouping",
+    "pred_employed_by_multihop_redundant",
+    "pred_has_current_employer_denorm",
+    "pred_current_role_temporal_shortcut",
+    "composition_professional_skill",
+    "pred_avoids_negative_semantics"
+  ]
+}

@@ -136,6 +136,10 @@ class DatabaseLlmCallLogger:
         )
 
     def _resolve_cost(self, *, row: LlmCallLog, completion: LlmCallCompletion) -> CostEstimate:
+        cfg = self._settings
+        use_env_rates = (
+            row.provider == cfg.semantic_review_provider and row.model == cfg.semantic_review_model
+        )
         return estimate_cost(
             provider=row.provider,
             model=row.model,
@@ -143,4 +147,11 @@ class DatabaseLlmCallLogger:
             output_tokens=completion.output_tokens,
             provider_reported_cost=completion.provider_reported_cost,
             provider_reported_currency=completion.provider_reported_currency,
+            input_rate_per_token=(
+                cfg.semantic_review_input_rate_per_token if use_env_rates else None
+            ),
+            output_rate_per_token=(
+                cfg.semantic_review_output_rate_per_token if use_env_rates else None
+            ),
+            currency=cfg.semantic_review_currency if use_env_rates else None,
         )

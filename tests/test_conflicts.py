@@ -227,11 +227,18 @@ def test_merge_entity_preserves_history(db_session: Session) -> None:
     assert merged.source.status == EntityStatus.MERGED
     assert merged.source.merged_into_entity_id == target_id
     assert merged.target.status == EntityStatus.ACTIVE
+    assert "Source Doc" in merged.target.aliases
     statement = db_session.scalars(
-        select(Statement).where(Statement.subject_entity_id == source_id)
+        select(Statement).where(Statement.subject_entity_id == target_id)
     ).one()
-    assert statement.subject_entity_id == source_id
-    # Merged source is no longer an identity candidate.
+    assert statement.subject_entity_id == target_id
+    assert (
+        db_session.scalars(
+            select(Statement).where(Statement.subject_entity_id == source_id)
+        ).first()
+        is None
+    )
+    # Source name redirects to the surviving target via transferred alias.
     reuse = EntityService(db_session).create_entity(
         CreateEntityRequest(
             actor_key="writer",
@@ -241,6 +248,6 @@ def test_merge_entity_preserves_history(db_session: Session) -> None:
             class_key="Document",
         )
     )
-    assert reuse.outcome.value == "CREATE"
+    assert reuse.outcome.value == "REUSE"
     assert reuse.entity is not None
-    assert reuse.entity.id != source_id
+    assert reuse.entity.id == target_id

@@ -1,0 +1,1080 @@
+{
+  "version": "semantic-review-eval-v3",
+  "notes": [
+    "Non-production calibration corpus for context builder + prompt quality.",
+    "Depth over lexical near-duplicates: multi-hop redundancy, modeling philosophy, cross-class ambiguity.",
+    "Under mock: drive expected_model_decision via metadata (orchestration only).",
+    "Under shadow: call Terra; score end-to-end after clarification/challenge.",
+    "Promotion unchanged: unsafe_wrong_confident_initial==0; ambiguous cases issue clarification; e2e converges; no deterministic bypass.",
+    "Proposal outcomes stay non-authoritative in shadow (always MANUAL_REVIEW)."
+  ],
+  "cases": [
+    {
+      "id": "dup_job_title_vs_role",
+      "category": "clear_duplicate",
+      "risk_class": "unsafe",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "JobTitle",
+        "label": "Job Title",
+        "description": "A position or title held by a person in an organization.",
+        "parent_keys": [
+          "Thing"
+        ]
+      },
+      "human_expected": "reject",
+      "expected_related_key": "Role",
+      "expected_reason_codes": [
+        "near_duplicate"
+      ],
+      "failure_mode": "near_duplicate",
+      "notes": "Clear duplicate of Role.",
+      "policy_bucket": "clear_duplicate",
+      "canonical_model_case": false
+    },
+    {
+      "id": "distinct_responsibility_vs_role",
+      "category": "clear_distinct_sibling",
+      "risk_class": "neutral",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "Responsibility",
+        "label": "Responsibility",
+        "description": "A duty or obligation that can exist independently of a particular holder and may be attached to a Role; not itself a position held by an agent.",
+        "parent_keys": [
+          "Thing"
+        ]
+      },
+      "human_expected": "approve",
+      "expected_related_key": "Role",
+      "failure_mode": "clear_approval",
+      "notes": "Explicit duty-vs-position distinction should approve.",
+      "policy_bucket": "clear_distinct",
+      "canonical_model_case": false
+    },
+    {
+      "id": "broad_narrow_technical_skill_subclass",
+      "category": "broad_vs_narrow",
+      "risk_class": "neutral",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "TechnicalSkill",
+        "label": "Technical Skill",
+        "description": "A specialization of Skill covering engineering and technical competences such as SQL optimization or systems programming. Intended as a subclass of Skill, not a sibling replacement.",
+        "parent_keys": [
+          "Skill"
+        ]
+      },
+      "human_expected": "approve",
+      "expected_related_key": "Skill",
+      "failure_mode": "clear_approval",
+      "notes": "Narrow subclass under Skill should approve.",
+      "policy_bucket": "broad_vs_narrow",
+      "canonical_model_case": false
+    },
+    {
+      "id": "broad_narrow_technical_skill_sibling",
+      "category": "broad_vs_narrow",
+      "risk_class": "unsafe",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "TechnicalSkillSibling",
+        "label": "Technical Skill",
+        "description": "An ability an agent has in technical domains. Same scope as Skill but only for technical work.",
+        "parent_keys": [
+          "Thing"
+        ]
+      },
+      "human_expected": "reject",
+      "expected_related_key": "Skill",
+      "failure_mode": "near_duplicate",
+      "notes": "Sibling restating Skill should reject/reuse.",
+      "policy_bucket": "broad_vs_narrow",
+      "canonical_model_case": false
+    },
+    {
+      "id": "ambiguous_capability_area",
+      "category": "category_vs_capability",
+      "risk_class": "unsafe",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "CapabilityArea",
+        "label": "Capability Area",
+        "description": "Some kind of ability or focus area related to agents.",
+        "parent_keys": [
+          "Thing"
+        ]
+      },
+      "initial_human_expected": "manual_review",
+      "expects_clarification": true,
+      "expected_related_key": "Skill",
+      "clarification_response": "CapabilityArea is a domain grouping such as Data Engineering. Skill is a concrete competence such as SQL optimization. A person may have multiple Skills grouped under one CapabilityArea; having a CapabilityArea does not imply possessing every Skill in that area.",
+      "clarification_human_expected": "approve",
+      "failure_mode": "ambiguity",
+      "notes": "Vague multi-model wording \u2192 clarify \u2192 approve.",
+      "policy_bucket": "directionality_semantic_ambiguity",
+      "canonical_model_case": false
+    },
+    {
+      "id": "instance_like_product_manager",
+      "category": "instance_like_class_misuse",
+      "risk_class": "unsafe",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "ProductManager",
+        "label": "Product Manager",
+        "description": "The product manager job; a specific organizational position people hold.",
+        "parent_keys": [
+          "Thing"
+        ]
+      },
+      "human_expected": "reject",
+      "expected_related_key": "Role",
+      "failure_mode": "near_duplicate",
+      "notes": "Instance-like Role should be a Role entity, not a new class.",
+      "policy_bucket": "clear_duplicate",
+      "canonical_model_case": false
+    },
+    {
+      "id": "event_vs_state_employment_underspecified",
+      "category": "event_vs_durable_state",
+      "risk_class": "conservative",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "EmploymentRelation",
+        "label": "Employment Relation",
+        "description": "A person's ongoing employment relationship.",
+        "parent_keys": [
+          "Thing"
+        ]
+      },
+      "human_expected": "reject",
+      "expected_related_key": "Employment",
+      "expected_related_keys": [
+        "Employment",
+        "Role",
+        "RelationshipContext"
+      ],
+      "failure_mode": "near_duplicate",
+      "notes": "Covered by existing Employment RelationshipContext; should reuse/reject.",
+      "policy_bucket": "derivable_shortcut",
+      "canonical_model_case": true
+    },
+    {
+      "id": "transition_promotion_as_event",
+      "category": "transition_vs_state",
+      "risk_class": "neutral",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "Promotion",
+        "label": "Promotion",
+        "description": "An Event in which an agent changes from one Role to a higher Role within an organization. Not the Role itself, and not an ongoing employment state.",
+        "parent_keys": [
+          "Event"
+        ]
+      },
+      "human_expected": "approve",
+      "expected_related_keys": [
+        "Event",
+        "Role"
+      ],
+      "failure_mode": "clear_approval",
+      "notes": "Event-like transition distinct from Role.",
+      "policy_bucket": "clear_distinct",
+      "canonical_model_case": false
+    },
+    {
+      "id": "ambiguous_career_transition_plan",
+      "category": "goal_vs_decision",
+      "risk_class": "unsafe",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "CareerTransitionPlan",
+        "label": "Career Transition Plan",
+        "description": "Something about changing careers that an agent wants or decides.",
+        "parent_keys": [
+          "Thing"
+        ]
+      },
+      "initial_human_expected": "manual_review",
+      "expects_clarification": true,
+      "expected_related_keys": [
+        "Goal",
+        "Decision"
+      ],
+      "clarification_response": "CareerTransitionPlan is a Goal: a desired future career state pursued over time. It is not a Decision event; decisions may be made in service of the plan but the plan itself is the desired outcome.",
+      "clarification_human_expected": "reject",
+      "failure_mode": "ambiguity",
+      "notes": "Vague initially; after clarifying it is just a Goal, reuse Goal rather than mint a subclass.",
+      "policy_bucket": "directionality_semantic_ambiguity",
+      "canonical_model_case": false
+    },
+    {
+      "id": "ambiguous_avoid_people_management",
+      "category": "preference_vs_constraint",
+      "risk_class": "unsafe",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "AvoidPeopleManagement",
+        "label": "Avoid People Management",
+        "description": "About not doing people management in a career.",
+        "parent_keys": [
+          "Thing"
+        ]
+      },
+      "initial_human_expected": "manual_review",
+      "expects_clarification": true,
+      "expected_related_keys": [
+        "Preference",
+        "Constraint"
+      ],
+      "clarification_response": "AvoidPeopleManagement is a Preference: a durable career tendency. It is not a hard Constraint that must be satisfied for validity of other assertions.",
+      "clarification_human_expected": "reject",
+      "failure_mode": "ambiguity",
+      "notes": "Vague initially; after clarifying it is just a Preference, reuse Preference.",
+      "policy_bucket": "directionality_semantic_ambiguity",
+      "canonical_model_case": false
+    },
+    {
+      "id": "architecture_thinking_as_preference",
+      "category": "skill_vs_preference",
+      "risk_class": "unsafe",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "ArchitectureThinking",
+        "label": "Architecture Thinking",
+        "description": "Prefers systems-level architectural reasoning when evaluating designs.",
+        "parent_keys": [
+          "Thing"
+        ]
+      },
+      "human_expected": "reject",
+      "expected_related_key": "Preference",
+      "failure_mode": "near_duplicate",
+      "notes": "Wording is preference language, not demonstrated competence.",
+      "policy_bucket": "directionality_semantic_ambiguity",
+      "canonical_model_case": false
+    },
+    {
+      "id": "architecture_design_as_skill",
+      "category": "skill_vs_preference",
+      "risk_class": "neutral",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "ArchitectureDesignSkill",
+        "label": "Architecture Design Skill",
+        "description": "Demonstrated ability to design system architectures across services, data flows, and operational constraints.",
+        "parent_keys": [
+          "Skill"
+        ]
+      },
+      "human_expected": "approve",
+      "expected_related_key": "Skill",
+      "failure_mode": "clear_approval",
+      "notes": "Demonstrated competence is Skill specialization.",
+      "policy_bucket": "clear_distinct",
+      "canonical_model_case": false
+    },
+    {
+      "id": "atlas_synapse_as_system",
+      "category": "system_vs_project",
+      "risk_class": "neutral",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "AtlasSynapsePlatform",
+        "label": "AtlasSynapse Platform",
+        "description": "An ongoing software platform used by agents for ontology governance and semantic memory; a durable System, not a time-bounded development effort.",
+        "parent_keys": [
+          "System"
+        ]
+      },
+      "human_expected": "approve",
+      "expected_related_keys": [
+        "System",
+        "Project"
+      ],
+      "failure_mode": "clear_approval",
+      "notes": "Ongoing platform \u2192 System.",
+      "policy_bucket": "clear_distinct",
+      "canonical_model_case": false
+    },
+    {
+      "id": "atlas_synapse_build_as_project",
+      "category": "system_vs_project",
+      "risk_class": "neutral",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "AtlasSynapseBuild",
+        "label": "AtlasSynapse Build",
+        "description": "A time-bounded development effort to build AtlasSynapse with start/end and deliverables; a Project/Activity, not the lasting platform itself.",
+        "parent_keys": [
+          "Project"
+        ]
+      },
+      "human_expected": "approve",
+      "expected_related_keys": [
+        "Project",
+        "System"
+      ],
+      "failure_mode": "clear_approval",
+      "notes": "Development effort \u2192 Project.",
+      "policy_bucket": "clear_distinct",
+      "canonical_model_case": false
+    },
+    {
+      "id": "ambiguous_platform_org_vs_system",
+      "category": "organization_vs_system",
+      "risk_class": "unsafe",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "Platform",
+        "label": "Platform",
+        "description": "A platform that teams work with.",
+        "parent_keys": [
+          "Thing"
+        ]
+      },
+      "initial_human_expected": "manual_review",
+      "expects_clarification": true,
+      "expected_related_keys": [
+        "Organization",
+        "System"
+      ],
+      "failure_mode": "ambiguity",
+      "notes": "Ambiguous Organization vs System.",
+      "policy_bucket": "directionality_semantic_ambiguity",
+      "canonical_model_case": false
+    },
+    {
+      "id": "pred_relies_upon_vs_depends_on",
+      "category": "predicate_duplicate",
+      "risk_class": "unsafe",
+      "proposal_type": "predicate",
+      "payload": {
+        "namespace_key": "core",
+        "key": "reliesUpon",
+        "label": "relies upon",
+        "description": "Indicates that one entity depends on another entity to function.",
+        "value_kind": "entity",
+        "cardinality": "many",
+        "domain_keys": [
+          "Thing"
+        ],
+        "range_keys": [
+          "Thing"
+        ]
+      },
+      "human_expected": "reject",
+      "expected_related_key": "dependsOn",
+      "failure_mode": "similar_predicate",
+      "notes": "Near-duplicate of dependsOn.",
+      "policy_bucket": "clear_duplicate",
+      "canonical_model_case": false
+    },
+    {
+      "id": "pred_associated_with_vs_related_to",
+      "category": "predicate_related",
+      "risk_class": "unsafe",
+      "proposal_type": "predicate",
+      "payload": {
+        "namespace_key": "core",
+        "key": "associatedWith",
+        "label": "associated with",
+        "description": "Generic non-directional association between two things, without implying dependency, deployment, or participation.",
+        "value_kind": "entity",
+        "cardinality": "many",
+        "domain_keys": [
+          "Thing"
+        ],
+        "range_keys": [
+          "Thing"
+        ]
+      },
+      "human_expected": "reject",
+      "expected_related_key": "relatedTo",
+      "failure_mode": "similar_predicate",
+      "notes": "Should reuse relatedTo, not dependsOn.",
+      "policy_bucket": "clear_duplicate",
+      "canonical_model_case": false
+    },
+    {
+      "id": "pred_used_by_directionality",
+      "category": "predicate_directionality",
+      "risk_class": "conservative",
+      "proposal_type": "predicate",
+      "payload": {
+        "namespace_key": "core",
+        "key": "usedBy",
+        "label": "used by",
+        "description": "Links a System to an Agent that uses it. Direction is System\u2192Agent (the system is used by the agent), not a generic dependency between things.",
+        "value_kind": "entity",
+        "cardinality": "many",
+        "domain_keys": [
+          "System"
+        ],
+        "range_keys": [
+          "Agent"
+        ]
+      },
+      "initial_human_expected": "manual_review",
+      "expects_clarification": true,
+      "expected_related_keys": [
+        "dependsOn",
+        "deployedOn",
+        "relatedTo"
+      ],
+      "failure_mode": "ambiguity",
+      "notes": "Must not auto-reuse dependsOn; direction/semantics differ.",
+      "policy_bucket": "directionality_semantic_ambiguity",
+      "canonical_model_case": false
+    },
+    {
+      "id": "pred_has_employer_multihop",
+      "category": "inverse_multihop",
+      "risk_class": "unsafe",
+      "proposal_type": "predicate",
+      "payload": {
+        "namespace_key": "core",
+        "key": "hasEmployer",
+        "label": "has employer",
+        "description": "Links a Person directly to the Organization that employs them.",
+        "value_kind": "entity",
+        "cardinality": "many",
+        "domain_keys": [
+          "Person"
+        ],
+        "range_keys": [
+          "Organization"
+        ]
+      },
+      "human_expected": "reject",
+      "expected_related_keys": [
+        "holdsRole",
+        "roleAt"
+      ],
+      "failure_mode": "similar_predicate",
+      "notes": "Derivable via Person\u2192holdsRole\u2192Role\u2192roleAt\u2192Organization.",
+      "policy_bucket": "derivable_shortcut",
+      "canonical_model_case": true
+    },
+    {
+      "id": "pred_part_of_underspecified",
+      "category": "transitive_looking",
+      "risk_class": "conservative",
+      "proposal_type": "predicate",
+      "payload": {
+        "namespace_key": "core",
+        "key": "partOf",
+        "label": "part of",
+        "description": "Indicates that one thing is part of another.",
+        "value_kind": "entity",
+        "cardinality": "many",
+        "domain_keys": [
+          "Thing"
+        ],
+        "range_keys": [
+          "Thing"
+        ]
+      },
+      "initial_human_expected": "manual_review",
+      "expects_clarification": true,
+      "expected_related_keys": [
+        "relatedTo",
+        "dependsOn"
+      ],
+      "failure_mode": "ambiguity",
+      "notes": "Transitivity/domain semantics undefined.",
+      "policy_bucket": "directionality_semantic_ambiguity",
+      "canonical_model_case": false
+    },
+    {
+      "id": "pred_supersedes_lifecycle",
+      "category": "same_domain_range_different_meaning",
+      "risk_class": "neutral",
+      "proposal_type": "predicate",
+      "payload": {
+        "namespace_key": "core",
+        "key": "supersedes",
+        "label": "supersedes",
+        "description": "Lifecycle relation: the subject replaces the object as the current authoritative version or successor. Not a generic association and not a runtime dependency.",
+        "value_kind": "entity",
+        "cardinality": "many",
+        "domain_keys": [
+          "Thing"
+        ],
+        "range_keys": [
+          "Thing"
+        ]
+      },
+      "human_expected": "approve",
+      "expected_related_keys": [
+        "relatedTo",
+        "dependsOn"
+      ],
+      "failure_mode": "clear_approval",
+      "notes": "Same shape as relatedTo/dependsOn but distinct lifecycle semantics.",
+      "policy_bucket": "clear_distinct",
+      "canonical_model_case": false
+    },
+    {
+      "id": "role_assignment_vs_role",
+      "category": "lexical_family_different_role",
+      "risk_class": "neutral",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "RoleAssignment",
+        "label": "Role Assignment",
+        "description": "A RelationshipContext capturing that a specific Agent holds a specific Role for a period; not the Role type itself.",
+        "parent_keys": [
+          "RelationshipContext"
+        ]
+      },
+      "human_expected": "approve",
+      "expected_related_keys": [
+        "Role",
+        "RelationshipContext",
+        "Employment"
+      ],
+      "failure_mode": "clear_approval",
+      "notes": "Noun similarity to Role but different semantic role.",
+      "policy_bucket": "clear_distinct",
+      "canonical_model_case": false
+    },
+    {
+      "id": "role_change_as_event",
+      "category": "lexical_family_different_role",
+      "risk_class": "neutral",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "RoleChange",
+        "label": "Role Change",
+        "description": "An Event recording that an agent's Role changed at a point in time. Distinct from the durable Role concept and from ongoing RoleAssignment.",
+        "parent_keys": [
+          "Event"
+        ]
+      },
+      "human_expected": "approve",
+      "expected_related_keys": [
+        "Event",
+        "Role"
+      ],
+      "failure_mode": "clear_approval",
+      "notes": "RoleChange is Event-like, not Role.",
+      "policy_bucket": "clear_distinct",
+      "canonical_model_case": false
+    },
+    {
+      "id": "historical_role_temporality_leak",
+      "category": "temporal_semantics",
+      "risk_class": "unsafe",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "HistoricalRole",
+        "label": "Historical Role",
+        "description": "A Role that was held in the past. Used to distinguish former roles from current ones.",
+        "parent_keys": [
+          "Thing"
+        ]
+      },
+      "human_expected": "reject",
+      "expected_related_key": "Role",
+      "failure_mode": "near_duplicate",
+      "notes": "Temporality belongs on statements/validity windows, not a new class.",
+      "policy_bucket": "metadata_as_ontology",
+      "canonical_model_case": true
+    },
+    {
+      "id": "verified_skill_provenance_leak",
+      "category": "provenance_modeling",
+      "risk_class": "unsafe",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "VerifiedSkill",
+        "label": "Verified Skill",
+        "description": "A Skill that has been verified by evidence or a trusted source.",
+        "parent_keys": [
+          "Thing"
+        ]
+      },
+      "human_expected": "reject",
+      "expected_related_key": "Skill",
+      "failure_mode": "near_duplicate",
+      "notes": "Verification is statement/evidence metadata, not a subclass taxonomy.",
+      "policy_bucket": "metadata_as_ontology",
+      "canonical_model_case": true
+    },
+    {
+      "id": "probable_goal_confidence_leak",
+      "category": "confidence_modeling",
+      "risk_class": "unsafe",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "ProbableGoal",
+        "label": "Probable Goal",
+        "description": "A Goal that we are only somewhat confident about.",
+        "parent_keys": [
+          "Thing"
+        ]
+      },
+      "human_expected": "reject",
+      "expected_related_key": "Goal",
+      "failure_mode": "near_duplicate",
+      "notes": "Confidence belongs on the assertion, not the class.",
+      "policy_bucket": "metadata_as_ontology",
+      "canonical_model_case": true
+    },
+    {
+      "id": "user_specific_didac_career_goal",
+      "category": "user_specific_leak",
+      "risk_class": "unsafe",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "DidacCareerGoal",
+        "label": "Didac Career Goal",
+        "description": "Didac's personal career goal of becoming a principal engineer.",
+        "parent_keys": [
+          "Thing"
+        ]
+      },
+      "human_expected": "reject",
+      "expected_related_key": "Goal",
+      "failure_mode": "near_duplicate",
+      "notes": "User-specific instance should be a Goal entity, not ontology class.",
+      "policy_bucket": "namespace_core_leakage",
+      "canonical_model_case": true
+    },
+    {
+      "id": "product_specific_alpha_loop_signal",
+      "category": "product_specific_leak",
+      "risk_class": "conservative",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "AlphaLoopSignal",
+        "label": "Alpha Loop Signal",
+        "description": "A signal type used only inside the AlphaLoop product experiment.",
+        "parent_keys": [
+          "Thing"
+        ]
+      },
+      "human_expected": "reject",
+      "failure_mode": "near_duplicate",
+      "notes": "Product-specific concept should not enter core without reusable justification.",
+      "policy_bucket": "namespace_core_leakage",
+      "canonical_model_case": true
+    },
+    {
+      "id": "domain_trade_signal_in_core",
+      "category": "namespace_pressure",
+      "risk_class": "conservative",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "TradeSignal",
+        "label": "Trade Signal",
+        "description": "A market trading signal used by quantitative finance agents.",
+        "parent_keys": [
+          "Thing"
+        ]
+      },
+      "human_expected": "manual_review",
+      "failure_mode": "ambiguity",
+      "notes": "Domain-specific for core; conservative manual_review without forcing a core class.",
+      "policy_bucket": "namespace_core_leakage",
+      "canonical_model_case": true
+    },
+    {
+      "id": "challenge_responsibility_overturn",
+      "category": "challenge_overturn",
+      "risk_class": "neutral",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "ResponsibilityVague",
+        "label": "Responsibility",
+        "description": "A duty or obligation (initially underspecified).",
+        "parent_keys": [
+          "Thing"
+        ]
+      },
+      "initial_human_expected": "reject",
+      "expected_related_key": "Role",
+      "challenge_reason": "Role represents positions held by agents, while Responsibility represents duties that may exist independently of a particular holder and can be attached to a Role.",
+      "challenge_human_expected": "approve",
+      "failure_mode": "challenge_overturn",
+      "notes": "Meaningful distinction after challenge/clarification.",
+      "policy_bucket": "challenge",
+      "canonical_model_case": false
+    },
+    {
+      "id": "challenge_job_title_upheld",
+      "category": "challenge_upheld",
+      "risk_class": "unsafe",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "PositionLabel",
+        "label": "Position Label",
+        "description": "Another name for an organizational role or job position.",
+        "parent_keys": [
+          "Thing"
+        ]
+      },
+      "initial_human_expected": "reject",
+      "expected_related_key": "Role",
+      "challenge_reason": "Still think this is different somehow because naming preferences differ across teams and products.",
+      "challenge_human_expected": "uphold_rejection",
+      "failure_mode": "challenge_upheld",
+      "notes": "Usability preference is not semantic distinction.",
+      "policy_bucket": "challenge",
+      "canonical_model_case": false
+    },
+    {
+      "id": "clarification_capability_area_insufficient",
+      "category": "insufficient_clarification",
+      "risk_class": "unsafe",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "CapabilityAreaWeak",
+        "label": "Capability Area",
+        "description": "Some kind of ability or focus area related to agents.",
+        "parent_keys": [
+          "Thing"
+        ]
+      },
+      "initial_human_expected": "manual_review",
+      "expects_clarification": true,
+      "expected_related_key": "Skill",
+      "clarification_response": "It is different from Skill somehow, but I cannot explain the intended distinction yet.",
+      "clarification_human_expected": "manual_review",
+      "failure_mode": "ambiguity",
+      "notes": "Insufficient clarification must not force approve.",
+      "policy_bucket": "directionality_semantic_ambiguity",
+      "canonical_model_case": false
+    },
+    {
+      "id": "misleading_label_skill_grouping",
+      "category": "misleading_label",
+      "risk_class": "unsafe",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "SkillGrouping",
+        "label": "Skill",
+        "description": "A strategic domain grouping of competencies, not a concrete agent-held competence.",
+        "parent_keys": [
+          "Thing"
+        ]
+      },
+      "human_expected": "approve",
+      "expected_related_key": "Skill",
+      "failure_mode": "clear_approval",
+      "notes": "Misleading label 'Skill' but description already states grouping \u2260 competence; approve.",
+      "policy_bucket": "clear_distinct",
+      "canonical_model_case": false
+    },
+    {
+      "id": "novel_telemetry_channel",
+      "category": "good_novel_class",
+      "risk_class": "neutral",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "TelemetryChannel",
+        "label": "Telemetry Channel",
+        "description": "A named channel that carries telemetry streams between systems; not a Role, Skill, or Preference.",
+        "parent_keys": [
+          "Thing"
+        ]
+      },
+      "human_expected": "approve",
+      "failure_mode": "clear_approval",
+      "notes": "Genuinely novel infrastructure concept.",
+      "policy_bucket": "clear_distinct",
+      "canonical_model_case": false
+    },
+    {
+      "id": "novel_requires_approval_predicate",
+      "category": "good_novel_predicate",
+      "risk_class": "neutral",
+      "proposal_type": "predicate",
+      "payload": {
+        "namespace_key": "core",
+        "key": "requiresApproval",
+        "label": "requires approval",
+        "description": "Links a Decision to the Agent or Organization whose approval is required before the decision may be treated as authorized. Distinct from generic relatedTo and from actor participation.",
+        "value_kind": "entity",
+        "cardinality": "many",
+        "domain_keys": [
+          "Decision"
+        ],
+        "range_keys": [
+          "Agent"
+        ]
+      },
+      "human_expected": "approve",
+      "expected_related_keys": [
+        "relatedTo",
+        "actor"
+      ],
+      "failure_mode": "clear_approval",
+      "notes": "Structurally valid, semantically distinct approval relation.",
+      "policy_bucket": "clear_distinct",
+      "canonical_model_case": false
+    },
+    {
+      "id": "pred_employed_by_multihop_redundant",
+      "category": "multihop_reasoning",
+      "risk_class": "unsafe",
+      "proposal_type": "predicate",
+      "payload": {
+        "namespace_key": "core",
+        "key": "employedBy",
+        "label": "employed by",
+        "description": "Direct Person\u2192Organization employment link.",
+        "value_kind": "entity",
+        "cardinality": "many",
+        "domain_keys": [
+          "Person"
+        ],
+        "range_keys": [
+          "Organization"
+        ]
+      },
+      "human_expected": "reject",
+      "expected_related_keys": [
+        "holdsRole",
+        "roleAt"
+      ],
+      "failure_mode": "similar_predicate",
+      "notes": "Redundant with 2-hop Person\u2192holdsRole\u2192Role\u2192roleAt\u2192Organization.",
+      "policy_bucket": "derivable_shortcut",
+      "canonical_model_case": true
+    },
+    {
+      "id": "pred_has_current_employer_denorm",
+      "category": "derived_shortcut",
+      "risk_class": "unsafe",
+      "proposal_type": "predicate",
+      "payload": {
+        "namespace_key": "core",
+        "key": "hasCurrentEmployer",
+        "label": "has current employer",
+        "description": "Shortcut from Person to their current employing Organization, avoiding holdsRole/roleAt traversal.",
+        "value_kind": "entity",
+        "cardinality": "one",
+        "domain_keys": [
+          "Person"
+        ],
+        "range_keys": [
+          "Organization"
+        ]
+      },
+      "human_expected": "reject",
+      "expected_related_keys": [
+        "holdsRole",
+        "roleAt"
+      ],
+      "failure_mode": "similar_predicate",
+      "notes": "Denormalized shortcut of canonical Role model.",
+      "policy_bucket": "derivable_shortcut",
+      "canonical_model_case": true
+    },
+    {
+      "id": "pred_current_role_temporal_shortcut",
+      "category": "temporal_shortcut",
+      "risk_class": "unsafe",
+      "proposal_type": "predicate",
+      "payload": {
+        "namespace_key": "core",
+        "key": "currentRole",
+        "label": "current role",
+        "description": "The Role an Agent currently holds, as opposed to past roles.",
+        "value_kind": "entity",
+        "cardinality": "many",
+        "domain_keys": [
+          "Agent"
+        ],
+        "range_keys": [
+          "Role"
+        ]
+      },
+      "human_expected": "reject",
+      "expected_related_key": "holdsRole",
+      "failure_mode": "similar_predicate",
+      "notes": "Currentness is temporal validity on holdsRole, not a new predicate.",
+      "policy_bucket": "derivable_shortcut",
+      "canonical_model_case": true
+    },
+    {
+      "id": "composition_professional_skill",
+      "category": "composition_vs_primitive",
+      "risk_class": "conservative",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "ProfessionalSkill",
+        "label": "Professional Skill",
+        "description": "A skill used in a professional Role context.",
+        "parent_keys": [
+          "Thing"
+        ]
+      },
+      "initial_human_expected": "manual_review",
+      "expects_clarification": true,
+      "expected_related_keys": [
+        "Skill",
+        "Role"
+      ],
+      "failure_mode": "ambiguity",
+      "notes": "Likely representable via hasSkill + Role context.",
+      "policy_bucket": "derivable_shortcut",
+      "canonical_model_case": true
+    },
+    {
+      "id": "cross_class_assignment",
+      "category": "cross_class_ambiguity",
+      "risk_class": "unsafe",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "Assignment",
+        "label": "Assignment",
+        "description": "An assignment involving people and work.",
+        "parent_keys": [
+          "Thing"
+        ]
+      },
+      "initial_human_expected": "manual_review",
+      "expects_clarification": true,
+      "expected_related_keys": [
+        "Role",
+        "Event",
+        "Activity",
+        "RelationshipContext"
+      ],
+      "failure_mode": "ambiguity",
+      "notes": "Could be Role, Event, Activity, or RelationshipContext.",
+      "policy_bucket": "directionality_semantic_ambiguity",
+      "canonical_model_case": false
+    },
+    {
+      "id": "pred_collaborates_with_symmetry",
+      "category": "ontology_symmetry",
+      "risk_class": "conservative",
+      "proposal_type": "predicate",
+      "payload": {
+        "namespace_key": "core",
+        "key": "collaboratesWith",
+        "label": "collaborates with",
+        "description": "Symmetric collaboration relation between Persons who work together. Explicitly symmetric; not a generic relatedTo and not a dependency.",
+        "value_kind": "entity",
+        "cardinality": "many",
+        "domain_keys": [
+          "Person"
+        ],
+        "range_keys": [
+          "Person"
+        ]
+      },
+      "human_expected": "approve",
+      "expected_related_key": "relatedTo",
+      "failure_mode": "clear_approval",
+      "notes": "Approve only because symmetry and Person domain are explicit.",
+      "policy_bucket": "clear_distinct",
+      "canonical_model_case": false
+    },
+    {
+      "id": "pred_avoids_negative_semantics",
+      "category": "negative_semantics",
+      "risk_class": "unsafe",
+      "proposal_type": "predicate",
+      "payload": {
+        "namespace_key": "core",
+        "key": "avoids",
+        "label": "avoids",
+        "description": "Indicates avoidance between things.",
+        "value_kind": "entity",
+        "cardinality": "many",
+        "domain_keys": [
+          "Thing"
+        ],
+        "range_keys": [
+          "Thing"
+        ]
+      },
+      "initial_human_expected": "manual_review",
+      "expects_clarification": true,
+      "expected_related_keys": [
+        "relatedTo",
+        "Preference",
+        "Constraint"
+      ],
+      "failure_mode": "ambiguity",
+      "notes": "Could be relation, preference, or constraint depending on subject/object.",
+      "policy_bucket": "directionality_semantic_ambiguity",
+      "canonical_model_case": false
+    },
+    {
+      "id": "deterministic_missing_parent",
+      "category": "deterministic_failure",
+      "risk_class": "neutral",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "BrokenConcept",
+        "description": "Should never reach the LLM.",
+        "parent_keys": [
+          "MissingParentThatDoesNotExist"
+        ]
+      },
+      "human_expected": "deterministic_reject",
+      "failure_mode": "deterministic_short_circuit",
+      "notes": "LLM must not be called.",
+      "policy_bucket": "deterministic",
+      "canonical_model_case": false
+    },
+    {
+      "id": "context_truncated_manual",
+      "category": "context_insufficient",
+      "risk_class": "conservative",
+      "proposal_type": "class",
+      "payload": {
+        "namespace_key": "core",
+        "key": "ThinContextProbe",
+        "description": "Probe for context_sufficient=false when context is aggressively truncated.",
+        "parent_keys": [
+          "Thing"
+        ]
+      },
+      "human_expected": "manual_review",
+      "force_context_insufficient": true,
+      "failure_mode": "context_insufficient",
+      "notes": "Provider/context failure must degrade to manual_review.",
+      "policy_bucket": "context_insufficient",
+      "canonical_model_case": false
+    }
+  ]
+}

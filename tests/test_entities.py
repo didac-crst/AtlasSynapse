@@ -18,11 +18,13 @@ from semantic_memory.exceptions import (
     UnknownClassError,
 )
 from semantic_memory.models import ActorStatus, ActorType, Entity, EntityType, OperationLog
-from semantic_memory.models.enums import OperationStatus
+from semantic_memory.models.enums import AliasIdentityStrength, OperationStatus
 from semantic_memory.repositories.entities import EntityRepository
 from semantic_memory.repositories.ontology import OntologyRepository
 from semantic_memory.schemas.actors import ActorEnsureRequest
+from semantic_memory.schemas.conflicts import MergeEntityRequest
 from semantic_memory.schemas.entities import (
+    AddEntityAliasRequest,
     CreateEntityRequest,
     ExternalReferenceInput,
     ResolutionOutcome,
@@ -62,6 +64,7 @@ def _create_request(
 
 
 def test_create_entity_and_exact_reuse(db_session: Session) -> None:
+    """Exact supporting name match must not auto-collapse to REUSE."""
     _ensure_writer(db_session)
     service = EntityService(db_session)
 
@@ -70,26 +73,26 @@ def test_create_entity_and_exact_reuse(db_session: Session) -> None:
 
     assert first.outcome == ResolutionOutcome.CREATE
     assert first.entity is not None
-    assert second.outcome == ResolutionOutcome.REUSE
-    assert second.entity is not None
-    assert first.entity.id == second.entity.id
+    assert second.outcome == ResolutionOutcome.AMBIGUOUS
+    assert second.entity is None
+    assert {item.id for item in second.candidates} == {first.entity.id}
     assert "Person" in {item.class_key for item in first.entity.types}
 
 
 def test_alias_reuse(db_session: Session) -> None:
+    """Supporting aliases alone must not auto-collapse."""
     _ensure_writer(db_session)
     service = EntityService(db_session)
 
     created = service.create_entity(
         _create_request(name="Didac Costa", class_key="Person", aliases=["Didac"])
     )
-    reused = service.create_entity(_create_request(name="Didac", class_key="Person"))
+    second = service.create_entity(_create_request(name="Didac", class_key="Person"))
 
     assert created.outcome == ResolutionOutcome.CREATE
-    assert reused.outcome == ResolutionOutcome.REUSE
+    assert second.outcome == ResolutionOutcome.AMBIGUOUS
     assert created.entity is not None
-    assert reused.entity is not None
-    assert created.entity.id == reused.entity.id
+    assert {item.id for item in second.candidates} == {created.entity.id}
 
 
 def test_external_reference_reuse(db_session: Session) -> None:
@@ -157,9 +160,10 @@ def test_indexed_identity_queries_reuse_and_ambiguity(db_session: Session) -> No
 
     identity = IdentityService(db_session)
     person_hit = identity.resolve(canonical_name="atlas", class_id=person.id)
-    assert person_hit.outcome == ResolutionOutcome.REUSE
-    assert person_hit.entity is not None
-    assert person_hit.entity.id == person_entity.id
+    assert person_hit.outcome == ResolutionOutcome.AMBIGUOUS
+    assert person_hit.identity is not None
+    assert person_hit.identity.resolution.value == "AMBIGUOUS"
+    assert {item.id for item in person_hit.candidates} == {person_entity.id}
 
     ambiguous = identity.resolve(canonical_name="Atlas Corp")
     assert ambiguous.outcome == ResolutionOutcome.AMBIGUOUS
@@ -193,14 +197,268 @@ def test_disabled_actor_error(db_session: Session) -> None:
 def test_duplicate_alias_does_not_silent_merge(db_session: Session) -> None:
     _ensure_writer(db_session)
     service = EntityService(db_session)
-    service.create_entity(
-        _create_request(name="Didac Costa", class_key="Person", aliases=["Didac"])
+    first = service.create_entity(
+        _create_request(name="Alpha Loop", class_key="Project", aliases=["SharedMark"])
     )
+    assert first.entity is not None
     with pytest.raises(DuplicateEntityError) as exc:
         service.create_entity(
-            _create_request(name="Didac Garcia", class_key="Person", aliases=["Didac"])
+            _create_request(name="Beta Loop", class_key="Project", aliases=["SharedMark"])
         )
     assert exc.value.error_code == "DUPLICATE_ENTITY"
+
+
+def test_shared_nickname_near_name_is_ambiguous(db_session: Session) -> None:
+    """Didac Costa vs Didac Garcia must not silent-merge; near-name forces review."""
+    _ensure_writer(db_session)
+    service = EntityService(db_session)
+    first = service.create_entity(
+        _create_request(name="Didac Costa", class_key="Person", aliases=["Didac"])
+    )
+    assert first.entity is not None
+    second = service.create_entity(_create_request(name="Didac Garcia", class_key="Person"))
+    assert second.outcome == ResolutionOutcome.AMBIGUOUS
+    assert {item.id for item in second.candidates} == {first.entity.id}
+
+
+def test_near_name_is_ambiguous_not_create(db_session: Session) -> None:
+    _ensure_writer(db_session)
+    service = EntityService(db_session)
+    short = service.create_entity(_create_request(name="Didac", class_key="Person"))
+    assert short.entity is not None
+
+    longer = service.create_entity(_create_request(name="Didac Cristobal", class_key="Person"))
+    assert longer.outcome == ResolutionOutcome.AMBIGUOUS
+    assert longer.entity is None
+    assert {item.id for item in longer.candidates} == {short.entity.id}
+    assert longer.candidates[0].match_reason == "near_name"
+
+
+def test_add_entity_alias_enables_reuse(db_session: Session) -> None:
+    _ensure_writer(db_session)
+    service = EntityService(db_session)
+    created = service.create_entity(_create_request(name="Didac Cristobal", class_key="Person"))
+    assert created.entity is not None
+
+    updated = service.add_entity_alias(
+        AddEntityAliasRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            entity_id=created.entity.id,
+            alias="Didac",
+            identity_strength=AliasIdentityStrength.AUTHORITATIVE,
+        )
+    )
+    assert "Didac" in updated.aliases
+
+    reused = service.create_entity(_create_request(name="Didac", class_key="Person"))
+    assert reused.outcome == ResolutionOutcome.REUSE
+    assert reused.entity is not None
+    assert reused.entity.id == created.entity.id
+
+
+def test_neighborhood_follows_merge_redirect(db_session: Session) -> None:
+    """Statement FKs stay on the merged row; neighborhood resolves to the survivor."""
+    from semantic_memory.schemas.statements import AssertStatementRequest
+    from semantic_memory.services.retrieval import RetrievalService
+    from semantic_memory.services.statements import StatementService
+
+    _ensure_writer(db_session)
+    entities = EntityService(db_session)
+    statements = StatementService(db_session)
+    keeper = entities.create_entity(_create_request(name="Keeper", class_key="Person"))
+    duplicate = entities.create_entity(_create_request(name="Other Person", class_key="Person"))
+    peer = entities.create_entity(_create_request(name="Peer", class_key="Person"))
+    assert keeper.entity and duplicate.entity and peer.entity
+
+    statements.assert_statement(
+        AssertStatementRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            subject_entity_id=duplicate.entity.id,
+            predicate_key="relatedTo",
+            object_entity_id=peer.entity.id,
+        )
+    )
+    entities.merge_entity(
+        MergeEntityRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            source_entity_id=duplicate.entity.id,
+            target_entity_id=keeper.entity.id,
+        )
+    )
+
+    neighborhood = RetrievalService(db_session).get_entity_neighborhood(keeper.entity.id)
+    neighbor_ids = {edge.neighbor_entity_id for edge in neighborhood.edges}
+    assert peer.entity.id in neighbor_ids
+
+    peer_view = RetrievalService(db_session).get_entity_neighborhood(peer.entity.id)
+    assert any(edge.neighbor_entity_id == keeper.entity.id for edge in peer_view.edges)
+
+    # Physical statement FKs are reassigned to the survivor for graph exporters.
+    from sqlalchemy import select
+
+    from semantic_memory.models import Statement
+
+    moved = db_session.scalars(
+        select(Statement).where(Statement.subject_entity_id == keeper.entity.id)
+    ).all()
+    assert moved
+    assert not db_session.scalars(
+        select(Statement).where(Statement.subject_entity_id == duplicate.entity.id)
+    ).all()
+
+
+def test_merge_transfers_aliases_for_redirect(db_session: Session) -> None:
+    _ensure_writer(db_session)
+    service = EntityService(db_session)
+    left = service.create_entity(_create_request(name="Alpha Loop", class_key="Project"))
+    right = service.create_entity(_create_request(name="Beta Loop", class_key="Project"))
+    assert left.entity is not None
+    assert right.entity is not None
+
+    merged = service.merge_entity(
+        MergeEntityRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            source_entity_id=right.entity.id,
+            target_entity_id=left.entity.id,
+        )
+    )
+    assert "Beta Loop" in merged.target.aliases
+    assert any(
+        entry.alias == "Beta Loop"
+        and entry.identity_strength == AliasIdentityStrength.AUTHORITATIVE
+        for entry in merged.target.alias_entries
+    )
+    reused = service.create_entity(_create_request(name="Beta Loop", class_key="Project"))
+    assert reused.outcome == ResolutionOutcome.REUSE
+    assert reused.entity is not None
+    assert reused.entity.id == left.entity.id
+
+
+def test_merge_preserves_supporting_alias_strength(db_session: Session) -> None:
+    """Supporting aliases must not become authoritative during merge."""
+    _ensure_writer(db_session)
+    service = EntityService(db_session)
+    target = service.create_entity(_create_request(name="Keeper", class_key="Person"))
+    source = service.create_entity(_create_request(name="Merged Person", class_key="Person"))
+    assert target.entity is not None
+    assert source.entity is not None
+
+    service.add_entity_alias(
+        AddEntityAliasRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            entity_id=source.entity.id,
+            alias="Nickname Only",
+            identity_strength=AliasIdentityStrength.SUPPORTING,
+        )
+    )
+    merged = service.merge_entity(
+        MergeEntityRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            source_entity_id=source.entity.id,
+            target_entity_id=target.entity.id,
+        )
+    )
+    by_alias = {entry.alias: entry.identity_strength for entry in merged.target.alias_entries}
+    assert by_alias["Merged Person"] == AliasIdentityStrength.AUTHORITATIVE
+    assert by_alias["Nickname Only"] == AliasIdentityStrength.SUPPORTING
+
+    ambiguous = service.create_entity(_create_request(name="Nickname Only", class_key="Person"))
+    assert ambiguous.outcome == ResolutionOutcome.AMBIGUOUS
+
+
+def test_authoritative_alias_match_reuses_didac_cristobal(db_session: Session) -> None:
+    """Confirmed alias must MATCH; this is the original Didac Cristobal case."""
+    _ensure_writer(db_session)
+    service = EntityService(db_session)
+    created = service.create_entity(_create_request(name="Didac", class_key="Person"))
+    assert created.entity is not None
+
+    service.add_entity_alias(
+        AddEntityAliasRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            entity_id=created.entity.id,
+            alias="Didac Cristobal",
+            identity_strength=AliasIdentityStrength.AUTHORITATIVE,
+        )
+    )
+
+    reused = service.create_entity(_create_request(name="Didac Cristobal", class_key="Person"))
+    assert reused.outcome == ResolutionOutcome.REUSE
+    assert reused.entity is not None
+    assert reused.entity.id == created.entity.id
+
+
+def test_supporting_alias_name_match_is_ambiguous(db_session: Session) -> None:
+    """Supporting name/alias evidence must not auto-collapse John Smith."""
+    _ensure_writer(db_session)
+    service = EntityService(db_session)
+    created = service.create_entity(_create_request(name="John Smith", class_key="Person"))
+    assert created.outcome == ResolutionOutcome.CREATE
+    assert created.entity is not None
+    assert any(
+        entry.alias == "John Smith" and entry.identity_strength == AliasIdentityStrength.SUPPORTING
+        for entry in created.entity.alias_entries
+    )
+
+    second = service.create_entity(_create_request(name="John Smith", class_key="Person"))
+    assert second.outcome == ResolutionOutcome.AMBIGUOUS
+    assert second.entity is None
+    assert {item.id for item in second.candidates} == {created.entity.id}
+
+
+def test_conflicting_decisive_identity_is_ambiguous(db_session: Session) -> None:
+    """Two decisive SAME candidates must not let ordering pick a winner."""
+    _ensure_writer(db_session)
+    actors = ActorService(db_session)
+    actor = actors.require_active_actor("writer")
+    ontology = OntologyRepository(db_session)
+    person = ontology.get_class_by_key(namespace_key="core", class_key="Person")
+    assert person is not None
+
+    repo = EntityRepository(db_session)
+    left = repo.create(canonical_name="Didac Left", created_by_actor_id=actor.id)
+    right = repo.create(canonical_name="Didac Right", created_by_actor_id=actor.id)
+    repo.add_type(entity_id=left.id, class_id=person.id, asserted_by_actor_id=actor.id)
+    repo.add_type(entity_id=right.id, class_id=person.id, asserted_by_actor_id=actor.id)
+    repo.add_alias(
+        entity_id=left.id,
+        alias="Didac Cristobal",
+        identity_strength=AliasIdentityStrength.AUTHORITATIVE.value,
+    )
+    repo.add_alias(
+        entity_id=right.id,
+        alias="Didac Cristobal",
+        identity_strength=AliasIdentityStrength.AUTHORITATIVE.value,
+    )
+
+    result = EntityService(db_session).create_entity(
+        _create_request(name="Didac Cristobal", class_key="Person")
+    )
+    assert result.outcome == ResolutionOutcome.AMBIGUOUS
+    assert result.entity is None
+    assert {item.id for item in result.candidates} == {left.id, right.id}
+
+    identity = IdentityService(db_session).resolve(
+        canonical_name="Didac Cristobal", class_id=person.id
+    )
+    assert identity.identity is not None
+    assert identity.identity.resolution.value == "AMBIGUOUS"
+    same = [c for c in identity.identity.candidates if c.decision.value == "SAME"]
+    assert len(same) == 2
 
 
 def test_failed_create_rolls_back_idempotency_and_allows_retry(db_session: Session) -> None:
@@ -285,7 +543,14 @@ def test_parallel_create_only_one_entity(engine: Engine) -> None:
                 )
             )
             session.commit()
-            assert result.outcome in {ResolutionOutcome.CREATE, ResolutionOutcome.REUSE}
+            assert result.outcome in {
+                ResolutionOutcome.CREATE,
+                ResolutionOutcome.REUSE,
+                ResolutionOutcome.AMBIGUOUS,
+            }
+            if result.outcome == ResolutionOutcome.AMBIGUOUS:
+                assert result.entity is None
+                return "ambiguous"
             assert result.entity is not None
             return str(result.entity.id)
         finally:
@@ -295,7 +560,9 @@ def test_parallel_create_only_one_entity(engine: Engine) -> None:
     with ThreadPoolExecutor(max_workers=8) as pool:
         futures = [pool.submit(_worker) for _ in range(8)]
         for future in as_completed(futures):
-            entity_ids.add(future.result())
+            value = future.result()
+            if value != "ambiguous":
+                entity_ids.add(value)
 
     assert len(entity_ids) == 1
 
@@ -326,14 +593,14 @@ def test_acceptance_scenario(db_session: Session) -> None:
 
     assert didac.outcome == ResolutionOutcome.CREATE
     assert airbus.outcome == ResolutionOutcome.CREATE
-    assert didac_again.outcome == ResolutionOutcome.REUSE
-    assert airbus_again.outcome == ResolutionOutcome.REUSE
+    assert didac_again.outcome == ResolutionOutcome.AMBIGUOUS
+    assert airbus_again.outcome == ResolutionOutcome.AMBIGUOUS
     assert didac.entity is not None
     assert airbus.entity is not None
-    assert didac_again.entity is not None
-    assert airbus_again.entity is not None
-    assert didac.entity.id == didac_again.entity.id
-    assert airbus.entity.id == airbus_again.entity.id
+    assert didac_again.entity is None
+    assert airbus_again.entity is None
+    assert {item.id for item in didac_again.candidates} == {didac.entity.id}
+    assert {item.id for item in airbus_again.candidates} == {airbus.entity.id}
 
     actors = ActorService(db_session)
     actor = actors.require_active_actor("writer")

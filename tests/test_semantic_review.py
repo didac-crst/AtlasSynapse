@@ -141,7 +141,7 @@ def test_mock_accept_reject_reuse(db_session: Session) -> None:
             **_envelope(proposer),
             key="AcceptedLab",
             parent_keys=["Organization"],
-            metadata={"review_decision": ReviewDecision.ACCEPT.value},
+            metadata={"review_decision": ReviewDecision.APPROVE.value},
         )
     )
     assert accepted.outcome == ProposalOutcome.READY_TO_APPLY
@@ -179,7 +179,7 @@ def test_reviewer_has_no_session_and_cannot_write(db_session: Session) -> None:
             payload={
                 "namespace_key": "core",
                 "key": "shouldNotExist",
-                "metadata": {"review_decision": ReviewDecision.ACCEPT.value},
+                "metadata": {"review_decision": ReviewDecision.APPROVE.value},
             },
         )
     )

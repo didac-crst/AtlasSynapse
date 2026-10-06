@@ -41,7 +41,11 @@ class UnknownStatementError(DomainError):
 
 
 class UnknownSourceError(DomainError):
-    error_code = "UNKNOWN_ENTITY"
+    error_code = "UNKNOWN_SOURCE"
+
+
+class AmbiguousSourceError(DomainError):
+    error_code = "AMBIGUOUS_SOURCE"
 
 
 class AmbiguousEntityError(DomainError):
@@ -94,6 +98,18 @@ class OntologyReuseRecommendedError(DomainError):
 
 class UnknownProposalError(DomainError):
     error_code = "UNKNOWN_PROPOSAL"
+
+
+class ClarificationRequestNotFoundError(DomainError):
+    error_code = "CLARIFICATION_REQUEST_NOT_FOUND"
+
+
+class ClarificationRequestAlreadyResolvedError(DomainError):
+    error_code = "CLARIFICATION_REQUEST_ALREADY_RESOLVED"
+
+
+class ClarificationRequestSupersededError(DomainError):
+    error_code = "CLARIFICATION_REQUEST_SUPERSEDED"
 
 
 class UnknownFeedbackError(DomainError):

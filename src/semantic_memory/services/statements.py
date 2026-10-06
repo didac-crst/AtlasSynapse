@@ -108,12 +108,14 @@ class StatementService:
                 f"Entity {entity_id} was not found",
                 details={"entity_id": str(entity_id)},
             )
+        identity_ids = self._entities.identity_group_ids(entity_id)
+        survivor_id = self._entities.resolve_survivor_id(entity_id)
         entries: list[TimelineEntry] = []
-        for statement in self._statements.list_for_entity_timeline(entity_id):
+        for statement in self._statements.list_for_entity_timeline(identity_ids):
             response = self._to_response(statement)
             sort_time = response.valid_from or response.asserted_at
             entries.append(TimelineEntry(statement=response, sort_time=sort_time))
-        return TimelineResponse(entity_id=entity_id, entries=entries)
+        return TimelineResponse(entity_id=survivor_id, entries=entries)
 
     def _supersede_body(
         self, *, request: SupersedeStatementRequest, actor_id: uuid.UUID
@@ -480,4 +482,5 @@ class StatementService:
             superseded_by_statement_id=statement.superseded_by_statement_id,
             retracts_statement_id=statement.retracts_statement_id,
             created_at=statement.created_at,
+            metadata=dict(statement.metadata_json or {}),
         )

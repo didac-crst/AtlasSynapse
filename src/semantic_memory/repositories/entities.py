@@ -17,6 +17,7 @@ from semantic_memory.models import (
     OntologyClass,
     OntologyNamespace,
 )
+from semantic_memory.models.enums import AliasIdentityStrength
 from semantic_memory.validation.normalization import normalize_text
 
 
@@ -31,6 +32,28 @@ class EntityRepository:
 
     def get(self, entity_id: uuid.UUID, *, populate_existing: bool = False) -> Entity | None:
         return self._session.get(Entity, entity_id, populate_existing=populate_existing)
+
+    def resolve_survivor_id(self, entity_id: uuid.UUID) -> uuid.UUID:
+        """Follow merged_into links to the surviving active entity id."""
+        current_id = entity_id
+        seen: set[uuid.UUID] = set()
+        while current_id not in seen:
+            seen.add(current_id)
+            entity = self.get(current_id)
+            if entity is None or entity.merged_into_entity_id is None:
+                return current_id
+            current_id = entity.merged_into_entity_id
+        return current_id
+
+    def identity_group_ids(self, entity_id: uuid.UUID) -> list[uuid.UUID]:
+        """Survivor plus every entity merged into it (for read-side graph views)."""
+        survivor_id = self.resolve_survivor_id(entity_id)
+        merged_ids = list(
+            self._session.scalars(
+                select(Entity.id).where(Entity.merged_into_entity_id == survivor_id)
+            ).all()
+        )
+        return [survivor_id, *merged_ids]
 
     def create(
         self,
@@ -72,12 +95,20 @@ class EntityRepository:
         *,
         entity_id: uuid.UUID,
         alias: str,
+        identity_strength: str = AliasIdentityStrength.SUPPORTING.value,
     ) -> EntityAlias:
+        strength = identity_strength or AliasIdentityStrength.SUPPORTING.value
+        if strength not in {
+            AliasIdentityStrength.SUPPORTING.value,
+            AliasIdentityStrength.AUTHORITATIVE.value,
+        }:
+            raise ValueError(f"Invalid identity_strength: {identity_strength!r}")
         row = EntityAlias(
             id=uuid.uuid4(),
             entity_id=entity_id,
             alias=alias,
             normalized_alias=normalize_text(alias),
+            identity_strength=strength,
         )
         self._session.add(row)
         self._session.flush()
@@ -134,21 +165,39 @@ class EntityRepository:
         return list(self._session.scalars(stmt).all())
 
     def find_by_alias(self, alias: str, *, class_id: uuid.UUID | None = None) -> list[Entity]:
+        return [entity for entity, _alias in self.find_alias_matches(alias, class_id=class_id)]
+
+    def find_alias_matches(
+        self, alias: str, *, class_id: uuid.UUID | None = None
+    ) -> list[tuple[Entity, EntityAlias]]:
+        """Return active entities with the matching alias row (includes strength)."""
         normalized = normalize_text(alias)
         stmt = (
-            select(Entity)
+            select(Entity, EntityAlias)
             .join(EntityAlias, EntityAlias.entity_id == Entity.id)
             .where(
                 EntityAlias.normalized_alias == normalized,
                 Entity.status == EntityStatus.ACTIVE.value,
             )
-            .distinct()
         )
         if class_id is not None:
             stmt = stmt.join(EntityType, EntityType.entity_id == Entity.id).where(
                 EntityType.class_id == class_id
             )
-        return list(self._session.scalars(stmt).all())
+        # Prefer authoritative rows when an entity somehow has duplicates.
+        rows = list(self._session.execute(stmt).all())
+        by_entity: dict[uuid.UUID, tuple[Entity, EntityAlias]] = {}
+        for entity, alias_row in rows:
+            existing = by_entity.get(entity.id)
+            if existing is None:
+                by_entity[entity.id] = (entity, alias_row)
+                continue
+            if (
+                alias_row.identity_strength == AliasIdentityStrength.AUTHORITATIVE.value
+                and existing[1].identity_strength != AliasIdentityStrength.AUTHORITATIVE.value
+            ):
+                by_entity[entity.id] = (entity, alias_row)
+        return list(by_entity.values())
 
     def find_candidates(
         self, *, name: str, class_id: uuid.UUID | None = None
@@ -167,6 +216,100 @@ class EntityRepository:
 
         return [(entity, "+".join(sorted(reasons))) for entity, reasons in by_id.values()]
 
+    def find_near_name_candidates(
+        self, name: str, *, class_id: uuid.UUID | None = None
+    ) -> list[Entity]:
+        """Find active entities whose name/alias is a token-subset near-match.
+
+        Examples: ``Didac`` ↔ ``Didac Cristobal``. Does not match unrelated
+        shared nicknames such as ``Didac Costa`` vs ``Didac Garcia``.
+        """
+        normalized = normalize_text(name)
+        tokens = [token for token in normalized.split(" ") if token]
+        if not tokens:
+            return []
+
+        by_id: dict[uuid.UUID, Entity] = {}
+
+        # Shorter existing names that are proper prefixes of the incoming name.
+        for end in range(1, len(tokens)):
+            prefix = " ".join(tokens[:end])
+            for entity in self.find_by_canonical_name(prefix, class_id=class_id):
+                by_id[entity.id] = entity
+            for entity in self.find_by_alias(prefix, class_id=class_id):
+                by_id[entity.id] = entity
+
+        # Longer existing names/aliases that start with the incoming name.
+        escaped = normalized.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        like_pattern = f"{escaped} %"
+        canonical_stmt = (
+            select(Entity)
+            .where(
+                Entity.status == EntityStatus.ACTIVE.value,
+                _normalized_canonical_sql().like(like_pattern, escape="\\"),
+            )
+            .distinct()
+        )
+        alias_stmt = (
+            select(Entity)
+            .join(EntityAlias, EntityAlias.entity_id == Entity.id)
+            .where(
+                Entity.status == EntityStatus.ACTIVE.value,
+                EntityAlias.normalized_alias.like(like_pattern, escape="\\"),
+            )
+            .distinct()
+        )
+        if class_id is not None:
+            canonical_stmt = canonical_stmt.join(
+                EntityType, EntityType.entity_id == Entity.id
+            ).where(EntityType.class_id == class_id)
+            alias_stmt = alias_stmt.join(EntityType, EntityType.entity_id == Entity.id).where(
+                EntityType.class_id == class_id
+            )
+        for entity in self._session.scalars(canonical_stmt).all():
+            by_id[entity.id] = entity
+        for entity in self._session.scalars(alias_stmt).all():
+            by_id[entity.id] = entity
+
+        return list(by_id.values())
+
+    def ensure_alias(
+        self,
+        *,
+        entity_id: uuid.UUID,
+        alias: str,
+        identity_strength: str = AliasIdentityStrength.SUPPORTING.value,
+    ) -> EntityAlias | None:
+        """Add alias if missing; promote supporting→authoritative when requested."""
+        strength = identity_strength or AliasIdentityStrength.SUPPORTING.value
+        if strength not in {
+            AliasIdentityStrength.SUPPORTING.value,
+            AliasIdentityStrength.AUTHORITATIVE.value,
+        }:
+            raise ValueError(f"Invalid identity_strength: {identity_strength!r}")
+        normalized = normalize_text(alias)
+        if not normalized:
+            return None
+        existing = self._session.scalar(
+            select(EntityAlias).where(
+                EntityAlias.entity_id == entity_id,
+                EntityAlias.normalized_alias == normalized,
+            )
+        )
+        if existing is not None:
+            if (
+                strength == AliasIdentityStrength.AUTHORITATIVE.value
+                and existing.identity_strength != AliasIdentityStrength.AUTHORITATIVE.value
+            ):
+                existing.identity_strength = AliasIdentityStrength.AUTHORITATIVE.value
+                self._session.flush()
+            return existing
+        return self.add_alias(
+            entity_id=entity_id,
+            alias=alias.strip(),
+            identity_strength=strength,
+        )
+
     def has_type(self, entity_id: uuid.UUID, class_id: uuid.UUID) -> bool:
         row = self._session.scalar(
             select(EntityType.id).where(
@@ -180,6 +323,15 @@ class EntityRepository:
         return list(
             self._session.scalars(
                 select(EntityAlias.alias).where(EntityAlias.entity_id == entity_id)
+            ).all()
+        )
+
+    def list_alias_entries(self, entity_id: uuid.UUID) -> list[EntityAlias]:
+        return list(
+            self._session.scalars(
+                select(EntityAlias)
+                .where(EntityAlias.entity_id == entity_id)
+                .order_by(EntityAlias.created_at.asc())
             ).all()
         )
 
@@ -202,9 +354,12 @@ class EntityRepository:
     def alias_exists_on_other_entity(self, *, alias: str, entity_id: uuid.UUID) -> bool:
         normalized = normalize_text(alias)
         other = self._session.scalar(
-            select(EntityAlias.id).where(
+            select(EntityAlias.id)
+            .join(Entity, Entity.id == EntityAlias.entity_id)
+            .where(
                 EntityAlias.normalized_alias == normalized,
                 EntityAlias.entity_id != entity_id,
+                Entity.status == EntityStatus.ACTIVE.value,
             )
         )
         return other is not None

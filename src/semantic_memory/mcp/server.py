@@ -19,17 +19,24 @@ from semantic_memory.mcp.tools import (
     RetrievalMCPTools,
     StatementMCPTools,
 )
+from semantic_memory.runtime_info import runtime_config
 
 REGISTERED_TOOL_NAMES: tuple[str, ...] = (
+    "get_runtime_config",
     "create_entity",
     "get_entity",
     "search_entities",
     "get_entity_neighborhood",
     "merge_entity",
+    "add_entity_alias",
     "assert_statement",
     "get_statement",
     "search_statements",
     "explain_statement",
+    "ensure_source",
+    "ingest_source_content",
+    "get_source_content",
+    "search_source_content",
     "add_evidence",
     "supersede_statement",
     "retract_statement",
@@ -48,6 +55,8 @@ REGISTERED_TOOL_NAMES: tuple[str, ...] = (
     "propose_constraint",
     "propose_alias",
     "propose_class_parent",
+    "challenge_ontology_review",
+    "answer_semantic_clarification",
     "report_feedback",
 )
 
@@ -168,6 +177,15 @@ def _payload_tool(name: str, description: str, call: Any) -> ToolSpec:
 def build_mcp_tools() -> list[ToolSpec]:
     """Build tool specs bound to per-call database sessions."""
     return [
+        ToolSpec(
+            name="get_runtime_config",
+            description=(
+                "Return non-secret AtlasSynapse runtime config for deploy parity checks "
+                "(semantic_review_mode, version, model thresholds)."
+            ),
+            handler=lambda: runtime_config(),
+            input_schema={"type": "object", "properties": {}, "additionalProperties": False},
+        ),
         _payload_tool(
             "create_entity",
             "Create a typed knowledge entity.",
@@ -205,8 +223,15 @@ def build_mcp_tools() -> list[ToolSpec]:
         ),
         _payload_tool(
             "merge_entity",
-            "Explicitly merge two entities.",
+            "Explicitly merge two entities. Copies source names/aliases onto the "
+            "target so future create/search by those names reuse the survivor.",
             lambda session, payload: EntityMCPTools(session).merge_entity(payload),
+        ),
+        _payload_tool(
+            "add_entity_alias",
+            "Add an alternate name/alias to an existing active entity "
+            "(e.g. add 'Didac' to 'Didac Cristobal').",
+            lambda session, payload: EntityMCPTools(session).add_entity_alias(payload),
         ),
         _payload_tool(
             "assert_statement",
@@ -241,6 +266,30 @@ def build_mcp_tools() -> list[ToolSpec]:
                 "properties": {"statement_id": {"type": "string"}},
                 "required": ["statement_id"],
             },
+        ),
+        _payload_tool(
+            "ensure_source",
+            "Ensure a reusable provenance source (create or reuse by identity).",
+            lambda session, payload: StatementMCPTools(session).ensure_source(payload),
+        ),
+        _payload_tool(
+            "ingest_source_content",
+            "Ingest source content. Prefer content + content_format (html|markdown|text); "
+            "AtlasSynapse preserves the exact original and deterministically canonicalizes "
+            "(HTML→Markdown v1). Optional canonical_format defaults to markdown.",
+            lambda session, payload: StatementMCPTools(session).ingest_source_content(payload),
+        ),
+        _payload_tool(
+            "get_source_content",
+            "Fetch latest or specific source content revision by source_id, "
+            "document_entity_id, or revision_id.",
+            lambda session, payload: StatementMCPTools(session).get_source_content(payload),
+        ),
+        _payload_tool(
+            "search_source_content",
+            "Lexical search over canonical source content; returns passages with "
+            "revision-qualified locators.",
+            lambda session, payload: StatementMCPTools(session).search_source_content(payload),
         ),
         _payload_tool(
             "add_evidence",
@@ -377,12 +426,14 @@ def build_mcp_tools() -> list[ToolSpec]:
         ),
         _payload_tool(
             "propose_class",
-            "Propose a new ontology class.",
+            "Propose a new ontology class. On ambiguous overlap, response includes "
+            "open_clarification_request with AtlasSynapse-issued clarification_request_id.",
             lambda session, payload: OntologyMCPTools(session).propose_class(payload),
         ),
         _payload_tool(
             "propose_predicate",
-            "Propose a new ontology predicate.",
+            "Propose a new ontology predicate. On ambiguous overlap, response includes "
+            "open_clarification_request with AtlasSynapse-issued clarification_request_id.",
             lambda session, payload: OntologyMCPTools(session).propose_predicate(payload),
         ),
         _payload_tool(
@@ -399,6 +450,19 @@ def build_mcp_tools() -> list[ToolSpec]:
             "propose_class_parent",
             "Propose a class parent link.",
             lambda session, payload: OntologyMCPTools(session).propose_class_parent(payload),
+        ),
+        _payload_tool(
+            "challenge_ontology_review",
+            "Challenge a reject/reuse semantic review with new rationale/evidence.",
+            lambda session, payload: OntologyMCPTools(session).challenge_ontology_review(payload),
+        ),
+        _payload_tool(
+            "answer_semantic_clarification",
+            "Answer an AtlasSynapse clarification_request_id with the intended "
+            "semantic distinction and examples; triggers re-review.",
+            lambda session, payload: OntologyMCPTools(session).answer_semantic_clarification(
+                payload
+            ),
         ),
         _payload_tool(
             "report_feedback",

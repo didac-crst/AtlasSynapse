@@ -49,6 +49,8 @@ Project, Document, Observation, Decision, RelationshipContext
 Initial inheritance:
 
 ```text
+Agent -> Thing
+Place -> Thing
 Person -> Agent
 Organization -> Agent
 Event -> Thing

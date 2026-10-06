@@ -46,6 +46,8 @@ CORE_CLASSES: tuple[str, ...] = (
 )
 
 CORE_INHERITANCE: tuple[tuple[str, str], ...] = (
+    ("Agent", "Thing"),
+    ("Place", "Thing"),
     ("Person", "Agent"),
     ("Organization", "Agent"),
     ("Event", "Thing"),
@@ -83,10 +85,20 @@ CORE_PREDICATES: tuple[
     ),
     ("relatedTo", ValueKind.ENTITY, Cardinality.MANY, ("Thing",), ("Thing",)),
     ("source", ValueKind.ENTITY, Cardinality.MANY, ("Thing",), ("Document",)),
+    ("authoredBy", ValueKind.ENTITY, Cardinality.MANY, ("Document",), ("Person",)),
+    (
+        "publicationContext",
+        ValueKind.ENTITY,
+        Cardinality.MANY,
+        ("Document",),
+        ("Organization",),
+    ),
 )
 
 # Data-only extensions for Milestone B Phase 7 proofs. No new SQL tables.
 # Applied by ensure_rich_event_models() on top of the bootstrap seed.
+# Agent→Thing and Place→Thing also live in CORE_INHERITANCE; kept here so
+# ensure_rich_event_models remains idempotent on databases seeded before that.
 RICH_EVENT_INHERITANCE_FIXES: tuple[tuple[str, str], ...] = (
     ("Agent", "Thing"),
     ("Place", "Thing"),

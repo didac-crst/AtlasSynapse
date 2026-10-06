@@ -54,6 +54,14 @@ _DEFAULT_PRICING: dict[tuple[str, str], PricingSnapshot] = {
         provider="mock",
         model="mock-reviewer",
     ),
+    ("openai", "gpt-5.6-terra"): PricingSnapshot(
+        version="openai-terra-2026-10",
+        currency="USD",
+        input_rate_per_token=Decimal("0.000002"),
+        output_rate_per_token=Decimal("0.000012"),
+        provider="openai",
+        model="gpt-5.6-terra",
+    ),
 }
 
 
@@ -62,7 +70,19 @@ def resolve_pricing(
     provider: str,
     model: str,
     pricing_version: str | None = None,
+    input_rate_per_token: Decimal | str | None = None,
+    output_rate_per_token: Decimal | str | None = None,
+    currency: str | None = None,
 ) -> PricingSnapshot | None:
+    if input_rate_per_token is not None and output_rate_per_token is not None:
+        return PricingSnapshot(
+            version=pricing_version or "env-configured",
+            currency=currency or "USD",
+            input_rate_per_token=Decimal(str(input_rate_per_token)),
+            output_rate_per_token=Decimal(str(output_rate_per_token)),
+            provider=provider,
+            model=model,
+        )
     snapshot = _DEFAULT_PRICING.get((provider, model))
     if snapshot is None:
         return None
@@ -79,6 +99,10 @@ def estimate_cost(
     output_tokens: int | None,
     provider_reported_cost: Decimal | None = None,
     provider_reported_currency: str | None = None,
+    input_rate_per_token: Decimal | str | None = None,
+    output_rate_per_token: Decimal | str | None = None,
+    currency: str | None = None,
+    pricing_version: str | None = None,
 ) -> CostEstimate:
     """Estimate cost from tokens, or accept a provider-reported amount.
 
@@ -97,7 +121,14 @@ def estimate_cost(
             },
         )
 
-    snapshot = resolve_pricing(provider=provider, model=model)
+    snapshot = resolve_pricing(
+        provider=provider,
+        model=model,
+        pricing_version=pricing_version,
+        input_rate_per_token=input_rate_per_token,
+        output_rate_per_token=output_rate_per_token,
+        currency=currency,
+    )
     if (
         snapshot is None
         or snapshot.input_rate_per_token is None

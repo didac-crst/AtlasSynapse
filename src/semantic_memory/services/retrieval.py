@@ -127,10 +127,11 @@ class RetrievalService:
         if request.status is not None:
             stmt = stmt.where(Statement.status == request.status.value)
         if request.entity_id is not None:
+            identity_ids = self._entities.identity_group_ids(request.entity_id)
             stmt = stmt.where(
                 or_(
-                    Statement.subject_entity_id == request.entity_id,
-                    Statement.object_entity_id == request.entity_id,
+                    Statement.subject_entity_id.in_(identity_ids),
+                    Statement.object_entity_id.in_(identity_ids),
                 )
             )
         if request.predicate_key is not None:
@@ -195,20 +196,38 @@ class RetrievalService:
                 f"Entity {entity_id} was not found",
                 details={"entity_id": str(entity_id)},
             )
-        statements = self._statements.list_for_entity_timeline(entity_id)
+        # Statement FKs are preserved on merge; reads follow the identity group.
+        identity_ids = set(self._entities.identity_group_ids(entity_id))
+        survivor_id = self._entities.resolve_survivor_id(entity_id)
+        statements = self._statements.list_for_entity_timeline(list(identity_ids))
         now = as_of or datetime.now(UTC)
         edges: list[NeighborhoodEdge] = []
+        seen_statement_ids: set[uuid.UUID] = set()
         for statement in statements:
             if statement.status != StatementStatus.ASSERTED.value:
                 continue
-            if statement.subject_entity_id == entity_id:
+            if statement.id in seen_statement_ids:
+                continue
+            seen_statement_ids.add(statement.id)
+            subject_in_group = statement.subject_entity_id in identity_ids
+            object_in_group = (
+                statement.object_entity_id is not None
+                and statement.object_entity_id in identity_ids
+            )
+            if subject_in_group and not object_in_group:
                 direction = "outgoing"
                 neighbor = statement.object_entity_id
-            else:
+            elif object_in_group and not subject_in_group:
                 direction = "incoming"
                 neighbor = statement.subject_entity_id
+            else:
+                # Self-loop within the merged identity group.
+                direction = "outgoing"
+                neighbor = survivor_id
+            if neighbor is not None:
+                neighbor = self._entities.resolve_survivor_id(neighbor)
             signals, _ = self._score_statement(
-                statement, query=None, focus_entity_id=entity_id, now=now
+                statement, query=None, focus_entity_id=survivor_id, now=now
             )
             edges.append(
                 NeighborhoodEdge(
@@ -221,10 +240,11 @@ class RetrievalService:
             )
         edges.sort(key=lambda item: item.ranking_score, reverse=True)
         return NeighborhoodResponse(
-            entity_id=entity_id,
+            entity_id=survivor_id if entity_id in identity_ids else entity_id,
             edges=edges[:limit],
             ranking_explanations=[
                 "Neighborhood edges are ordered by temporal validity, recency, and evidence.",
+                "Merged entity aliases are included; neighbor ids resolve to surviving entities.",
                 "ranking_score is for ordering only and is not a truth score.",
             ],
         )

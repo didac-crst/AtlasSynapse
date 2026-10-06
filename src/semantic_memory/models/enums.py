@@ -47,6 +47,17 @@ class AliasTargetType(StrEnum):
     PREDICATE = "predicate"
 
 
+class AliasIdentityStrength(StrEnum):
+    """How strongly an entity alias establishes identity.
+
+    supporting: observed/inferred lexical hint; never alone decisive for MATCH.
+    authoritative: confirmed via merge, user confirmation, or authoritative ID.
+    """
+
+    SUPPORTING = "supporting"
+    AUTHORITATIVE = "authoritative"
+
+
 class ConstraintType(StrEnum):
     DOMAIN = "domain"
     RANGE = "range"
@@ -159,3 +170,22 @@ class FeedbackStatus(StrEnum):
 class FeedbackOutcome(StrEnum):
     CREATE = "CREATE"
     DEDUPED = "DEDUPED"
+
+
+class SemanticReviewStage(StrEnum):
+    INITIAL = "initial"
+    CHALLENGE = "challenge"
+    CLARIFICATION = "clarification"
+
+
+class SemanticChallengeStatus(StrEnum):
+    ACCEPTED_FOR_REVIEW = "accepted_for_review"
+    REJECTED_AS_INSUBSTANTIVE = "rejected_as_insubstantive"
+    REVIEWED = "reviewed"
+
+
+class SemanticClarificationStatus(StrEnum):
+    OPEN = "open"
+    ANSWERED = "answered"
+    SUPERSEDED = "superseded"
+    RESOLVED = "resolved"

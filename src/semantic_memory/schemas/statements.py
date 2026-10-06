@@ -84,6 +84,7 @@ class StatementResponse(BaseModel):
     superseded_by_statement_id: uuid.UUID | None = None
     retracts_statement_id: uuid.UUID | None = None
     created_at: datetime
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class AssertStatementResponse(BaseModel):

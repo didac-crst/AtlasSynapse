@@ -23,7 +23,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from semantic_memory.models.base import Base, CreatedAtMixin, TimestampMixin, UUIDPrimaryKeyMixin
-from semantic_memory.models.enums import EntityStatus, StatementStatus
+from semantic_memory.models.enums import AliasIdentityStrength, EntityStatus, StatementStatus
 
 _OBJECT_EXCLUSIVITY = (
     "("
@@ -110,8 +110,13 @@ class EntityAlias(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "entity_alias"
     __table_args__ = (
         UniqueConstraint("entity_id", "alias", name="uq_entity_alias_entity_alias"),
+        CheckConstraint(
+            f"identity_strength IN ({', '.join(repr(v.value) for v in AliasIdentityStrength)})",
+            name="identity_strength",
+        ),
         Index("ix_entity_alias_alias", "alias"),
         Index("ix_entity_alias_normalized_alias", "normalized_alias"),
+        Index("ix_entity_alias_identity_strength", "identity_strength"),
     )
 
     entity_id: Mapped[uuid.UUID] = mapped_column(
@@ -121,6 +126,11 @@ class EntityAlias(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
     alias: Mapped[str] = mapped_column(Text, nullable=False)
     normalized_alias: Mapped[str] = mapped_column(Text, nullable=False)
+    identity_strength: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default=AliasIdentityStrength.SUPPORTING.value,
+    )
     source_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("source.id"),

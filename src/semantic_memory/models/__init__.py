@@ -5,6 +5,7 @@ from semantic_memory.models.embeddings import Embedding
 from semantic_memory.models.enums import (
     ActorStatus,
     ActorType,
+    AliasIdentityStrength,
     AliasTargetType,
     BatchStatus,
     Cardinality,
@@ -23,6 +24,9 @@ from semantic_memory.models.enums import (
     OperationStatus,
     ProposalStatus,
     ProposalType,
+    SemanticChallengeStatus,
+    SemanticClarificationStatus,
+    SemanticReviewStage,
     StatementStatus,
     ValueKind,
 )
@@ -31,6 +35,9 @@ from semantic_memory.models.governance import (
     OntologyChange,
     OntologyGateResult,
     OntologyProposal,
+    OntologySemanticChallenge,
+    OntologySemanticClarificationRequest,
+    OntologySemanticReview,
 )
 from semantic_memory.models.knowledge import (
     Entity,
@@ -53,13 +60,22 @@ from semantic_memory.models.ontology import (
     OntologyPredicateRevision,
 )
 from semantic_memory.models.operations import Actor, IdempotencyRecord, IngestionBatch, OperationLog
-from semantic_memory.models.provenance import ExternalReference, Source, StatementEvidence
+from semantic_memory.models.provenance import (
+    ExternalReference,
+    Source,
+    SourceContentRevision,
+    SourceIdentityConflict,
+    SourceSystemAlias,
+    SourceSystemRegistry,
+    StatementEvidence,
+)
 from semantic_memory.models.reasoning import Conflict
 
 __all__ = [
     "Actor",
     "ActorStatus",
     "ActorType",
+    "AliasIdentityStrength",
     "AliasTargetType",
     "Base",
     "BatchStatus",
@@ -99,11 +115,21 @@ __all__ = [
     "OntologyPredicateRange",
     "OntologyPredicateRevision",
     "OntologyProposal",
+    "OntologySemanticChallenge",
+    "OntologySemanticClarificationRequest",
+    "OntologySemanticReview",
+    "SemanticClarificationStatus",
     "OperationLog",
     "OperationStatus",
     "ProposalStatus",
     "ProposalType",
+    "SemanticChallengeStatus",
+    "SemanticReviewStage",
     "Source",
+    "SourceContentRevision",
+    "SourceIdentityConflict",
+    "SourceSystemAlias",
+    "SourceSystemRegistry",
     "Statement",
     "StatementEvidence",
     "StatementQualifier",

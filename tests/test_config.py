@@ -29,9 +29,14 @@ def test_mcp_server_info() -> None:
     assert "assert_statement" in info.tools
     assert "explain_statement" in info.tools
     assert "add_evidence" in info.tools
+    assert "ensure_source" in info.tools
+    assert "ingest_source_content" in info.tools
+    assert "get_source_content" in info.tools
+    assert "search_source_content" in info.tools
     assert "get_timeline" in info.tools
     assert "find_conflicts" in info.tools
     assert "merge_entity" in info.tools
+    assert "add_entity_alias" in info.tools
     assert "assert_batch" in info.tools
     assert "get_class" in info.tools
     assert "get_predicate" in info.tools
@@ -39,6 +44,8 @@ def test_mcp_server_info() -> None:
     assert "get_ontology_context" in info.tools
     assert "propose_class" in info.tools
     assert "get_proposal" in info.tools
+    assert "challenge_ontology_review" in info.tools
+    assert "answer_semantic_clarification" in info.tools
     assert "apply_proposal" not in info.tools
     assert "search_entities" in info.tools
     assert "search_statements" in info.tools
@@ -46,6 +53,7 @@ def test_mcp_server_info() -> None:
     assert "get_relevant_context" in info.tools
     assert "get_entity_neighborhood" in info.tools
     assert "report_feedback" in info.tools
+    assert "get_runtime_config" in info.tools
     assert info.transport in {"stdio", "http"}
 
 
