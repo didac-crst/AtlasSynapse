@@ -63,9 +63,7 @@ class StatementRepository:
             ).all()
         )
 
-    def list_for_entity_timeline(
-        self, entity_id: uuid.UUID | list[uuid.UUID]
-    ) -> list[Statement]:
+    def list_for_entity_timeline(self, entity_id: uuid.UUID | list[uuid.UUID]) -> list[Statement]:
         """Return statements involving an entity (or identity group), ordered by time."""
         entity_ids = [entity_id] if isinstance(entity_id, uuid.UUID) else list(entity_id)
         if not entity_ids:
@@ -127,10 +125,7 @@ class StatementRepository:
                     Statement.status == StatementStatus.ASSERTED.value,
                 )
             )
-            if (
-                duplicate is not None
-                and statement.status == StatementStatus.ASSERTED.value
-            ):
+            if duplicate is not None and statement.status == StatementStatus.ASSERTED.value:
                 statement.status = StatementStatus.RETRACTED.value
                 retracted_duplicates += 1
                 continue
@@ -154,10 +149,7 @@ class StatementRepository:
                     Statement.status == StatementStatus.ASSERTED.value,
                 )
             )
-            if (
-                duplicate is not None
-                and statement.status == StatementStatus.ASSERTED.value
-            ):
+            if duplicate is not None and statement.status == StatementStatus.ASSERTED.value:
                 statement.status = StatementStatus.RETRACTED.value
                 retracted_duplicates += 1
                 continue

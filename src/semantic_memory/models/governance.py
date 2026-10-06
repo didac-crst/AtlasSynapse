@@ -127,9 +127,7 @@ class OntologySemanticClarificationRequest(Base, UUIDPrimaryKeyMixin, CreatedAtM
     )
     reason_code: Mapped[str] = mapped_column(String(64), nullable=False)
     question: Mapped[str] = mapped_column(Text, nullable=False)
-    required_clarification: Mapped[list[Any]] = mapped_column(
-        JSONB, nullable=False, default=list
-    )
+    required_clarification: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
     related_existing_concepts: Mapped[list[Any]] = mapped_column(
         JSONB, nullable=False, default=list
     )

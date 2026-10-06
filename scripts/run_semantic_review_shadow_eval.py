@@ -195,20 +195,14 @@ def main() -> int:
                     **{
                         **settings.model_dump(),
                         "semantic_review_max_context_tokens": (
-                            200
-                            if force_thin
-                            else settings.semantic_review_max_context_tokens
+                            200 if force_thin else settings.semantic_review_max_context_tokens
                         ),
                         "semantic_review_max_candidates": (
-                            1
-                            if force_thin
-                            else settings.semantic_review_max_candidates
+                            1 if force_thin else settings.semantic_review_max_candidates
                         ),
                     }
                 )
-                local = (
-                    ProposalService(session, settings=tiny) if force_thin else service
-                )
+                local = ProposalService(session, settings=tiny) if force_thin else service
                 result = local.propose_class(
                     ProposeClassRequest(
                         **env,
@@ -223,9 +217,7 @@ def main() -> int:
             review = result.proposal.effective_semantic_review
             model = None if review is None else review.decision.value
             conf = None if review is None else review.confidence
-            initial_human = case.get("initial_human_expected") or case.get(
-                "human_expected"
-            )
+            initial_human = case.get("initial_human_expected") or case.get("human_expected")
             final_human = (
                 case.get("clarification_human_expected")
                 or case.get("challenge_human_expected")
@@ -242,9 +234,7 @@ def main() -> int:
                 if review.related_existing_concepts:
                     print(
                         "related="
-                        + ", ".join(
-                            f"{c.kind}:{c.key}" for c in review.related_existing_concepts
-                        )
+                        + ", ".join(f"{c.kind}:{c.key}" for c in review.related_existing_concepts)
                     )
                 if result.open_clarification_request is not None:
                     clar = result.open_clarification_request

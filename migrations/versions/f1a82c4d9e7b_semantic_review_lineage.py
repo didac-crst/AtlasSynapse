@@ -50,9 +50,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.CheckConstraint(
-            "status IN ("
-            "'accepted_for_review', 'rejected_as_insubstantive', 'reviewed'"
-            ")",
+            "status IN ('accepted_for_review', 'rejected_as_insubstantive', 'reviewed')",
             name=op.f("ck_ontology_semantic_challenge_status"),
         ),
         sa.ForeignKeyConstraint(
@@ -113,7 +111,9 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("'[]'::jsonb"),
         ),
-        sa.Column("context_sufficient", sa.Boolean(), nullable=False, server_default=sa.text("true")),
+        sa.Column(
+            "context_sufficient", sa.Boolean(), nullable=False, server_default=sa.text("true")
+        ),
         sa.Column("challengeable", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("previous_decision", sa.String(length=32), nullable=True),
         sa.Column("decision_changed", sa.Boolean(), nullable=True),

@@ -326,9 +326,7 @@ class GovernanceRepository:
             self._session.scalars(
                 select(OntologySemanticReview)
                 .where(OntologySemanticReview.proposal_id == proposal_id)
-                .order_by(
-                    OntologySemanticReview.created_at.asc(), OntologySemanticReview.id.asc()
-                )
+                .order_by(OntologySemanticReview.created_at.asc(), OntologySemanticReview.id.asc())
             ).all()
         )
 
@@ -394,9 +392,7 @@ class GovernanceRepository:
     def get_clarification_request(
         self, clarification_request_id: uuid.UUID
     ) -> OntologySemanticClarificationRequest | None:
-        return self._session.get(
-            OntologySemanticClarificationRequest, clarification_request_id
-        )
+        return self._session.get(OntologySemanticClarificationRequest, clarification_request_id)
 
     def get_open_clarification_for_proposal(
         self, proposal_id: uuid.UUID
@@ -428,9 +424,7 @@ class GovernanceRepository:
             .limit(1)
         )
 
-    def supersede_open_clarifications(
-        self, proposal_id: uuid.UUID
-    ) -> list[uuid.UUID]:
+    def supersede_open_clarifications(self, proposal_id: uuid.UUID) -> list[uuid.UUID]:
         """Mark open asks superseded. Returns IDs newest-first."""
         rows = list(
             self._session.scalars(

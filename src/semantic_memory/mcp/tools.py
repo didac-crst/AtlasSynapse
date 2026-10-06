@@ -213,9 +213,7 @@ class EntityMCPTools:
     def add_entity_alias(self, payload: dict[str, Any]) -> dict[str, Any]:
         return _run_mutation(
             self._session,
-            lambda: self._entities.add_entity_alias(
-                AddEntityAliasRequest.model_validate(payload)
-            ),
+            lambda: self._entities.add_entity_alias(AddEntityAliasRequest.model_validate(payload)),
         )
 
 

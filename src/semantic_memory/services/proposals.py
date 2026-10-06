@@ -370,9 +370,7 @@ class ProposalService:
         if semantic_decision is None and semantic_gate is not None:
             semantic_decision = semantic_gate.decision
 
-        failed = [
-            item.gate_name for item in non_semantic if item.decision == GateDecision.FAIL
-        ]
+        failed = [item.gate_name for item in non_semantic if item.decision == GateDecision.FAIL]
         if semantic_decision == GateDecision.FAIL:
             failed.append("semantic_review")
         if failed:
@@ -430,9 +428,7 @@ class ProposalService:
             or details.get("review_decision")
             or "manual_review"
         )
-        authoritative = bool(details.get("authoritative", True)) and not bool(
-            details.get("shadow")
-        )
+        authoritative = bool(details.get("authoritative", True)) and not bool(details.get("shadow"))
         review = self._governance.create_semantic_review(
             proposal_id=proposal.id,
             review_stage=SemanticReviewStage.INITIAL,
@@ -461,12 +457,8 @@ class ProposalService:
                 "gate_decision": semantic.decision.value,
                 "shadow": bool(details.get("shadow")),
                 "model_decision": model_decision,
-                "candidate_selection_trace": list(
-                    details.get("candidate_selection_trace") or []
-                ),
-                "required_clarification": list(
-                    details.get("required_clarification") or []
-                ),
+                "candidate_selection_trace": list(details.get("candidate_selection_trace") or []),
+                "required_clarification": list(details.get("required_clarification") or []),
             },
         )
         self._governance.set_effective_semantic_review(proposal, review.id)
@@ -475,9 +467,7 @@ class ProposalService:
         if clarification is not None:
             details["clarification_request_id"] = str(clarification.id)
             details["reason_code"] = clarification.reason_code
-            details["required_clarification"] = list(
-                clarification.required_clarification or []
-            )
+            details["required_clarification"] = list(clarification.required_clarification or [])
         # Enrich historical gate details with review_id pointer only; decision stays unchanged.
         self._governance.upsert_gate_result(
             proposal_id=proposal.id,
@@ -680,9 +670,7 @@ class ProposalService:
                 "required_clarification": list(structured.required_clarification),
             },
         )
-        self._governance.set_challenge_status(
-            challenge, status=SemanticChallengeStatus.REVIEWED
-        )
+        self._governance.set_challenge_status(challenge, status=SemanticChallengeStatus.REVIEWED)
         self._governance.set_effective_semantic_review(proposal, review.id)
         self._maybe_issue_clarification_request(proposal=proposal, review=review)
         # Do NOT mutate historical ontology_gate_result rows.
@@ -727,23 +715,17 @@ class ProposalService:
             request=request,
             response_model=AnswerSemanticClarificationResponse,
             constraint_name="ontology_propose",
-            execute=lambda: self._answer_clarification_body(
-                request=request, actor_id=actor.id
-            ),
+            execute=lambda: self._answer_clarification_body(request=request, actor_id=actor.id),
         )
 
     def _answer_clarification_body(
         self, *, request: AnswerSemanticClarificationRequest, actor_id: uuid.UUID
     ) -> AnswerSemanticClarificationResponse:
-        clarification = self._governance.get_clarification_request(
-            request.clarification_request_id
-        )
+        clarification = self._governance.get_clarification_request(request.clarification_request_id)
         if clarification is None:
             raise ClarificationRequestNotFoundError(
                 "Clarification request was not found",
-                details={
-                    "clarification_request_id": str(request.clarification_request_id)
-                },
+                details={"clarification_request_id": str(request.clarification_request_id)},
                 request_id=str(request.request_id),
             )
         if clarification.status == SemanticClarificationStatus.SUPERSEDED.value:
@@ -912,9 +894,7 @@ class ProposalService:
                 "answered_clarification_request_id": str(clarification.id),
             },
         )
-        self._governance.mark_clarification_resolved(
-            clarification, resulting_review_id=review.id
-        )
+        self._governance.mark_clarification_resolved(clarification, resulting_review_id=review.id)
         self._governance.set_effective_semantic_review(proposal, review.id)
         self._maybe_issue_clarification_request(proposal=proposal, review=review)
 
@@ -1005,9 +985,7 @@ class ProposalService:
             question=asks[0],
             required_clarification=asks,
             related_existing_concepts=related,
-            supersedes_clarification_request_id=(
-                superseded_ids[0] if superseded_ids else None
-            ),
+            supersedes_clarification_request_id=(superseded_ids[0] if superseded_ids else None),
         )
         review.details = {
             **details,
@@ -1539,9 +1517,7 @@ class ProposalService:
             updated_at=proposal.updated_at,
         )
 
-    def _to_semantic_review_response(
-        self, row: OntologySemanticReview
-    ) -> SemanticReviewResponse:
+    def _to_semantic_review_response(self, row: OntologySemanticReview) -> SemanticReviewResponse:
         details = row.details or {}
         clarification_id = _optional_uuid(details.get("clarification_request_id"))
         if clarification_id is None:
@@ -1572,16 +1548,12 @@ class ProposalService:
                 for item in row.related_existing_concepts or []
             ],
             recommended_actions=[str(x) for x in row.recommended_actions or []],
-            required_clarification=[
-                str(x) for x in details.get("required_clarification") or []
-            ],
+            required_clarification=[str(x) for x in details.get("required_clarification") or []],
             context_sufficient=bool(row.context_sufficient),
             challengeable=bool(row.challengeable),
             authoritative=bool(row.authoritative),
             previous_decision=(
-                None
-                if row.previous_decision is None
-                else SemanticDecision(row.previous_decision)
+                None if row.previous_decision is None else SemanticDecision(row.previous_decision)
             ),
             decision_changed=row.decision_changed,
             llm_call_log_id=row.llm_call_log_id,
@@ -1624,9 +1596,7 @@ def _review_row_to_structured(row: OntologySemanticReview) -> StructuredReviewRe
             for item in row.related_existing_concepts or []
         ],
         recommended_actions=[str(x) for x in row.recommended_actions or []],
-        required_clarification=[
-            str(x) for x in details.get("required_clarification") or []
-        ],
+        required_clarification=[str(x) for x in details.get("required_clarification") or []],
         context_sufficient=bool(row.context_sufficient),
         challengeable=bool(row.challengeable),
     )

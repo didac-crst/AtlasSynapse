@@ -188,7 +188,6 @@ class SourceContentRevision(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
 class StatementEvidence(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
     """Evidence linking a statement to a source."""
 
-
     __tablename__ = "statement_evidence"
     __table_args__ = (
         CheckConstraint(

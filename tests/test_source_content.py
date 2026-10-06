@@ -334,9 +334,7 @@ def test_divide_and_conquer_html_ingest(db_session: Session) -> None:
     assert alt.source.id != ingested.source.id
     assert alt.source.entity_id == doc_id
 
-    by_entity = provenance.get_source_content(
-        GetSourceContentRequest(document_entity_id=doc_id)
-    )
+    by_entity = provenance.get_source_content(GetSourceContentRequest(document_entity_id=doc_id))
     assert "partition" in by_entity.revision.canonical_content.casefold()
 
     hits = provenance.search_source_content(

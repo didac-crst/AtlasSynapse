@@ -118,8 +118,7 @@ class ReviewContext:
                     f" label={item.label or item.key}"
                     f" reason={item.reason}"
                     f" score={item.score:.3f}"
-                    f" tier={item.tier.name.lower()}"
-                    + (f" desc={desc}" if desc else "")
+                    f" tier={item.tier.name.lower()}" + (f" desc={desc}" if desc else "")
                 )
         if self.derivation_hints:
             lines.append("")
@@ -229,11 +228,9 @@ class SemanticReviewContextBuilder:
             identity = (kind, key)
             if identity in by_id and by_id[identity].tier == ContextTier.PINNED:
                 continue
-            row = None
+            row: Any = None
             if kind == "class":
-                row = self._ontology.get_class_by_key(
-                    namespace_key=namespace_key, class_key=key
-                )
+                row = self._ontology.get_class_by_key(namespace_key=namespace_key, class_key=key)
             elif kind == "predicate":
                 row = self._ontology.get_predicate_by_key(
                     namespace_key=namespace_key, predicate_key=key
@@ -278,9 +275,7 @@ class SemanticReviewContextBuilder:
                     return packed
                 trial = packed + [concept]
                 if (
-                    self._estimate_tokens(
-                        proposal_type, payload, trial, derivation_hints=hints
-                    )
+                    self._estimate_tokens(proposal_type, payload, trial, derivation_hints=hints)
                     > max_tokens
                     and packed
                 ):
@@ -310,9 +305,7 @@ class SemanticReviewContextBuilder:
         for tier in (ContextTier.GENERIC, ContextTier.SUPPORTING, ContextTier.PINNED):
             while (
                 remaining
-                and self._estimate_tokens(
-                    proposal_type, payload, remaining, derivation_hints=hints
-                )
+                and self._estimate_tokens(proposal_type, payload, remaining, derivation_hints=hints)
                 > max_tokens
             ):
                 # Remove the last concept of this tier (lowest score within tier due to sort).
@@ -446,9 +439,7 @@ class SemanticReviewContextBuilder:
                         score=0.55 if parent_is_root else 0.72,
                         reason="proposed_parent",
                         tier=ContextTier.GENERIC if parent_is_root else ContextTier.SUPPORTING,
-                        selection_trace=(
-                            "generic_parent" if parent_is_root else "proposed_parent"
-                        ),
+                        selection_trace=("generic_parent" if parent_is_root else "proposed_parent"),
                     )
                 )
                 siblings: list[ContextConcept] = []
@@ -550,9 +541,7 @@ class SemanticReviewContextBuilder:
 
         # 6) Directly connected ontology concepts for already selected pinned/supporting
         seed = [
-            c
-            for c in scored.values()
-            if c.tier in {ContextTier.PINNED, ContextTier.SUPPORTING}
+            c for c in scored.values() if c.tier in {ContextTier.PINNED, ContextTier.SUPPORTING}
         ]
         for concept in list(seed):
             self._add_connected_support(
@@ -625,17 +614,18 @@ class SemanticReviewContextBuilder:
             kind, cand_key = kind_key
             if (kind, cand_key) in seen_ids:
                 continue
+            pinned_row: Any
             if kind == "class":
-                row = self._ontology.get_class_by_key(
+                pinned_row = self._ontology.get_class_by_key(
                     namespace_key=namespace_key, class_key=cand_key
                 )
             else:
-                row = self._ontology.get_predicate_by_key(
+                pinned_row = self._ontology.get_predicate_by_key(
                     namespace_key=namespace_key, predicate_key=cand_key
                 )
-            if row is not None:
+            if pinned_row is not None:
                 seen_ids.add((kind, cand_key))
-                candidates.append((kind, row))
+                candidates.append((kind, pinned_row))
 
         for kind, row in candidates:
             if row.key == proposal_key:
@@ -848,12 +838,17 @@ def match_derivation_hints(
     blob = f"{key} {label} {description}".casefold()
 
     if proposal_type == ProposalType.PREDICATE:
-        if key_cf in {
-            "employedby",
-            "hasemployer",
-            "hascurrentemployer",
-            "employerof",
-        } or "employed by" in blob or "current employer" in blob:
+        if (
+            key_cf
+            in {
+                "employedby",
+                "hasemployer",
+                "hascurrentemployer",
+                "employerof",
+            }
+            or "employed by" in blob
+            or "current employer" in blob
+        ):
             return DerivationHintMatch(
                 hints=(
                     "Relevant canonical path: Person --holdsRole--> Role --roleAt--> Organization",
@@ -886,7 +881,8 @@ def match_derivation_hints(
         if key_cf in {"usedby", "uses"}:
             return DerivationHintMatch(
                 hints=(
-                    "Directionality matters: usedBy/uses is not automatically dependsOn or deployedOn.",
+                    "Directionality matters: usedBy/uses is not automatically "
+                    "dependsOn or deployedOn.",
                     "If intended subject/object or usage semantics are underspecified, prefer "
                     "manual_review with clarification over approval.",
                 ),
@@ -930,15 +926,18 @@ def match_derivation_hints(
             return DerivationHintMatch(
                 hints=(
                     "Relevant canonical relation: Agent/Person --holdsRole--> Role",
-                    "Temporality belongs on statements/validity windows, not a HistoricalRole class.",
+                    "Temporality belongs on statements/validity windows, "
+                    "not a HistoricalRole class.",
                 ),
                 pin_concepts=(
                     ("class", "Role"),
                     ("predicate", "holdsRole"),
                 ),
             )
-        if key_cf.startswith("verified") or key_cf.startswith("confirmed") or (
-            "verified" in blob and "skill" in blob
+        if (
+            key_cf.startswith("verified")
+            or key_cf.startswith("confirmed")
+            or ("verified" in blob and "skill" in blob)
         ):
             return DerivationHintMatch(
                 hints=(
@@ -948,8 +947,10 @@ def match_derivation_hints(
                 ),
                 pin_concepts=(("class", "Skill"), ("predicate", "hasSkill")),
             )
-        if key_cf.startswith("probable") or key_cf.startswith("likely") or (
-            "confidence" in blob and ("goal" in blob or "probable" in blob)
+        if (
+            key_cf.startswith("probable")
+            or key_cf.startswith("likely")
+            or ("confidence" in blob and ("goal" in blob or "probable" in blob))
         ):
             return DerivationHintMatch(
                 hints=(
@@ -1041,18 +1042,18 @@ def _hash_context(context: ReviewContext) -> str:
 
 def _label_for(repo: OntologyRepository, kind: str, row: Any) -> str | None:
     if kind == "class":
-        revision = repo.get_current_class_revision(row)
-        return None if revision is None else revision.label
-    revision = repo.get_current_predicate_revision(row)
-    return None if revision is None else revision.label
+        class_revision = repo.get_current_class_revision(row)
+        return None if class_revision is None else class_revision.label
+    predicate_revision = repo.get_current_predicate_revision(row)
+    return None if predicate_revision is None else predicate_revision.label
 
 
 def _description_for(repo: OntologyRepository, kind: str, row: Any) -> str | None:
     if kind == "class":
-        revision = repo.get_current_class_revision(row)
-        return None if revision is None else revision.description
-    revision = repo.get_current_predicate_revision(row)
-    return None if revision is None else revision.description
+        class_revision = repo.get_current_class_revision(row)
+        return None if class_revision is None else class_revision.description
+    predicate_revision = repo.get_current_predicate_revision(row)
+    return None if predicate_revision is None else predicate_revision.description
 
 
 @dataclass(frozen=True)
@@ -1160,12 +1161,12 @@ def _lexical_proximity(proposal: _TextFields, candidate: _TextFields) -> float:
         contain = 0.92
 
     key_ratio = SequenceMatcher(None, pk, ck).ratio()
-    prop_id_parts = {
-        normalize_text(p) for p in _camel_parts(proposal.key)
-    } | _tokens(proposal.label)
-    cand_id_parts = {
-        normalize_text(p) for p in _camel_parts(candidate.key)
-    } | _tokens(candidate.label)
+    prop_id_parts = {normalize_text(p) for p in _camel_parts(proposal.key)} | _tokens(
+        proposal.label
+    )
+    cand_id_parts = {normalize_text(p) for p in _camel_parts(candidate.key)} | _tokens(
+        candidate.label
+    )
     stem_hit = _stem_part_overlap(prop_id_parts, cand_id_parts)
 
     desc_j = _jaccard(
@@ -1195,15 +1196,13 @@ def _lexical_proximity(proposal: _TextFields, candidate: _TextFields) -> float:
     text_score = (0.35 + 0.55 * cross_j) if cross_j >= 0.2 else (0.7 * cross_j)
 
     # Candidate key/label mentioned in proposal description: strong only with other signal.
-    cand_mention_parts = {
-        _light_stem(normalize_text(p)) for p in _camel_parts(candidate.key)
-    } | {_light_stem(ck)}
+    cand_mention_parts = {_light_stem(normalize_text(p)) for p in _camel_parts(candidate.key)} | {
+        _light_stem(ck)
+    }
     cand_mention_parts |= {_light_stem(t) for t in _tokens(candidate.label) if len(t) >= 4}
     prop_desc_stems = _content_tokens(proposal.description)
     mentioned = bool(cand_mention_parts & prop_desc_stems)
-    if mentioned and (
-        cross_j >= 0.15 or identity >= 0.45 or contain or key_ratio >= 0.48
-    ):
+    if mentioned and (cross_j >= 0.15 or identity >= 0.45 or contain or key_ratio >= 0.48):
         # key_ratio gate keeps reliesUpon↔dependsOn strong while "not a Role" stays weak.
         mention_score = 0.82
     elif mentioned:

@@ -6,6 +6,7 @@ import uuid
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from semantic_memory.exceptions import AmbiguousSourceError
@@ -173,7 +174,7 @@ def test_unique_index_blocks_second_non_conflict_insert(db_session: Session) -> 
             created_by_actor_id=actor.id,
         )
     )
-    with pytest.raises(Exception):
+    with pytest.raises(IntegrityError):
         db_session.flush()
 
 

@@ -54,8 +54,7 @@ def _ensure_predicate(
 
     pred_id = conn.execute(
         sa.text(
-            "SELECT p.id FROM ontology_predicate p "
-            "WHERE p.namespace_id = :ns AND p.key = :key"
+            "SELECT p.id FROM ontology_predicate p WHERE p.namespace_id = :ns AND p.key = :key"
         ),
         {"ns": ns_id, "key": key},
     ).scalar()
@@ -89,9 +88,7 @@ def _ensure_predicate(
             },
         )
         conn.execute(
-            sa.text(
-                "UPDATE ontology_predicate SET current_revision_id = :rev WHERE id = :id"
-            ),
+            sa.text("UPDATE ontology_predicate SET current_revision_id = :rev WHERE id = :id"),
             {"rev": rev_id, "id": pred_id},
         )
     else:

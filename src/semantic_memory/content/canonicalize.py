@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from html import unescape
-from typing import Literal
+from typing import Any, Literal
 
-from bs4 import BeautifulSoup, NavigableString, Tag
+from bs4 import BeautifulSoup, Tag
+from bs4.element import NavigableString
 
 ContentFormat = Literal["markdown", "text", "html"]
 
@@ -104,9 +106,7 @@ def canonicalize_content(
         canonical = _normalize_text_body(original)
         method, version = f"{source_format}_normalize", "1"
     else:
-        raise ValueError(
-            f"Unsupported canonicalization {source_format!r} → {target_format!r}"
-        )
+        raise ValueError(f"Unsupported canonicalization {source_format!r} → {target_format!r}")
 
     return CanonicalizationResult(
         canonical_content=canonical,
@@ -150,8 +150,8 @@ def _html_to_markdown(html: str) -> str:
     return text + "\n"
 
 
-def _render_nodes(nodes: object, parts: list[str], *, list_depth: int) -> None:
-    for node in nodes:  # type: ignore[union-attr]
+def _render_nodes(nodes: Iterable[Any], parts: list[str], *, list_depth: int) -> None:
+    for node in nodes:
         _render_node(node, parts, list_depth=list_depth)
 
 

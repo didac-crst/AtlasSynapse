@@ -215,9 +215,7 @@ class ProvenanceRepository:
         limit: int = 20,
     ) -> list[tuple[SourceContentRevision, Source]]:
         pattern = (
-            "%"
-            + query.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            + "%"
+            "%" + query.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
         )
         stmt = (
             select(SourceContentRevision, Source)

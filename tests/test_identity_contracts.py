@@ -6,6 +6,7 @@ import uuid
 
 import pytest
 from sqlalchemy import select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from semantic_memory.models import ActorType, AliasIdentityStrength, EntityAlias
@@ -85,9 +86,7 @@ def test_aggregate_candidate_decisions() -> None:
         == IdentityResolutionOutcome.MATCH
     )
     assert (
-        aggregate_candidate_decisions(
-            [cand(CandidateDecision.SAME), cand(CandidateDecision.SAME)]
-        )
+        aggregate_candidate_decisions([cand(CandidateDecision.SAME), cand(CandidateDecision.SAME)])
         == IdentityResolutionOutcome.AMBIGUOUS
     )
     assert (
@@ -182,7 +181,7 @@ def test_identity_strength_check_constraint(db_session: Session) -> None:
         )
     )
     assert created.entity is not None
-    with pytest.raises(Exception):
+    with pytest.raises(IntegrityError):
         db_session.execute(
             text(
                 "INSERT INTO entity_alias "

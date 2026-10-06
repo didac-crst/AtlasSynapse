@@ -62,7 +62,15 @@ def ensure_identity_graph_ontology(session: Session) -> dict[str, Any]:
         raise RuntimeError("core ontology namespace missing; run core seed first")
 
     created = 0
-    for key, description, value_kind, cardinality, domains, ranges, is_symmetric in _IDENTITY_PREDICATES:
+    for (
+        key,
+        description,
+        value_kind,
+        cardinality,
+        domains,
+        ranges,
+        is_symmetric,
+    ) in _IDENTITY_PREDICATES:
         existing = session.scalar(
             select(OntologyPredicate).where(
                 OntologyPredicate.namespace_id == namespace.id,

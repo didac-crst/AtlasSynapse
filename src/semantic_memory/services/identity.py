@@ -10,12 +10,6 @@ from sqlalchemy.orm import Session
 from semantic_memory.models import Entity, OntologyClass
 from semantic_memory.models.enums import AliasIdentityStrength, EntityStatus
 from semantic_memory.repositories.entities import EntityRepository
-from semantic_memory.schemas.identity_adjudication import IdentityAdjudicationRequest
-from semantic_memory.services.identity_adjudication import IdentityAdjudicationService
-from semantic_memory.services.identity_graph_evidence import (
-    IdentityGraphEvidenceService,
-    sort_candidates_for_explanation,
-)
 from semantic_memory.schemas.entities import EntityCandidate, ResolutionOutcome
 from semantic_memory.schemas.identity import (
     CandidateDecision,
@@ -27,6 +21,12 @@ from semantic_memory.schemas.identity import (
     action_for_resolution,
     aggregate_candidate_decisions,
     to_legacy_resolution_outcome,
+)
+from semantic_memory.schemas.identity_adjudication import IdentityAdjudicationRequest
+from semantic_memory.services.identity_adjudication import IdentityAdjudicationService
+from semantic_memory.services.identity_graph_evidence import (
+    IdentityGraphEvidenceService,
+    sort_candidates_for_explanation,
 )
 
 
@@ -227,16 +227,14 @@ class IdentityService:
         elif resolution == IdentityResolutionOutcome.AMBIGUOUS:
             top_reasons = [
                 IdentityEvidence(
-                    signal="identity_conflict" if _multiple_same(identity_candidates) else "uncertain_identity",
+                    signal="identity_conflict"
+                    if _multiple_same(identity_candidates)
+                    else "uncertain_identity",
                     strength=EvidenceStrength.DECISIVE
                     if _multiple_same(identity_candidates)
                     else EvidenceStrength.SUPPORTING,
                     value=canonical_name,
-                    detail=(
-                        f"{len(identity_candidates)} candidate(s); "
-                        f"same={sum(1 for c in identity_candidates if c.decision == CandidateDecision.SAME)}; "
-                        f"uncertain={sum(1 for c in identity_candidates if c.decision == CandidateDecision.UNCERTAIN)}"
-                    ),
+                    detail=_ambiguous_detail(identity_candidates),
                     evidence_refs=[f"entity:{c.entity_id}" for c in identity_candidates],
                 )
             ]
@@ -289,6 +287,12 @@ class IdentityService:
 
 def _multiple_same(candidates: list[IdentityCandidate]) -> bool:
     return sum(1 for c in candidates if c.decision == CandidateDecision.SAME) > 1
+
+
+def _ambiguous_detail(candidates: list[IdentityCandidate]) -> str:
+    same_n = sum(1 for c in candidates if c.decision == CandidateDecision.SAME)
+    uncertain_n = sum(1 for c in candidates if c.decision == CandidateDecision.UNCERTAIN)
+    return f"{len(candidates)} candidate(s); same={same_n}; uncertain={uncertain_n}"
 
 
 def _legacy_match_reason(candidate: IdentityCandidate) -> str:

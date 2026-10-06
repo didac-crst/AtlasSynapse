@@ -13,7 +13,11 @@ from semantic_memory.models.enums import ActorType, AliasIdentityStrength, Entit
 from semantic_memory.repositories.entities import EntityRepository
 from semantic_memory.repositories.ontology import OntologyRepository
 from semantic_memory.schemas.actors import ActorEnsureRequest
-from semantic_memory.schemas.entities import CreateEntityRequest, ExternalReferenceInput, ResolutionOutcome
+from semantic_memory.schemas.entities import (
+    CreateEntityRequest,
+    ExternalReferenceInput,
+    ResolutionOutcome,
+)
 from semantic_memory.schemas.identity import (
     CandidateDecision,
     EvidenceStrength,
@@ -51,9 +55,7 @@ class _SpyAdjudicator:
 
 class _PromoteFirstUncertainAdjudicator:
     def adjudicate(self, request: IdentityAdjudicationRequest) -> IdentityAdjudicationResult:
-        uncertain = [
-            c for c in request.candidates if c.decision == CandidateDecision.UNCERTAIN
-        ]
+        uncertain = [c for c in request.candidates if c.decision == CandidateDecision.UNCERTAIN]
         if not uncertain:
             return IdentityAdjudicationResult(provider="test", model="test")
         return IdentityAdjudicationResult(
@@ -73,9 +75,7 @@ class _PromoteFirstUncertainAdjudicator:
 
 
 def _ensure_writer(session: Session) -> None:
-    ActorService(session).ensure(
-        ActorEnsureRequest(key="writer", actor_type=ActorType.AGENT)
-    )
+    ActorService(session).ensure(ActorEnsureRequest(key="writer", actor_type=ActorType.AGENT))
 
 
 def _uncertain_candidate(
@@ -351,9 +351,7 @@ def test_provider_failure_leaves_uncertain(db_session: Session) -> None:
     assert resolved.identity is not None
     audit = resolved.identity.metadata["adjudication"]
     assert audit["metadata"]["fail_closed"] is True
-    assert all(
-        row["decision"] == "UNCERTAIN" for row in audit["metadata"]["decisions"]
-    )
+    assert all(row["decision"] == "UNCERTAIN" for row in audit["metadata"]["decisions"])
 
 
 def test_openai_malformed_response_fail_closed() -> None:

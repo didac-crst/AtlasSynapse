@@ -39,9 +39,7 @@ def test_person_satisfies_related_to_thing_range_without_rich_events(
     assert ("Agent", "Thing") in parents
     assert ("Person", "Agent") in parents
 
-    ActorService(db_session).ensure(
-        ActorEnsureRequest(key="writer", actor_type=ActorType.AGENT)
-    )
+    ActorService(db_session).ensure(ActorEnsureRequest(key="writer", actor_type=ActorType.AGENT))
     entities = EntityService(db_session)
     statements = StatementService(db_session)
 

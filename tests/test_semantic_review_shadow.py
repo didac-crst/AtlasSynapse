@@ -65,9 +65,7 @@ def _related_metadata(case: dict, *, kind: str) -> list[dict[str, str]]:
     items: list[dict[str, str]] = []
     for key in _related_keys(case):
         item_kind = "class" if key[:1].isupper() else kind
-        items.append(
-            {"kind": item_kind, "key": key, "reason": "Closest semantic match"}
-        )
+        items.append({"kind": item_kind, "key": key, "reason": "Closest semantic match"})
     return items
 
 
@@ -227,9 +225,7 @@ def test_eval_corpus_mock_orchestration(db_session: Session) -> None:
             metadata["context_sufficient"] = False
             metadata["review_decision"] = ReviewDecision.APPROVE.value
             expected = "manual_review"
-        followup = case.get("clarification_human_expected") or case.get(
-            "challenge_human_expected"
-        )
+        followup = case.get("clarification_human_expected") or case.get("challenge_human_expected")
         if followup:
             metadata["challenge_decision"] = followup
 

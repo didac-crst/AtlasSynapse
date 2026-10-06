@@ -177,9 +177,13 @@ def upgrade() -> None:
         )
 
     # Backfill canonical_source_system from registry aliases, else provisional key.
-    rows = conn.execute(
-        sa.text("SELECT id, source_system FROM source WHERE source_system IS NOT NULL")
-    ).mappings().all()
+    rows = (
+        conn.execute(
+            sa.text("SELECT id, source_system FROM source WHERE source_system IS NOT NULL")
+        )
+        .mappings()
+        .all()
+    )
     alias_map = {
         row[0]: row[1]
         for row in conn.execute(
@@ -195,26 +199,28 @@ def upgrade() -> None:
         normalized = _normalize_key(raw)
         canonical = alias_map.get(normalized, normalized)
         conn.execute(
-            sa.text(
-                "UPDATE source SET canonical_source_system = :canonical WHERE id = :id"
-            ),
+            sa.text("UPDATE source SET canonical_source_system = :canonical WHERE id = :id"),
             {"canonical": canonical, "id": row["id"]},
         )
 
     # Flag identity collisions explicitly — do not merge or delete.
     import json
 
-    conflicts = conn.execute(
-        sa.text(
-            "SELECT canonical_source_system, external_id, "
-            "       array_agg(id::text ORDER BY created_at, id) AS source_ids "
-            "FROM source "
-            "WHERE canonical_source_system IS NOT NULL "
-            "  AND external_id IS NOT NULL "
-            "GROUP BY canonical_source_system, external_id "
-            "HAVING COUNT(*) > 1"
+    conflicts = (
+        conn.execute(
+            sa.text(
+                "SELECT canonical_source_system, external_id, "
+                "       array_agg(id::text ORDER BY created_at, id) AS source_ids "
+                "FROM source "
+                "WHERE canonical_source_system IS NOT NULL "
+                "  AND external_id IS NOT NULL "
+                "GROUP BY canonical_source_system, external_id "
+                "HAVING COUNT(*) > 1"
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     for conflict in conflicts:
         source_ids = list(conflict["source_ids"])
         conn.execute(

@@ -83,9 +83,7 @@ class ProvenanceService:
             request=request,
             response_model=IngestSourceContentResponse,
             constraint_name="source_content_write",
-            execute=lambda: self._ingest_source_content_body(
-                request=request, actor_id=actor.id
-            ),
+            execute=lambda: self._ingest_source_content_body(request=request, actor_id=actor.id),
         )
 
     def get_source_content(self, request: GetSourceContentRequest) -> GetSourceContentResponse:
@@ -194,18 +192,14 @@ class ProvenanceService:
         if document_entity_id is not None and source_input.entity_id is None:
             source_input = source_input.model_copy(update={"entity_id": document_entity_id})
 
-        source, _source_created = self._resolve_or_create_source(
-            source_input, actor_id=actor_id
-        )
+        source, _source_created = self._resolve_or_create_source(source_input, actor_id=actor_id)
         if document_entity_id is not None and source.entity_id != document_entity_id:
             source = self._provenance.set_source_entity_id(source, document_entity_id)
 
         # Access/retrieval policy and approximate dates live on source metadata.
         source_meta_keys = ("visibility", "published_at", "date_precision")
         source_meta = {
-            key: request.metadata[key]
-            for key in source_meta_keys
-            if key in request.metadata
+            key: request.metadata[key] for key in source_meta_keys if key in request.metadata
         }
         if source_meta:
             source = self._provenance.merge_source_metadata(source, source_meta)
@@ -220,9 +214,7 @@ class ProvenanceService:
             ) from exc
 
         canonical_hash = canonicalized.canonical_hash
-        self._provenance.acquire_source_lock(
-            material=f"content:{source.id}:{canonical_hash}"
-        )
+        self._provenance.acquire_source_lock(material=f"content:{source.id}:{canonical_hash}")
         existing = self._provenance.find_content_revision_by_hash(
             source_id=source.id,
             canonical_content_hash=canonical_hash,
@@ -273,9 +265,7 @@ class ProvenanceService:
             reused=False,
         )
 
-    def _canonicalize_ingest(
-        self, request: IngestSourceContentRequest
-    ) -> CanonicalizationResult:
+    def _canonicalize_ingest(self, request: IngestSourceContentRequest) -> CanonicalizationResult:
         """Resolve request fields into a CanonicalizationResult."""
         if request.content is not None and request.content_format is not None:
             return canonicalize_content(
@@ -573,9 +563,7 @@ class ProvenanceService:
             original_format=(
                 revision.original_format if include_original else None  # type: ignore[arg-type]
             ),
-            original_content_hash=(
-                revision.original_content_hash if include_original else None
-            ),
+            original_content_hash=(revision.original_content_hash if include_original else None),
             captured_at=revision.captured_at,
             metadata=revision.metadata_json,
             created_at=revision.created_at,

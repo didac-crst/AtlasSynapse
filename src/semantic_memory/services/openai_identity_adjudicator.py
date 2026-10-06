@@ -56,10 +56,7 @@ class OpenAIIdentityAdjudicator:
 
     @property
     def _api_key(self) -> str:
-        return (
-            self._settings.identity_review_api_key
-            or self._settings.semantic_review_api_key
-        )
+        return self._settings.identity_review_api_key or self._settings.semantic_review_api_key
 
     @property
     def _api_base(self) -> str:

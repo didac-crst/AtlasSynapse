@@ -141,9 +141,7 @@ class DeterministicGatePipeline:
         namespace_key = str(payload["namespace_key"])
         if proposal_type == ProposalType.CLASS:
             key = str(payload["key"])
-            existing = self._ontology.get_class_by_key(
-                namespace_key=namespace_key, class_key=key
-            )
+            existing = self._ontology.get_class_by_key(namespace_key=namespace_key, class_key=key)
             if existing is None:
                 existing = self._ontology.find_class_by_normalized_key(
                     namespace_key=namespace_key, class_key=key

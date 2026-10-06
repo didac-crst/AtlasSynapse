@@ -80,9 +80,6 @@ def downgrade() -> None:
     conn = op.get_bind()
     for child_key, parent_key in _PARENT_LINKS:
         conn.execute(
-            sa.text(
-                "DELETE FROM ontology_class_parent "
-                "WHERE id = :id"
-            ),
+            sa.text("DELETE FROM ontology_class_parent WHERE id = :id"),
             {"id": _sid("class_parent", _CORE_NS, child_key, parent_key)},
         )

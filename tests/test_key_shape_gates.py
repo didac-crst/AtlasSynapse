@@ -52,9 +52,7 @@ def test_lowercase_person_reuses_core_person(db_session: Session) -> None:
         )
     )
     assert result.outcome == ProposalOutcome.REUSE_RECOMMENDED
-    existing = next(
-        g for g in result.proposal.gate_results if g.gate_name == "existing_key"
-    )
+    existing = next(g for g in result.proposal.gate_results if g.gate_name == "existing_key")
     assert existing.details.get("reason") == "canonical_key_equivalent"
     assert existing.details.get("existing_key") == "Person"
 

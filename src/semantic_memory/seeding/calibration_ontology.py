@@ -170,13 +170,13 @@ def ensure_calibration_ontology(session: Session) -> dict[str, Any]:
 
     created_predicates = 0
     for key, description, value_kind, cardinality, domains, ranges in CALIBRATION_PREDICATES:
-        existing = session.scalar(
+        existing_predicate = session.scalar(
             select(OntologyPredicate).where(
                 OntologyPredicate.namespace_id == namespace.id,
                 OntologyPredicate.key == key,
             )
         )
-        if existing is not None:
+        if existing_predicate is not None:
             continue
         pred_id = stable_seed_id("calibration-predicate", key)
         rev_id = stable_seed_id("calibration-predicate-rev", key)
@@ -189,7 +189,7 @@ def ensure_calibration_ontology(session: Session) -> dict[str, Any]:
         )
         session.add(predicate)
         session.flush()
-        revision = OntologyPredicateRevision(
+        predicate_revision = OntologyPredicateRevision(
             id=rev_id,
             predicate_id=pred_id,
             revision_number=1,
@@ -201,7 +201,7 @@ def ensure_calibration_ontology(session: Session) -> dict[str, Any]:
             is_transitive=False,
             metadata_json={},
         )
-        session.add(revision)
+        session.add(predicate_revision)
         session.flush()
         predicate.current_revision_id = rev_id
         for domain_key in domains:

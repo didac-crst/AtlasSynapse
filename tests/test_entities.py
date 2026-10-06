@@ -216,9 +216,7 @@ def test_shared_nickname_near_name_is_ambiguous(db_session: Session) -> None:
         _create_request(name="Didac Costa", class_key="Person", aliases=["Didac"])
     )
     assert first.entity is not None
-    second = service.create_entity(
-        _create_request(name="Didac Garcia", class_key="Person")
-    )
+    second = service.create_entity(_create_request(name="Didac Garcia", class_key="Person"))
     assert second.outcome == ResolutionOutcome.AMBIGUOUS
     assert {item.id for item in second.candidates} == {first.entity.id}
 
@@ -229,9 +227,7 @@ def test_near_name_is_ambiguous_not_create(db_session: Session) -> None:
     short = service.create_entity(_create_request(name="Didac", class_key="Person"))
     assert short.entity is not None
 
-    longer = service.create_entity(
-        _create_request(name="Didac Cristobal", class_key="Person")
-    )
+    longer = service.create_entity(_create_request(name="Didac Cristobal", class_key="Person"))
     assert longer.outcome == ResolutionOutcome.AMBIGUOUS
     assert longer.entity is None
     assert {item.id for item in longer.candidates} == {short.entity.id}
@@ -241,9 +237,7 @@ def test_near_name_is_ambiguous_not_create(db_session: Session) -> None:
 def test_add_entity_alias_enables_reuse(db_session: Session) -> None:
     _ensure_writer(db_session)
     service = EntityService(db_session)
-    created = service.create_entity(
-        _create_request(name="Didac Cristobal", class_key="Person")
-    )
+    created = service.create_entity(_create_request(name="Didac Cristobal", class_key="Person"))
     assert created.entity is not None
 
     updated = service.add_entity_alias(
@@ -306,8 +300,9 @@ def test_neighborhood_follows_merge_redirect(db_session: Session) -> None:
     assert any(edge.neighbor_entity_id == keeper.entity.id for edge in peer_view.edges)
 
     # Physical statement FKs are reassigned to the survivor for graph exporters.
-    from semantic_memory.models import Statement
     from sqlalchemy import select
+
+    from semantic_memory.models import Statement
 
     moved = db_session.scalars(
         select(Statement).where(Statement.subject_entity_id == keeper.entity.id)
@@ -365,9 +360,7 @@ def test_authoritative_alias_match_reuses_didac_cristobal(db_session: Session) -
         )
     )
 
-    reused = service.create_entity(
-        _create_request(name="Didac Cristobal", class_key="Person")
-    )
+    reused = service.create_entity(_create_request(name="Didac Cristobal", class_key="Person"))
     assert reused.outcome == ResolutionOutcome.REUSE
     assert reused.entity is not None
     assert reused.entity.id == created.entity.id
@@ -381,8 +374,7 @@ def test_supporting_alias_name_match_is_ambiguous(db_session: Session) -> None:
     assert created.outcome == ResolutionOutcome.CREATE
     assert created.entity is not None
     assert any(
-        entry.alias == "John Smith"
-        and entry.identity_strength == AliasIdentityStrength.SUPPORTING
+        entry.alias == "John Smith" and entry.identity_strength == AliasIdentityStrength.SUPPORTING
         for entry in created.entity.alias_entries
     )
 
@@ -429,11 +421,7 @@ def test_conflicting_decisive_identity_is_ambiguous(db_session: Session) -> None
     )
     assert identity.identity is not None
     assert identity.identity.resolution.value == "AMBIGUOUS"
-    same = [
-        c
-        for c in identity.identity.candidates
-        if c.decision.value == "SAME"
-    ]
+    same = [c for c in identity.identity.candidates if c.decision.value == "SAME"]
     assert len(same) == 2
 
 

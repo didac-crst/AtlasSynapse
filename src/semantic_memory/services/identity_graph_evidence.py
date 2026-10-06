@@ -17,7 +17,7 @@ from semantic_memory.identity.graph_predicates import (
 )
 from semantic_memory.models import Statement, StatementStatus
 from semantic_memory.repositories.ontology import OntologyRepository
-from semantic_memory.schemas.identity import EvidenceStrength, IdentityEvidence
+from semantic_memory.schemas.identity import EvidenceStrength, IdentityCandidate, IdentityEvidence
 
 
 @dataclass(frozen=True, slots=True)
@@ -176,14 +176,12 @@ class IdentityGraphEvidenceService:
 
         for left_fact in left:
             peers = right_by_predicate.get(left_fact.predicate_key, [])
-            shared = [
-                peer
-                for peer in peers
-                if peer.object_entity_id == left_fact.object_entity_id
-            ]
+            shared = [peer for peer in peers if peer.object_entity_id == left_fact.object_entity_id]
             if shared:
                 for peer in shared:
-                    matched_right.add((peer.predicate_key, peer.object_entity_id, peer.statement_id))
+                    matched_right.add(
+                        (peer.predicate_key, peer.object_entity_id, peer.statement_id)
+                    )
                 evidence.append(
                     IdentityEvidence(
                         signal="shared_neighbor",
@@ -193,8 +191,7 @@ class IdentityGraphEvidenceService:
                         predicate=left_fact.role,
                         object_entity_id=left_fact.object_entity_id,
                         detail=(
-                            f"shared {left_fact.role} with comparison entity "
-                            f"{right_entity_id}"
+                            f"shared {left_fact.role} with comparison entity {right_entity_id}"
                         ),
                         evidence_refs=_statement_refs(left_fact, shared),
                     )
@@ -202,9 +199,7 @@ class IdentityGraphEvidenceService:
                 continue
 
             conflicts = [
-                peer
-                for peer in peers
-                if peer.object_entity_id != left_fact.object_entity_id
+                peer for peer in peers if peer.object_entity_id != left_fact.object_entity_id
             ]
             for peer in conflicts:
                 matched_right.add((peer.predicate_key, peer.object_entity_id, peer.statement_id))
@@ -295,15 +290,14 @@ def _dedupe_evidence(items: list[IdentityEvidence]) -> list[IdentityEvidence]:
 
 
 def sort_candidates_for_explanation(
-    candidates: list,
-) -> list:
+    candidates: list[IdentityCandidate],
+) -> list[IdentityCandidate]:
     """Order UNCERTAIN candidates by shared graph evidence count (explanation only)."""
 
-    def _graph_support_count(candidate: object) -> int:
-        reasons = getattr(candidate, "reasons", [])
+    def _graph_support_count(candidate: IdentityCandidate) -> int:
         return sum(
             1
-            for reason in reasons
+            for reason in candidate.reasons
             if reason.signal
             in {"shared_neighbor", "attribute_overlap", "conflicting_neighbor", "temporal_conflict"}
         )
@@ -312,6 +306,6 @@ def sort_candidates_for_explanation(
         candidates,
         key=lambda candidate: (
             -_graph_support_count(candidate),
-            str(getattr(candidate, "entity_id", "")),
+            str(candidate.entity_id),
         ),
     )

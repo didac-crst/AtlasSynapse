@@ -35,9 +35,7 @@ def merge_entity(request: MergeEntityRequest, session: DbSession) -> MergeEntity
 
 @router.post("/entities/aliases", response_model=EntityResponse)
 def add_entity_alias(request: AddEntityAliasRequest, session: DbSession) -> EntityResponse:
-    return run_audited_mutation(
-        session, lambda: EntityService(session).add_entity_alias(request)
-    )
+    return run_audited_mutation(session, lambda: EntityService(session).add_entity_alias(request))
 
 
 @router.get("/entities/{entity_id}", response_model=EntityResponse)

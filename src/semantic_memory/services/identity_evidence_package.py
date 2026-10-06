@@ -69,7 +69,7 @@ def package_identity_evidence(
     )
 
 
-def prompt_package_dict(package: BoundedIdentityPackage) -> dict:
+def prompt_package_dict(package: BoundedIdentityPackage) -> dict[str, object]:
     """Serialize for the model without leaking internal-only fields beyond entity_id."""
     return {
         "incoming_canonical_name": package.incoming_canonical_name,
@@ -81,9 +81,7 @@ def prompt_package_dict(package: BoundedIdentityPackage) -> dict:
                 "entity_id": str(candidate.entity_id),
                 "canonical_name": candidate.canonical_name,
                 "class_keys": candidate.class_keys,
-                "evidence": [
-                    item.model_dump(mode="json") for item in candidate.evidence
-                ],
+                "evidence": [item.model_dump(mode="json") for item in candidate.evidence],
             }
             for candidate in package.candidates
         ],

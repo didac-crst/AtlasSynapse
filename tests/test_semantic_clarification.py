@@ -189,9 +189,7 @@ def test_answer_to_superseded_clarification_hard_rejects(db_session: Session) ->
         decision=SemanticDecision.MANUAL_REVIEW.value,
         summary="Still ambiguous.",
         reasons=[{"code": CLARIFICATION_REASON_CODE, "message": "unclear"}],
-        related_existing_concepts=[
-            {"kind": "class", "key": "Skill", "reason": "overlap"}
-        ],
+        related_existing_concepts=[{"kind": "class", "key": "Skill", "reason": "overlap"}],
         details={"required_clarification": ["Clarify vs Skill again."]},
     )
     proposal = service._governance.get_proposal(first.proposal.id)
@@ -259,9 +257,7 @@ def test_clarification_answer_that_stays_manual_opens_new_request(
     assert nxt.supersedes_clarification_request_id is None  # prior was resolved, not open
     assert nxt.resolved_by_review_id is None
 
-    prior = db_session.get(
-        OntologySemanticClarificationRequest, first.clarification_request_id
-    )
+    prior = db_session.get(OntologySemanticClarificationRequest, first.clarification_request_id)
     assert prior is not None
     assert prior.status == SemanticClarificationStatus.RESOLVED.value
     assert prior.resulting_review_id == answered.review.id
@@ -359,7 +355,5 @@ def test_vague_confident_reuse_redirects_to_clarification(db_session: Session) -
     assert review is not None
     assert review.decision == SemanticDecision.MANUAL_REVIEW
     assert result.open_clarification_request is not None
-    assert any(
-        r.code == CLARIFICATION_REASON_CODE for r in review.reasons
-    )
+    assert any(r.code == CLARIFICATION_REASON_CODE for r in review.reasons)
     assert result.open_clarification_request.required_clarification

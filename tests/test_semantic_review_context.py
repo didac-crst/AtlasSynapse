@@ -232,7 +232,9 @@ def test_verified_skill_gets_provenance_hint(db_session: Session) -> None:
             "parent_keys": ["Thing"],
         },
     )
-    assert any("provenance" in h.casefold() or "evidence" in h.casefold() for h in ctx.derivation_hints)
+    assert any(
+        "provenance" in h.casefold() or "evidence" in h.casefold() for h in ctx.derivation_hints
+    )
     assert "class:Skill" in ctx.concept_keys()
     assert ctx.prefer_clarification is False
 
@@ -342,8 +344,7 @@ def test_skill_grouping_distinct_approve_not_forced_to_clarification(
             "key": "SkillGrouping",
             "label": "Skill",
             "description": (
-                "A strategic domain grouping of competencies, not a concrete "
-                "agent-held competence."
+                "A strategic domain grouping of competencies, not a concrete agent-held competence."
             ),
             "parent_keys": ["Thing"],
         },
@@ -359,8 +360,7 @@ def test_skill_grouping_distinct_approve_not_forced_to_clarification(
             key="SkillGrouping",
             label="Skill",
             description=(
-                "A strategic domain grouping of competencies, not a concrete "
-                "agent-held competence."
+                "A strategic domain grouping of competencies, not a concrete agent-held competence."
             ),
             parent_keys=["Thing"],
             metadata={

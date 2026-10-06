@@ -176,9 +176,7 @@ class MockSemanticReviewer:
             reasons=reasons,
             related_existing_concepts=related,
             recommended_actions=[str(x) for x in metadata.get("recommended_actions") or []],
-            required_clarification=[
-                str(x) for x in metadata.get("required_clarification") or []
-            ],
+            required_clarification=[str(x) for x in metadata.get("required_clarification") or []],
             context_sufficient=context_sufficient,
             challengeable=decision
             in {ReviewDecision.REJECT, ReviewDecision.REUSE_EXISTING, ReviewDecision.MANUAL_REVIEW},
@@ -434,9 +432,7 @@ def ensure_clarification_asks(
         )
 
     actions = list(structured.recommended_actions)
-    clarify_action = (
-        "Reply via answer_semantic_clarification using clarification_request_id"
-    )
+    clarify_action = "Reply via answer_semantic_clarification using clarification_request_id"
     if clarify_action not in actions:
         actions = [clarify_action, *actions]
 
@@ -498,11 +494,15 @@ def apply_confidence_policy(
                 ],
             }
         )
-    elif decision in {
-        SemanticDecision.REJECT,
-        SemanticDecision.REUSE_EXISTING,
-        SemanticDecision.UPHOLD_REJECTION,
-    } and confidence < reject_threshold:
+    elif (
+        decision
+        in {
+            SemanticDecision.REJECT,
+            SemanticDecision.REUSE_EXISTING,
+            SemanticDecision.UPHOLD_REJECTION,
+        }
+        and confidence < reject_threshold
+    ):
         # Conservative: ambiguity routes to manual review (severe issues still may reject
         # below threshold only when the model explicitly marked context sufficient and
         # confidence is high — here we force manual_review).
@@ -763,9 +763,7 @@ def make_semantic_review_gate(
             details["input_hash"] = review_context.input_hash
             details["context_builder_version"] = review_context.builder_version
             details["estimated_context_tokens"] = review_context.estimated_tokens
-            details["candidate_selection_trace"] = list(
-                review_context.candidate_selection_trace
-            )
+            details["candidate_selection_trace"] = list(review_context.candidate_selection_trace)
             details["derivation_hints"] = list(review_context.derivation_hints)
             details["prefer_clarification"] = bool(review_context.prefer_clarification)
         return GateOutcome(

@@ -6,6 +6,7 @@ import uuid
 
 from sqlalchemy.orm import Session
 
+from semantic_memory.models.enums import ActorType
 from semantic_memory.repositories.entities import EntityRepository
 from semantic_memory.repositories.ontology import OntologyRepository
 from semantic_memory.schemas.actors import ActorEnsureRequest
@@ -17,13 +18,10 @@ from semantic_memory.services.actors import ActorService
 from semantic_memory.services.entities import EntityService
 from semantic_memory.services.identity import IdentityService
 from semantic_memory.services.statements import StatementService
-from semantic_memory.models.enums import ActorType
 
 
 def _ensure_writer(session: Session) -> None:
-    ActorService(session).ensure(
-        ActorEnsureRequest(key="writer", actor_type=ActorType.AGENT)
-    )
+    ActorService(session).ensure(ActorEnsureRequest(key="writer", actor_type=ActorType.AGENT))
 
 
 def _ensure_graph_ontology(session: Session) -> None:
@@ -65,12 +63,8 @@ def test_shared_graph_neighbors_stay_ambiguous_with_statement_refs(db_session: S
     person_class = _person_class_id(db_session)
     entities = EntityService(db_session)
 
-    spouse = entities.create_entity(
-        _create(name="Alex Partner", class_key="Person")
-    ).entity
-    employer = entities.create_entity(
-        _create(name="Shared Corp", class_key="Organization")
-    ).entity
+    spouse = entities.create_entity(_create(name="Alex Partner", class_key="Person")).entity
+    employer = entities.create_entity(_create(name="Shared Corp", class_key="Organization")).entity
     child = entities.create_entity(_create(name="Kid Person", class_key="Person")).entity
     short = entities.create_entity(_create(name="Didac", class_key="Person")).entity
     assert spouse and employer and child and short
@@ -153,12 +147,16 @@ def test_conflicting_employers_stay_uncertain_not_different(db_session: Session)
     actor = actors.require_active_actor("writer")
     repo = EntityRepository(db_session)
 
-    org_a = EntityService(db_session).create_entity(
-        _create(name="Employer A", class_key="Organization")
-    ).entity
-    org_b = EntityService(db_session).create_entity(
-        _create(name="Employer B", class_key="Organization")
-    ).entity
+    org_a = (
+        EntityService(db_session)
+        .create_entity(_create(name="Employer A", class_key="Organization"))
+        .entity
+    )
+    org_b = (
+        EntityService(db_session)
+        .create_entity(_create(name="Employer B", class_key="Organization"))
+        .entity
+    )
     assert org_a and org_b
 
     left = repo.create(canonical_name="John Smith", created_by_actor_id=actor.id)
@@ -202,11 +200,7 @@ def test_conflicting_employers_stay_uncertain_not_different(db_session: Session)
     ]
     assert conflicts
     assert all(reason.strength.value == "supporting" for reason in conflicts)
-    conflict_refs = {
-        ref
-        for reason in conflicts
-        for ref in reason.evidence_refs
-    }
+    conflict_refs = {ref for reason in conflicts for ref in reason.evidence_refs}
     assert f"statement:{left_stmt}" in conflict_refs or f"statement:{right_stmt}" in conflict_refs
 
 
@@ -246,8 +240,7 @@ def test_graph_evidence_deduplicates_by_statement(db_session: Session) -> None:
         shared = [
             reason
             for reason in candidate.reasons
-            if reason.signal == "shared_neighbor"
-            and f"statement:{stmt_id}" in reason.evidence_refs
+            if reason.signal == "shared_neighbor" and f"statement:{stmt_id}" in reason.evidence_refs
         ]
         if not shared:
             continue
