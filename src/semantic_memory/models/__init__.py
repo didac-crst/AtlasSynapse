@@ -64,6 +64,9 @@ from semantic_memory.models.provenance import (
     ExternalReference,
     Source,
     SourceContentRevision,
+    SourceIdentityConflict,
+    SourceSystemAlias,
+    SourceSystemRegistry,
     StatementEvidence,
 )
 from semantic_memory.models.reasoning import Conflict
@@ -124,6 +127,9 @@ __all__ = [
     "SemanticReviewStage",
     "Source",
     "SourceContentRevision",
+    "SourceIdentityConflict",
+    "SourceSystemAlias",
+    "SourceSystemRegistry",
     "Statement",
     "StatementEvidence",
     "StatementQualifier",

@@ -61,6 +61,20 @@ class ProvenanceRepository:
             )
         )
 
+    def find_sources_by_canonical_external(
+        self, *, canonical_source_system: str, external_id: str
+    ) -> list[Source]:
+        return list(
+            self._session.scalars(
+                select(Source)
+                .where(
+                    Source.canonical_source_system == canonical_source_system,
+                    Source.external_id == external_id,
+                )
+                .order_by(Source.created_at.asc(), Source.id.asc())
+            ).all()
+        )
+
     def find_source_by_content_hash(self, content_hash: str) -> Source | None:
         return self._session.scalar(select(Source).where(Source.content_hash == content_hash))
 
@@ -78,6 +92,7 @@ class ProvenanceRepository:
         *,
         created_by_actor_id: uuid.UUID,
         source_system: str | None = None,
+        canonical_source_system: str | None = None,
         external_id: str | None = None,
         uri: str | None = None,
         title: str | None = None,
@@ -86,10 +101,13 @@ class ProvenanceRepository:
         retrieved_at: datetime | None = None,
         entity_id: uuid.UUID | None = None,
         metadata_json: dict[str, Any] | None = None,
+        identity_conflict: bool = False,
     ) -> Source:
         row = Source(
             id=uuid.uuid4(),
             source_system=source_system,
+            canonical_source_system=canonical_source_system,
+            identity_conflict=identity_conflict,
             external_id=external_id,
             uri=uri,
             title=title,

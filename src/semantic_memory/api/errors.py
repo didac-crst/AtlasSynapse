@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 
 from semantic_memory.exceptions import (
     AmbiguousEntityError,
+    AmbiguousSourceError,
     CardinalityViolationError,
     ClarificationRequestAlreadyResolvedError,
     ClarificationRequestNotFoundError,
@@ -63,6 +64,7 @@ _STATUS_BY_ERROR: dict[type[DomainError], int] = {
     UnknownLlmCallError: 404,
     UnknownBatchError: 404,
     AmbiguousEntityError: 409,
+    AmbiguousSourceError: 409,
     DuplicateEntityError: 409,
     DuplicateStatementError: 409,
     ConflictDetectedError: 409,

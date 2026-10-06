@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from semantic_memory.content.canonicalize import CanonicalizationResult, canonicalize_content
 from semantic_memory.exceptions import (
+    AmbiguousSourceError,
     UnknownEntityError,
     UnknownSourceError,
     UnknownStatementError,
@@ -23,6 +24,7 @@ from semantic_memory.repositories.provenance import (
     revision_locator,
 )
 from semantic_memory.repositories.statements import StatementRepository
+from semantic_memory.schemas.identity import IdentityResolutionOutcome
 from semantic_memory.schemas.provenance import (
     AddEvidenceRequest,
     AddEvidenceResponse,
@@ -44,6 +46,7 @@ from semantic_memory.schemas.provenance import (
 )
 from semantic_memory.services.actors import ActorService
 from semantic_memory.services.mutations import MutationRunner
+from semantic_memory.services.source_identity import SourceIdentityService
 from semantic_memory.validation.literals import normalize_confidence, normalize_optional_to_utc
 
 
@@ -54,6 +57,7 @@ class ProvenanceService:
         self._provenance = ProvenanceRepository(session)
         self._statements = StatementRepository(session)
         self._entities = EntityRepository(session)
+        self._source_identity = SourceIdentityService(session)
         self._mutations = MutationRunner(session)
 
     def ensure_source(self, request: EnsureSourceRequest) -> EnsureSourceResponse:
@@ -423,15 +427,6 @@ class ProvenanceService:
     def _resolve_or_create_source(
         self, source_input: SourceInput, *, actor_id: uuid.UUID
     ) -> tuple[Source, bool]:
-        if source_input.source_id is not None:
-            existing = self._provenance.get_source(source_input.source_id)
-            if existing is None:
-                raise UnknownSourceError(
-                    f"Source {source_input.source_id} was not found",
-                    details={"source_id": str(source_input.source_id)},
-                )
-            return existing, False
-
         if source_input.entity_id is not None:
             entity = self._entities.get(source_input.entity_id)
             if entity is None:
@@ -440,17 +435,48 @@ class ProvenanceService:
                     details={"entity_id": str(source_input.entity_id)},
                 )
 
+        identity = self._source_identity.resolve(
+            source_system=source_input.source_system,
+            external_id=source_input.external_id,
+            source_id=source_input.source_id,
+        )
+        if source_input.source_id is not None:
+            if identity.source is None:
+                raise UnknownSourceError(
+                    f"Source {source_input.source_id} was not found",
+                    details={"source_id": str(source_input.source_id)},
+                )
+            return identity.source, False
+        if identity.resolution == IdentityResolutionOutcome.AMBIGUOUS:
+            raise AmbiguousSourceError(
+                "Multiple sources share this provenance identity; "
+                "resolve source_identity_conflict before continuing",
+                details={
+                    "canonical_source_system": identity.canonical_source_system,
+                    "external_id": source_input.external_id,
+                    "conflict_id": (
+                        None if identity.conflict_id is None else str(identity.conflict_id)
+                    ),
+                    "candidate_source_ids": [str(c.source_id) for c in identity.candidates],
+                    "reasons": [r.model_dump(mode="json") for r in identity.reasons],
+                },
+            )
+        if identity.resolution == IdentityResolutionOutcome.MATCH:
+            assert identity.source is not None
+            return identity.source, False
+
+        # NO_MATCH → create (locks still serialize concurrent creates).
         content_hash = source_input.content_hash or hash_source_content(
-            source_input.source_system,
+            identity.canonical_source_system or source_input.source_system,
             source_input.external_id,
             source_input.uri,
             source_input.title,
         )
-        # Take every applicable identity lock so concurrent callers that share
-        # either external identity or content_hash serialize before lookup/create.
         lock_materials: list[str] = []
-        if source_input.source_system and source_input.external_id:
-            lock_materials.append(f"ext:{source_input.source_system}:{source_input.external_id}")
+        if identity.canonical_source_system and source_input.external_id:
+            lock_materials.append(
+                f"ext:{identity.canonical_source_system}:{source_input.external_id}"
+            )
         if content_hash:
             lock_materials.append(f"hash:{content_hash}")
         if not lock_materials:
@@ -458,13 +484,26 @@ class ProvenanceService:
         for lock_material in sorted(lock_materials):
             self._provenance.acquire_source_lock(material=lock_material)
 
-        if source_input.source_system and source_input.external_id:
-            existing = self._provenance.find_source_by_external(
-                source_system=source_input.source_system,
-                external_id=source_input.external_id,
+        # Re-resolve under lock in case a peer created first.
+        identity = self._source_identity.resolve(
+            source_system=source_input.source_system,
+            external_id=source_input.external_id,
+            source_id=source_input.source_id,
+        )
+        if identity.resolution == IdentityResolutionOutcome.AMBIGUOUS:
+            raise AmbiguousSourceError(
+                "Multiple sources share this provenance identity; "
+                "resolve source_identity_conflict before continuing",
+                details={
+                    "canonical_source_system": identity.canonical_source_system,
+                    "external_id": source_input.external_id,
+                    "candidate_source_ids": [str(c.source_id) for c in identity.candidates],
+                },
             )
-            if existing is not None:
-                return existing, False
+        if identity.resolution == IdentityResolutionOutcome.MATCH:
+            assert identity.source is not None
+            return identity.source, False
+
         if content_hash:
             existing = self._provenance.find_source_by_content_hash(content_hash)
             if existing is not None:
@@ -476,9 +515,18 @@ class ProvenanceService:
         except ValueError as exc:
             raise ValidationFailedError(str(exc), details={"source": "invalid fields"}) from exc
 
+        metadata = dict(source_input.metadata)
+        if (
+            source_input.source_system
+            and identity.canonical_source_system
+            and source_input.source_system.strip() != identity.canonical_source_system
+        ):
+            metadata.setdefault("source_system_raw", source_input.source_system.strip())
+
         created = self._provenance.create_source(
             created_by_actor_id=actor_id,
-            source_system=source_input.source_system,
+            source_system=identity.canonical_source_system or source_input.source_system,
+            canonical_source_system=identity.canonical_source_system,
             external_id=source_input.external_id,
             uri=source_input.uri,
             title=source_input.title,
@@ -486,7 +534,7 @@ class ProvenanceService:
             reliability=reliability,
             retrieved_at=retrieved_at,
             entity_id=source_input.entity_id,
-            metadata_json=source_input.metadata,
+            metadata_json=metadata,
         )
         return created, True
 
@@ -494,6 +542,8 @@ class ProvenanceService:
         return SourceResponse(
             id=source.id,
             source_system=source.source_system,
+            canonical_source_system=source.canonical_source_system,
+            identity_conflict=bool(source.identity_conflict),
             external_id=source.external_id,
             uri=source.uri,
             title=source.title,

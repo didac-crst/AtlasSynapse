@@ -8,6 +8,7 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -36,10 +37,13 @@ class Source(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         Index("ix_source_external_id", "external_id"),
         Index("ix_source_content_hash", "content_hash"),
         Index("ix_source_source_system", "source_system"),
+        Index("ix_source_canonical_source_system", "canonical_source_system"),
         Index("ix_source_entity_id", "entity_id"),
     )
 
     source_system: Mapped[str | None] = mapped_column(Text)
+    canonical_source_system: Mapped[str | None] = mapped_column(Text)
+    identity_conflict: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     external_id: Mapped[str | None] = mapped_column(Text)
     uri: Mapped[str | None] = mapped_column(Text)
     title: Mapped[str | None] = mapped_column(Text)
@@ -61,6 +65,64 @@ class Source(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         ForeignKey("actor.id"),
         nullable=False,
     )
+
+
+class SourceSystemRegistry(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """Canonical provenance platform (e.g. confluence)."""
+
+    __tablename__ = "source_system_registry"
+    __table_args__ = (
+        UniqueConstraint("canonical_key", name="uq_source_system_registry_canonical_key"),
+        Index("ix_source_system_registry_canonical_key", "canonical_key"),
+    )
+
+    canonical_key: Mapped[str] = mapped_column(Text, nullable=False)
+    label: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+
+
+class SourceSystemAlias(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
+    """Alias that maps to a canonical source-system key."""
+
+    __tablename__ = "source_system_alias"
+    __table_args__ = (
+        UniqueConstraint(
+            "normalized_alias",
+            name="uq_source_system_alias_normalized_alias",
+        ),
+        Index("ix_source_system_alias_registry_id", "registry_id"),
+    )
+
+    registry_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("source_system_registry.id"),
+        nullable=False,
+    )
+    alias: Mapped[str] = mapped_column(Text, nullable=False)
+    normalized_alias: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class SourceIdentityConflict(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
+    """Open collision on (canonical_source_system, external_id); never auto-merged."""
+
+    __tablename__ = "source_identity_conflict"
+    __table_args__ = (
+        UniqueConstraint(
+            "canonical_source_system",
+            "external_id",
+            name="uq_source_identity_conflict_canonical_external",
+        ),
+        CheckConstraint(
+            "status IN ('open', 'resolved')",
+            name="status",
+        ),
+    )
+
+    canonical_source_system: Mapped[str] = mapped_column(Text, nullable=False)
+    external_id: Mapped[str] = mapped_column(Text, nullable=False)
+    source_ids: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="open")
+    notes: Mapped[str | None] = mapped_column(Text)
 
 
 class SourceContentRevision(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):

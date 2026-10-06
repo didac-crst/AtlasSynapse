@@ -41,7 +41,11 @@ class UnknownStatementError(DomainError):
 
 
 class UnknownSourceError(DomainError):
-    error_code = "UNKNOWN_ENTITY"
+    error_code = "UNKNOWN_SOURCE"
+
+
+class AmbiguousSourceError(DomainError):
+    error_code = "AMBIGUOUS_SOURCE"
 
 
 class AmbiguousEntityError(DomainError):

@@ -48,6 +48,8 @@ class SourceInput(BaseModel):
 class SourceResponse(BaseModel):
     id: uuid.UUID
     source_system: str | None = None
+    canonical_source_system: str | None = None
+    identity_conflict: bool = False
     external_id: str | None = None
     uri: str | None = None
     title: str | None = None
