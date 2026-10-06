@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from semantic_memory.models.enums import AliasIdentityStrength, EntityStatus
 from semantic_memory.schemas.common import MutationEnvelope
+from semantic_memory.schemas.dry_run import EntityWriteAction, OperationMode
 from semantic_memory.schemas.identity import IdentityResolutionResult
 
 
@@ -121,3 +122,7 @@ class CreateEntityResponse(BaseModel):
     request_id: uuid.UUID
     reused: bool = False
     identity: IdentityResolutionResult | None = None
+    dry_run: bool = False
+    operation_mode: OperationMode = OperationMode.EXECUTE
+    would_persist: bool | None = None
+    entity_action: EntityWriteAction | None = None

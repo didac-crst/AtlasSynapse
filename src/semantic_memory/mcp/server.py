@@ -188,7 +188,8 @@ def build_mcp_tools() -> list[ToolSpec]:
         ),
         _payload_tool(
             "create_entity",
-            "Create a typed knowledge entity.",
+            "Create a typed knowledge entity. Set dry_run=true to preview "
+            "MATCH/CREATE/CLARIFY without persisting.",
             lambda session, payload: EntityMCPTools(session).create_entity(payload),
         ),
         ToolSpec(
@@ -237,7 +238,8 @@ def build_mcp_tools() -> list[ToolSpec]:
             "assert_statement",
             "Assert a typed statement. Pass subject_entity_id/object_entity_id when "
             "known, or subject/object EntityInput (canonical_name + class_key) and let "
-            "the server MATCH/CREATE/CLARIFY. Do not resolve or create entities yourself.",
+            "the server MATCH/CREATE/CLARIFY. Do not resolve or create entities yourself. "
+            "Set dry_run=true to preview the full decision path without persisting.",
             lambda session, payload: StatementMCPTools(session).assert_statement(payload),
         ),
         ToolSpec(
@@ -341,7 +343,8 @@ def build_mcp_tools() -> list[ToolSpec]:
             "assert_batch",
             "Atomically assert a batch of statements. Statement items may use "
             "EntityInput subject/object; ambiguous identity fails the whole batch "
-            "with AMBIGUOUS_ENTITY and rolls back created rows.",
+            "with AMBIGUOUS_ENTITY and rolls back created rows. "
+            "Set dry_run=true to preview without persisting.",
             lambda session, payload: StatementMCPTools(session).assert_batch(payload),
         ),
         _payload_tool(

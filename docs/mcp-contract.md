@@ -108,6 +108,35 @@ Single `assert_statement` returns `outcome=CLARIFY` with `subject_identity` / `o
 
 `ingest_source_content` is provenance-only; it does not create statements or bypass identity. Predicates are never auto-created from statement writes.
 
+### Dry-run
+
+Every mutation envelope accepts `dry_run` (default `false`).
+
+```text
+dry_run = false  → execute and persist (normal)
+dry_run = true   → same decision path; return what would happen; persist no knowledge
+```
+
+Dry-run runs the full identity / validation / review pipeline inside a savepoint and always rolls that savepoint back. It is **not** a simplified preview path and is distinct from a future `validate_only` (structural checks only).
+
+Invariant: `dry_run=true` produces no durable knowledge, provenance, or idempotency side effects. An `operation_log` row is still written with `operation_mode=dry_run` in the response payload for operational observability (not knowledge history).
+
+Example `assert_statement` dry-run response fields:
+
+```json
+{
+  "dry_run": true,
+  "operation_mode": "dry_run",
+  "would_persist": false,
+  "outcome": "CLARIFY",
+  "statement_action": "NOT_WRITTEN",
+  "subject_identity": { "resolution": "MATCH", "action": "REUSE", "entity_id": "..." },
+  "object_identity": { "resolution": "AMBIGUOUS", "action": "CLARIFY", "candidates": [] }
+}
+```
+
+When the write would succeed, `would_persist` is `true` and `statement_action` is `WOULD_CREATE` or `WOULD_REUSE` (entity creates use `entity_action` similarly). Preview entity/statement IDs in the response are not durable.
+
 ## Error envelope
 
 Every error contains:

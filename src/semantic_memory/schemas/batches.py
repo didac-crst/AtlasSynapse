@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from semantic_memory.models.enums import BatchStatus
 from semantic_memory.schemas.common import MutationEnvelope
+from semantic_memory.schemas.dry_run import OperationMode
 from semantic_memory.schemas.entities import (
     CreateEntityResponse,
     EntityCandidate,
@@ -144,3 +145,6 @@ class AssertBatchResponse(BaseModel):
     rejected: list[BatchItemResult] = Field(default_factory=list)
     ontology_required: list[BatchItemResult] = Field(default_factory=list)
     request_id: uuid.UUID
+    dry_run: bool = False
+    operation_mode: OperationMode = OperationMode.EXECUTE
+    would_persist: bool | None = None

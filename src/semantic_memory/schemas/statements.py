@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from semantic_memory.models.enums import StatementStatus
 from semantic_memory.schemas.common import MutationEnvelope
+from semantic_memory.schemas.dry_run import OperationMode, StatementWriteAction
 from semantic_memory.schemas.entities import EntityInput
 from semantic_memory.schemas.identity import IdentityResolutionResult
 
@@ -106,6 +107,10 @@ class AssertStatementResponse(BaseModel):
     conflict_ids: list[uuid.UUID] = Field(default_factory=list)
     subject_identity: IdentityResolutionResult | None = None
     object_identity: IdentityResolutionResult | None = None
+    dry_run: bool = False
+    operation_mode: OperationMode = OperationMode.EXECUTE
+    would_persist: bool | None = None
+    statement_action: StatementWriteAction | None = None
 
 
 class SupersedeStatementRequest(AssertStatementRequest):
