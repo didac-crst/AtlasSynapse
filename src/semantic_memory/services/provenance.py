@@ -218,7 +218,11 @@ class ProvenanceService:
         # different bodies cannot allocate the same revision_number.
         self._provenance.acquire_source_lock(material=f"content:{source.id}")
         latest = self._provenance.latest_content_revision(source.id)
-        if latest is not None and latest.canonical_content_hash == canonical_hash:
+        if (
+            latest is not None
+            and latest.canonical_content_hash == canonical_hash
+            and latest.canonical_format == canonicalized.canonical_format
+        ):
             return IngestSourceContentResponse(
                 outcome=SourceOutcome.REUSE,
                 source=self._to_source_response(source),

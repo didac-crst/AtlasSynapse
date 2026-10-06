@@ -377,6 +377,8 @@ def test_merge_preserves_supporting_alias_strength(db_session: Session) -> None:
     ambiguous = service.create_entity(_create_request(name="Nickname Only", class_key="Person"))
     assert ambiguous.outcome == ResolutionOutcome.AMBIGUOUS
 
+
+def test_authoritative_alias_match_reuses_didac_cristobal(db_session: Session) -> None:
     """Confirmed alias must MATCH; this is the original Didac Cristobal case."""
     _ensure_writer(db_session)
     service = EntityService(db_session)

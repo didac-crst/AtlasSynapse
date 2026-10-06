@@ -159,6 +159,53 @@ def test_ingest_hash_dedup_and_new_revision(db_session: Session) -> None:
     assert latest.revision.revision_number == 3
 
 
+def test_ingest_same_hash_different_format_creates_revision(db_session: Session) -> None:
+    """Reuse requires matching hash and canonical_format."""
+    _ensure_writer(db_session)
+    doc_id = _create_entity(db_session, name="Format Memo", class_key="Document")
+    provenance = ProvenanceService(db_session)
+    body = "plain body without markdown markers\n"
+
+    first = provenance.ingest_source_content(
+        IngestSourceContentRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            source=SourceInput(
+                source_system="fixture",
+                external_id="format-memo",
+                title="Format Memo",
+            ),
+            document_entity_id=doc_id,
+            content=body,
+            content_format="markdown",
+            canonical_format="markdown",
+        )
+    )
+    assert first.outcome.value == "CREATE"
+    assert first.revision.canonical_format == "markdown"
+
+    as_text = provenance.ingest_source_content(
+        IngestSourceContentRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            source=SourceInput(
+                source_system="fixture",
+                external_id="format-memo",
+            ),
+            document_entity_id=doc_id,
+            content=body,
+            content_format="text",
+            canonical_format="text",
+        )
+    )
+    assert as_text.outcome.value == "CREATE"
+    assert as_text.revision.revision_number == 2
+    assert as_text.revision.canonical_format == "text"
+    assert as_text.revision.canonical_content_hash == first.revision.canonical_content_hash
+
+
 def test_html_ingest_preserves_original_and_canonicalizes(db_session: Session) -> None:
     _ensure_writer(db_session)
     doc_id = _create_entity(db_session, name="Html Doc", class_key="Document")
