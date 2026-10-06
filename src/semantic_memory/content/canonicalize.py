@@ -10,7 +10,6 @@ import hashlib
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
-from html import unescape
 from typing import Any, Literal
 
 from bs4 import BeautifulSoup, Tag
@@ -259,10 +258,9 @@ def _render_node(node: object, parts: list[str], *, list_depth: int) -> None:
             parts.append("\n")
         return
 
-    before = len("".join(parts))
+    before = len(parts)
     _render_nodes(node.children, parts, list_depth=list_depth)
-    after = len("".join(parts))
-    if name in _BLOCK_TAGS and after > before:
+    if name in _BLOCK_TAGS and any(parts[before:]):
         _ensure_blank_line(parts)
 
 
@@ -270,7 +268,6 @@ def _inline_markdown(node: Tag) -> str:
     parts: list[str] = []
     _render_nodes(node.children, parts, list_depth=0)
     text = "".join(parts)
-    text = unescape(text)
     text = re.sub(r"[ \t\r\n\f\v]+", " ", text)
     return text.strip()
 
@@ -286,12 +283,16 @@ def _format_link(node: Tag) -> str:
 
 
 def _ensure_blank_line(parts: list[str]) -> None:
-    joined = "".join(parts)
-    if not joined:
+    if not parts:
         return
-    if joined.endswith("\n\n"):
+    trailing = ""
+    for chunk in reversed(parts):
+        trailing = chunk + trailing
+        if len(trailing) >= 2:
+            break
+    if trailing.endswith("\n\n"):
         return
-    if joined.endswith("\n"):
+    if trailing.endswith("\n"):
         parts.append("\n")
         return
     parts.append("\n\n")

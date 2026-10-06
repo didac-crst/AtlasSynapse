@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import UTC, datetime
 
@@ -110,14 +111,13 @@ class ProvenanceService:
             limit=request.limit,
         )
         passages: list[SourceContentPassage] = []
-        needle = query.casefold()
+        pattern = re.compile(re.escape(query), re.IGNORECASE)
         for revision, source in rows:
             body = revision.canonical_content
-            lower = body.casefold()
-            start = lower.find(needle)
-            if start < 0:
+            match = pattern.search(body)
+            if match is None:
                 continue
-            end = start + len(query)
+            start, end = match.start(), match.end()
             left = max(0, start - request.context_chars)
             right = min(len(body), end + request.context_chars)
             excerpt = body[left:right]
@@ -214,16 +214,15 @@ class ProvenanceService:
             ) from exc
 
         canonical_hash = canonicalized.canonical_hash
-        self._provenance.acquire_source_lock(material=f"content:{source.id}:{canonical_hash}")
-        existing = self._provenance.find_content_revision_by_hash(
-            source_id=source.id,
-            canonical_content_hash=canonical_hash,
-        )
-        if existing is not None:
+        # Serialize all content writes for this source so concurrent ingests of
+        # different bodies cannot allocate the same revision_number.
+        self._provenance.acquire_source_lock(material=f"content:{source.id}")
+        latest = self._provenance.latest_content_revision(source.id)
+        if latest is not None and latest.canonical_content_hash == canonical_hash:
             return IngestSourceContentResponse(
                 outcome=SourceOutcome.REUSE,
                 source=self._to_source_response(source),
-                revision=self._to_revision_response(existing),
+                revision=self._to_revision_response(latest),
                 request_id=request.request_id,
                 reused=True,
             )
@@ -253,9 +252,9 @@ class ProvenanceService:
             created_by_actor_id=actor_id,
             metadata_json=revision_metadata,
         )
-        # Keep legacy source.content_hash aligned with latest canonical body when set.
-        source.content_hash = canonical_hash
-        self._session.flush()
+        # source.content_hash is the source-identity hash used for dedup of
+        # sources without external identity; the canonical body hash lives on
+        # the revision row only.
 
         return IngestSourceContentResponse(
             outcome=SourceOutcome.CREATE,

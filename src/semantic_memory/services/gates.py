@@ -457,9 +457,9 @@ def _invoke_extra_gate(
     runtime: dict[str, Any],
 ) -> GateOutcome | None:
     try:
-        signature = inspect.signature(extra)
-        if len(signature.parameters) >= 3:
-            return extra(proposal_type, payload, runtime)
+        accepts_runtime = len(inspect.signature(extra).parameters) >= 3
     except (TypeError, ValueError):
-        pass
+        accepts_runtime = False
+    if accepts_runtime:
+        return extra(proposal_type, payload, runtime)
     return extra(proposal_type, payload)

@@ -151,10 +151,13 @@ class ProvenanceRepository:
         self, *, source_id: uuid.UUID, canonical_content_hash: str
     ) -> SourceContentRevision | None:
         return self._session.scalar(
-            select(SourceContentRevision).where(
+            select(SourceContentRevision)
+            .where(
                 SourceContentRevision.source_id == source_id,
                 SourceContentRevision.canonical_content_hash == canonical_content_hash,
             )
+            .order_by(SourceContentRevision.revision_number.desc())
+            .limit(1)
         )
 
     def latest_content_revision(self, source_id: uuid.UUID) -> SourceContentRevision | None:

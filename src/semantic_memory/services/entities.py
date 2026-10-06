@@ -158,15 +158,25 @@ class EntityService:
             )
         # Mark merged first so source aliases no longer block transfer, then
         # redirect future identity resolution onto the survivor (ADR-007).
-        # Transferred names become authoritative so subsequent resolve can MATCH.
+        # Canonical name transfers as authoritative; other aliases keep their
+        # original strength so supporting evidence cannot silently become MATCH.
         merged = self._entities.mark_merged(source, target_entity_id=target.id)
-        for alias in [source.canonical_name, *self._entities.list_aliases(source.id)]:
+        canonical_norm = normalize_text(source.canonical_name)
+        transfers: list[tuple[str, str]] = [
+            (source.canonical_name, AliasIdentityStrength.AUTHORITATIVE.value)
+        ]
+        transfers.extend(
+            (row.alias, row.identity_strength)
+            for row in self._entities.list_alias_entries(source.id)
+            if normalize_text(row.alias) != canonical_norm
+        )
+        for alias, strength in transfers:
             if self._entities.alias_exists_on_other_entity(alias=alias, entity_id=target.id):
                 continue
             self._entities.ensure_alias(
                 entity_id=target.id,
                 alias=alias,
-                identity_strength=AliasIdentityStrength.AUTHORITATIVE.value,
+                identity_strength=strength,
             )
         # Re-point statement endpoints so graph exporters that ignore merge
         # metadata do not drop edges (Cytoscape / raw SPO clients).
@@ -201,16 +211,17 @@ class EntityService:
             )
 
         external = request.external_reference
-        # Serialize resolve+create for this identity key, then resolve under the lock.
-        self._entities.acquire_identity_lock(
-            class_id=ontology_class.id,
-            canonical_name=request.canonical_name,
-        )
-        resolution = self._identity.resolve(
+        # Provider adjudication runs before the advisory lock; deterministic
+        # re-resolve + write happen under the lock (see IdentityService.resolve_for_create).
+        resolution = self._identity.resolve_for_create(
             canonical_name=request.canonical_name,
             class_id=ontology_class.id,
             external_source_system=None if external is None else external.source_system,
             external_id=None if external is None else external.external_id,
+            acquire_lock=lambda: self._entities.acquire_identity_lock(
+                class_id=ontology_class.id,
+                canonical_name=request.canonical_name,
+            ),
         )
 
         return self._response_for_resolution(

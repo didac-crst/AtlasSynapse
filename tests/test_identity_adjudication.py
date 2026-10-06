@@ -307,6 +307,44 @@ def test_shadow_mode_audits_without_enforcing_reuse(db_session: Session) -> None
     assert audit["model"] == "test"
 
 
+def test_create_path_runs_shadow_adjudication_outside_lock(db_session: Session) -> None:
+    """create_entity must still audit in shadow mode without enforcing REUSE."""
+    _ensure_writer(db_session)
+    service = EntityService(db_session)
+    first = service.create_entity(
+        CreateEntityRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            canonical_name="Didac",
+            class_key="Person",
+        )
+    )
+    assert first.entity is not None
+
+    spy = _SpyAdjudicator()
+    service._identity = IdentityService(
+        db_session,
+        adjudication=IdentityAdjudicationService(
+            adjudicator=spy,
+            settings=Settings(identity_review_mode="shadow"),
+        ),
+    )
+    second = service.create_entity(
+        CreateEntityRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            canonical_name="Didac",
+            class_key="Person",
+        )
+    )
+    assert second.outcome == ResolutionOutcome.AMBIGUOUS
+    assert spy.calls == 1
+    assert second.identity is not None
+    assert second.identity.metadata["adjudication"]["shadow"] is True
+
+
 def test_provider_failure_leaves_uncertain(db_session: Session) -> None:
     _ensure_writer(db_session)
     person_class = OntologyRepository(db_session).get_class_by_key(

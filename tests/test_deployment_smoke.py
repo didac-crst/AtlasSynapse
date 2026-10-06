@@ -11,8 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_dockerfile_and_compose_define_app_and_migrate() -> None:
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
-    # Local/dev compose keeps bundled Postgres; Satellite deploy uses shared DB.
-    compose_text = (ROOT / "docker-compose.upstream.yml").read_text(encoding="utf-8")
+    # Default compose is portable local (bundled Postgres).
+    compose_text = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
     compose = yaml.safe_load(compose_text)
     entrypoint = (ROOT / "scripts" / "docker-entrypoint.sh").read_text(encoding="utf-8")
     smoke = (ROOT / "scripts" / "smoke_deploy.sh").read_text(encoding="utf-8")
@@ -41,7 +41,7 @@ def test_dockerfile_and_compose_define_app_and_migrate() -> None:
 
 
 def test_satellite_compose_uses_shared_database_network() -> None:
-    compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text(encoding="utf-8"))
+    compose = yaml.safe_load((ROOT / "docker-compose.satellite.yml").read_text(encoding="utf-8"))
     services = compose["services"]
     assert set(services) >= {"migrate", "api", "mcp"}
     assert "postgres" not in services

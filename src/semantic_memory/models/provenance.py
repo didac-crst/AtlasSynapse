@@ -136,11 +136,6 @@ class SourceContentRevision(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
     __table_args__ = (
         UniqueConstraint(
             "source_id",
-            "canonical_content_hash",
-            name="uq_source_content_revision_source_canonical_hash",
-        ),
-        UniqueConstraint(
-            "source_id",
             "revision_number",
             name="uq_source_content_revision_source_revision_number",
         ),
@@ -155,6 +150,13 @@ class SourceContentRevision(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
         Index("ix_source_content_revision_source_id", "source_id"),
         Index(
             "ix_source_content_revision_canonical_content_hash",
+            "canonical_content_hash",
+        ),
+        # Non-unique: the same body may reappear after an intervening edit (A→B→A).
+        # Latest-by-revision_number is authoritative for "current" content.
+        Index(
+            "ix_source_content_revision_source_canonical_hash",
+            "source_id",
             "canonical_content_hash",
         ),
     )

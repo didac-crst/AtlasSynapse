@@ -45,15 +45,15 @@ def ingest_source_content(
 @router.get("/sources/content", response_model=GetSourceContentResponse)
 def get_source_content(
     session: DbSession,
-    source_id: Annotated[str | None, Query()] = None,
-    document_entity_id: Annotated[str | None, Query()] = None,
-    revision_id: Annotated[str | None, Query()] = None,
+    source_id: Annotated[uuid.UUID | None, Query()] = None,
+    document_entity_id: Annotated[uuid.UUID | None, Query()] = None,
+    revision_id: Annotated[uuid.UUID | None, Query()] = None,
     include_original: Annotated[bool, Query()] = True,
 ) -> GetSourceContentResponse:
     request = GetSourceContentRequest(
-        source_id=uuid.UUID(source_id) if source_id else None,
-        document_entity_id=uuid.UUID(document_entity_id) if document_entity_id else None,
-        revision_id=uuid.UUID(revision_id) if revision_id else None,
+        source_id=source_id,
+        document_entity_id=document_entity_id,
+        revision_id=revision_id,
         include_original=include_original,
     )
     return ProvenanceService(session).get_source_content(request)
@@ -63,15 +63,15 @@ def get_source_content(
 def search_source_content(
     session: DbSession,
     query: Annotated[str, Query(min_length=1)],
-    source_id: Annotated[str | None, Query()] = None,
-    document_entity_id: Annotated[str | None, Query()] = None,
+    source_id: Annotated[uuid.UUID | None, Query()] = None,
+    document_entity_id: Annotated[uuid.UUID | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     context_chars: Annotated[int, Query(ge=0, le=2000)] = 120,
 ) -> SearchSourceContentResponse:
     request = SearchSourceContentRequest(
         query=query,
-        source_id=uuid.UUID(source_id) if source_id else None,
-        document_entity_id=uuid.UUID(document_entity_id) if document_entity_id else None,
+        source_id=source_id,
+        document_entity_id=document_entity_id,
         limit=limit,
         context_chars=context_chars,
     )

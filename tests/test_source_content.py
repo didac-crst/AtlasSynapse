@@ -133,6 +133,31 @@ def test_ingest_hash_dedup_and_new_revision(db_session: Session) -> None:
     assert changed.revision.revision_number == 2
     assert changed.revision.id != first.revision.id
 
+    # Reverting to the original body must create a new latest revision (A→B→A),
+    # not REUSE the stale first row.
+    reverted = provenance.ingest_source_content(
+        IngestSourceContentRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            source=SourceInput(
+                source_system="fixture",
+                external_id="memo-alpha",
+            ),
+            document_entity_id=doc_id,
+            content=body,
+            content_format="markdown",
+        )
+    )
+    assert reverted.outcome.value == "CREATE"
+    assert reverted.revision.revision_number == 3
+    assert reverted.revision.id != first.revision.id
+    assert reverted.revision.canonical_content_hash == first.revision.canonical_content_hash
+
+    latest = provenance.get_source_content(GetSourceContentRequest(source_id=first.source.id))
+    assert latest.revision.id == reverted.revision.id
+    assert latest.revision.revision_number == 3
+
 
 def test_html_ingest_preserves_original_and_canonicalizes(db_session: Session) -> None:
     _ensure_writer(db_session)

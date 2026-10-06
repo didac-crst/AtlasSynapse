@@ -110,16 +110,13 @@ class StatementRepository:
             ).all()
         )
         for statement in subject_rows:
+            # Use normalized_object so JSON (and all value kinds) compare correctly.
             duplicate = self._session.scalar(
                 select(Statement.id).where(
                     Statement.id != statement.id,
                     Statement.subject_entity_id == target_entity_id,
                     Statement.predicate_id == statement.predicate_id,
-                    Statement.object_entity_id.is_not_distinct_from(statement.object_entity_id),
-                    Statement.object_string.is_not_distinct_from(statement.object_string),
-                    Statement.object_number.is_not_distinct_from(statement.object_number),
-                    Statement.object_boolean.is_not_distinct_from(statement.object_boolean),
-                    Statement.object_datetime.is_not_distinct_from(statement.object_datetime),
+                    Statement.normalized_object == statement.normalized_object,
                     Statement.valid_from.is_not_distinct_from(statement.valid_from),
                     Statement.valid_to.is_not_distinct_from(statement.valid_to),
                     Statement.status == StatementStatus.ASSERTED.value,
@@ -154,6 +151,7 @@ class StatementRepository:
                 retracted_duplicates += 1
                 continue
             statement.object_entity_id = target_entity_id
+            statement.normalized_object = f"entity:{target_entity_id}"
             moved_object += 1
 
         self._session.flush()

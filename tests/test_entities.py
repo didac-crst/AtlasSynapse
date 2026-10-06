@@ -342,7 +342,41 @@ def test_merge_transfers_aliases_for_redirect(db_session: Session) -> None:
     assert reused.entity.id == left.entity.id
 
 
-def test_authoritative_alias_match_reuses_didac_cristobal(db_session: Session) -> None:
+def test_merge_preserves_supporting_alias_strength(db_session: Session) -> None:
+    """Supporting aliases must not become authoritative during merge."""
+    _ensure_writer(db_session)
+    service = EntityService(db_session)
+    target = service.create_entity(_create_request(name="Keeper", class_key="Person"))
+    source = service.create_entity(_create_request(name="Merged Person", class_key="Person"))
+    assert target.entity is not None
+    assert source.entity is not None
+
+    service.add_entity_alias(
+        AddEntityAliasRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            entity_id=source.entity.id,
+            alias="Nickname Only",
+            identity_strength=AliasIdentityStrength.SUPPORTING,
+        )
+    )
+    merged = service.merge_entity(
+        MergeEntityRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            source_entity_id=source.entity.id,
+            target_entity_id=target.entity.id,
+        )
+    )
+    by_alias = {entry.alias: entry.identity_strength for entry in merged.target.alias_entries}
+    assert by_alias["Merged Person"] == AliasIdentityStrength.AUTHORITATIVE
+    assert by_alias["Nickname Only"] == AliasIdentityStrength.SUPPORTING
+
+    ambiguous = service.create_entity(_create_request(name="Nickname Only", class_key="Person"))
+    assert ambiguous.outcome == ResolutionOutcome.AMBIGUOUS
+
     """Confirmed alias must MATCH; this is the original Didac Cristobal case."""
     _ensure_writer(db_session)
     service = EntityService(db_session)

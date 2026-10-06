@@ -240,12 +240,13 @@ class EntityRepository:
                 by_id[entity.id] = entity
 
         # Longer existing names/aliases that start with the incoming name.
-        like_pattern = f"{normalized} %"
+        escaped = normalized.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        like_pattern = f"{escaped} %"
         canonical_stmt = (
             select(Entity)
             .where(
                 Entity.status == EntityStatus.ACTIVE.value,
-                _normalized_canonical_sql().like(like_pattern),
+                _normalized_canonical_sql().like(like_pattern, escape="\\"),
             )
             .distinct()
         )
@@ -254,7 +255,7 @@ class EntityRepository:
             .join(EntityAlias, EntityAlias.entity_id == Entity.id)
             .where(
                 Entity.status == EntityStatus.ACTIVE.value,
-                EntityAlias.normalized_alias.like(like_pattern),
+                EntityAlias.normalized_alias.like(like_pattern, escape="\\"),
             )
             .distinct()
         )

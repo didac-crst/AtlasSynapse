@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
@@ -22,8 +23,15 @@ from semantic_memory.schemas.identity import (
     aggregate_candidate_decisions,
     to_legacy_resolution_outcome,
 )
-from semantic_memory.schemas.identity_adjudication import IdentityAdjudicationRequest
-from semantic_memory.services.identity_adjudication import IdentityAdjudicationService
+from semantic_memory.schemas.identity_adjudication import (
+    IdentityAdjudicationRequest,
+    IdentityAdjudicationResult,
+)
+from semantic_memory.services.identity_adjudication import (
+    IdentityAdjudicationService,
+    apply_adjudication_to_candidates,
+    llm_adjudication_may_run,
+)
 from semantic_memory.services.identity_graph_evidence import (
     IdentityGraphEvidenceService,
     sort_candidates_for_explanation,
@@ -70,7 +78,101 @@ class IdentityService:
         class_id: uuid.UUID | None = None,
         external_source_system: str | None = None,
         external_id: str | None = None,
+        adjudicate: bool = True,
     ) -> ResolutionResult:
+        identity_candidates, entity_by_id, class_key = self._gather_candidates(
+            canonical_name=canonical_name,
+            class_id=class_id,
+            external_source_system=external_source_system,
+            external_id=external_id,
+        )
+        adjudication_result: IdentityAdjudicationResult | None = None
+        if adjudicate:
+            identity_candidates, adjudication_result = self._run_adjudication(
+                canonical_name=canonical_name,
+                class_key=class_key,
+                candidates=identity_candidates,
+            )
+        return self._to_resolution_result(
+            canonical_name=canonical_name,
+            identity_candidates=identity_candidates,
+            entity_by_id=entity_by_id,
+            adjudication_result=adjudication_result,
+        )
+
+    def resolve_for_create(
+        self,
+        *,
+        canonical_name: str,
+        class_id: uuid.UUID,
+        external_source_system: str | None = None,
+        external_id: str | None = None,
+        acquire_lock: Callable[[], None],
+    ) -> ResolutionResult:
+        """Create-path resolve: provider HTTP before advisory lock, write under lock.
+
+        ``pg_advisory_xact_lock`` is held until commit, so synchronous adjudication
+        must not run after ``acquire_lock`` or concurrent creates stall for tens of
+        seconds on shadow/external provider calls.
+        """
+        pre_candidates, _pre_entities, class_key = self._gather_candidates(
+            canonical_name=canonical_name,
+            class_id=class_id,
+            external_source_system=external_source_system,
+            external_id=external_id,
+        )
+        _pre_candidates, adjudication_result = self._run_adjudication(
+            canonical_name=canonical_name,
+            class_key=class_key,
+            candidates=pre_candidates,
+        )
+
+        acquire_lock()
+        identity_candidates, entity_by_id, _ = self._gather_candidates(
+            canonical_name=canonical_name,
+            class_id=class_id,
+            external_source_system=external_source_system,
+            external_id=external_id,
+        )
+        if adjudication_result is not None and adjudication_result.enforced:
+            identity_candidates = apply_adjudication_to_candidates(
+                identity_candidates, adjudication_result
+            )
+        return self._to_resolution_result(
+            canonical_name=canonical_name,
+            identity_candidates=identity_candidates,
+            entity_by_id=entity_by_id,
+            adjudication_result=adjudication_result,
+        )
+
+    def _run_adjudication(
+        self,
+        *,
+        canonical_name: str,
+        class_key: str | None,
+        candidates: list[IdentityCandidate],
+    ) -> tuple[list[IdentityCandidate], IdentityAdjudicationResult | None]:
+        preliminary = aggregate_candidate_decisions(candidates)
+        if not llm_adjudication_may_run(resolution=preliminary, candidates=candidates):
+            return candidates, None
+        return self._adjudication.maybe_adjudicate(
+            request=IdentityAdjudicationRequest(
+                incoming_canonical_name=canonical_name,
+                class_key=class_key,
+                candidates=candidates,
+            ),
+            resolution=preliminary,
+            candidates=candidates,
+        )
+
+    def _gather_candidates(
+        self,
+        *,
+        canonical_name: str,
+        class_id: uuid.UUID | None = None,
+        external_source_system: str | None = None,
+        external_id: str | None = None,
+    ) -> tuple[list[IdentityCandidate], dict[uuid.UUID, Entity], str | None]:
         by_id: dict[uuid.UUID, _CandidateAccum] = {}
 
         def _accum(entity: Entity) -> _CandidateAccum:
@@ -191,23 +293,21 @@ class IdentityService:
             )
 
         identity_candidates = sort_candidates_for_explanation(identity_candidates)
-
-        preliminary = aggregate_candidate_decisions(identity_candidates)
         class_key: str | None = None
         if class_id is not None:
             ontology_class = self._session.get(OntologyClass, class_id)
             if ontology_class is not None:
                 class_key = ontology_class.key
+        return identity_candidates, entity_by_id, class_key
 
-        identity_candidates, adjudication_result = self._adjudication.maybe_adjudicate(
-            request=IdentityAdjudicationRequest(
-                incoming_canonical_name=canonical_name,
-                class_key=class_key,
-                candidates=identity_candidates,
-            ),
-            resolution=preliminary,
-            candidates=identity_candidates,
-        )
+    def _to_resolution_result(
+        self,
+        *,
+        canonical_name: str,
+        identity_candidates: list[IdentityCandidate],
+        entity_by_id: dict[uuid.UUID, Entity],
+        adjudication_result: IdentityAdjudicationResult | None,
+    ) -> ResolutionResult:
         resolution = aggregate_candidate_decisions(identity_candidates)
         action = action_for_resolution(resolution)
         matched_entity: Entity | None = None

@@ -4,12 +4,15 @@ This document covers packaging, secrets, migrations, authentication, MCP transpo
 
 ## Compose packaging
 
-`docker-compose.yml` runs:
+`docker-compose.yml` runs the portable local stack:
 
 1. `postgres` — PostgreSQL 16
 2. `migrate` — one-shot `alembic upgrade head`
 3. `api` — uvicorn HTTP service (depends on a successful migrate)
 4. `mcp` (profile `mcp`) — optional stdio MCP process for local agent wiring
+
+On Satellite, use `docker compose -f docker-compose.satellite.yml` instead (shared
+Postgres network; no bundled database).
 
 ```bash
 cp .env.example .env

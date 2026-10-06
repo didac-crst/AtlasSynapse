@@ -1,72 +1,93 @@
-# AtlasSynapse on Satellite — shared Postgres, no bundled DB.
-# Upstream local Compose kept as docker-compose.upstream.yml.
+# Local / compose-based deployment.
+# Copy .env.example to .env and replace development secrets before any shared use.
 #
-# Usage:
-#   cd /srv/satellite/apps/atlas-synapse
-#   docker compose up -d --build
-#   docker compose run --rm -T mcp   # stdio MCP for OpenAI tunnel-client
-
-name: atlas-synapse
-
-x-app-env: &app-env
-  env_file:
-    - ./atlas-synapse.env
-    - /srv/satellite/secrets/atlas-synapse.secret.env
-
+# Compose services always reach Postgres via hostname "postgres", built from
+# POSTGRES_* (not host-side DATABASE_URL, which uses localhost for local tools).
 services:
-  migrate:
-    build: .
-    image: satellite-atlas-synapse:local
-    container_name: atlas-synapse-migrate
-    <<: *app-env
-    command: ["migrate"]
-    networks:
-      - satellite-databases
-    restart: "no"
-
-  api:
-    build: .
-    image: satellite-atlas-synapse:local
-    container_name: atlas-synapse-api
-    <<: *app-env
-    command: ["api"]
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-semantic_memory}
+      POSTGRES_USER: ${POSTGRES_USER:-semantic_memory}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-semantic_memory}
     ports:
-      - "10.10.0.12:5060:8000"
-    networks:
-      - satellite-databases
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-    restart: unless-stopped
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "curl -fsS http://127.0.0.1:8000/health/live >/dev/null",
+          "pg_isready -U ${POSTGRES_USER:-semantic_memory} -d ${POSTGRES_DB:-semantic_memory}",
         ]
-      interval: 15s
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build: .
+    command: ["migrate"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-semantic_memory}:${POSTGRES_PASSWORD:-semantic_memory}@postgres:5432/${POSTGRES_DB:-semantic_memory}
+      APP_ENV: ${APP_ENV:-development}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build: .
+    command: ["api"]
+    environment:
+      APP_NAME: ${APP_NAME:-AtlasSynapse}
+      APP_ENV: ${APP_ENV:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-semantic_memory}:${POSTGRES_PASSWORD:-semantic_memory}@postgres:5432/${POSTGRES_DB:-semantic_memory}
+      RAW_PAYLOAD_RETENTION: ${RAW_PAYLOAD_RETENTION:-redacted}
+      SEMANTIC_REVIEW_MODE: ${SEMANTIC_REVIEW_MODE:-disabled}
+      HTTP_HOST: ${HTTP_HOST:-0.0.0.0}
+      HTTP_PORT: ${HTTP_PORT:-8000}
+      HTTP_API_TOKEN: ${HTTP_API_TOKEN:-}
+      ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:-}
+    ports:
+      - "${HTTP_PORT:-8000}:${HTTP_PORT:-8000}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1:$${HTTP_PORT:-8000}/health/live >/dev/null",
+        ]
+      interval: 10s
       timeout: 5s
       retries: 6
-      start_period: 30s
 
-  # Spawned by OpenAI tunnel-client via stdio (do not allocate a TTY).
+  # Optional stdio MCP sidecar for local agent wiring.
+  # Pipe-based stdin/stdout only; do not allocate a TTY because MCP stdio expects
+  # clean protocol messages on stdin/stdout.
   mcp:
     profiles: ["mcp"]
     build: .
-    image: satellite-atlas-synapse:local
-    container_name: atlas-synapse-mcp
-    <<: *app-env
     command: ["mcp"]
-    networks:
-      - satellite-databases
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-semantic_memory}:${POSTGRES_PASSWORD:-semantic_memory}@postgres:5432/${POSTGRES_DB:-semantic_memory}
+      MCP_TRANSPORT: stdio
+      SEMANTIC_REVIEW_MODE: ${SEMANTIC_REVIEW_MODE:-disabled}
+      HTTP_API_TOKEN: ${HTTP_API_TOKEN:-}
+      ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:-}
     depends_on:
+      postgres:
+        condition: service_healthy
       migrate:
         condition: service_completed_successfully
     stdin_open: true
     tty: false
-    restart: "no"
 
-networks:
-  satellite-databases:
-    external: true
-    name: satellite-databases
+volumes:
+  postgres-data:
