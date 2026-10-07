@@ -49,10 +49,16 @@ propose_predicate
 propose_constraint
 propose_alias
 propose_class_parent
+apply_ontology_proposal
 challenge_ontology_review
 answer_semantic_clarification
 answer_identity_clarification
 ```
+
+`READY_TO_APPLY` means eligible for an apply attempt, not a guarantee. Call
+`apply_ontology_proposal` with `proposal_id`, `request_id`, and `idempotency_key`
+(the MCP server injects `actor_key`). The server revalidates gates and live
+ontology state before commit; there is no force/skip path.
 
 When semantic review cannot decide whether a proposal is new vs overlapping an
 existing concept, AtlasSynapse returns `manual_review` and issues a deterministic
@@ -179,4 +185,8 @@ Unknown predicates do not create ontology implicitly. They may include suggested
 
 ## Capabilities
 
-The expected default ChatGPT actor capabilities are `knowledge.read`, `knowledge.write`, `ontology.read`, `ontology.propose`, and `feedback.create`. Direct ontology application and feedback administration are reserved for privileged actors.
+The expected default ChatGPT MCP actor capabilities are `knowledge.read`,
+`knowledge.write`, `ontology.read`, `ontology.propose`, `ontology.apply`, and
+`feedback.create`. Feedback administration remains reserved for privileged
+actors. `ontology.apply` is required for `apply_ontology_proposal`; treat its
+presence on the live MCP actor as a deploy acceptance check.

@@ -34,6 +34,7 @@ from semantic_memory.schemas.ontology import (
     OntologySearchResponse,
 )
 from semantic_memory.schemas.proposals import (
+    ApplyProposalRequest,
     ProposalResponse,
     ProposeAliasRequest,
     ProposeClassParentRequest,
@@ -588,6 +589,17 @@ class OntologyMCPTools:
             lambda p: self._proposals.propose_class_parent(
                 ProposeClassParentRequest.model_validate(p)
             ),
+        )
+
+    def apply_ontology_proposal(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Commit a READY_TO_APPLY / applyable proposal into the live ontology.
+
+        Revalidates gates and live ontology state; does not bypass governance.
+        """
+        return _run_mutation(
+            self._session,
+            payload,
+            lambda p: self._proposals.apply_proposal(ApplyProposalRequest.model_validate(p)),
         )
 
     def challenge_ontology_review(self, payload: dict[str, Any]) -> dict[str, Any]:

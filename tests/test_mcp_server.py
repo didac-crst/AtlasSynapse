@@ -20,6 +20,7 @@ def test_build_mcp_server_registers_contract_tools() -> None:
     info = MCPServerInfo.from_settings(Settings(mcp_transport="stdio"))
     assert set(info.tools) == tools
     assert "create_entity" in tools
+    assert "apply_ontology_proposal" in tools
     assert "apply_proposal" not in tools
     assert info.transport == "stdio"
     server = build_mcp_server(Settings(mcp_transport="stdio"))

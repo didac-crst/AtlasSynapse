@@ -55,6 +55,7 @@ REGISTERED_TOOL_NAMES: tuple[str, ...] = (
     "propose_constraint",
     "propose_alias",
     "propose_class_parent",
+    "apply_ontology_proposal",
     "challenge_ontology_review",
     "answer_semantic_clarification",
     "answer_identity_clarification",
@@ -460,6 +461,14 @@ def build_mcp_tools() -> list[ToolSpec]:
             lambda session, payload: OntologyMCPTools(session).propose_class_parent(payload),
         ),
         _payload_tool(
+            "apply_ontology_proposal",
+            "Commit an applyable ontology proposal into the live ontology. "
+            "Server revalidates gates and current ontology state; not a force/override. "
+            "Requires ontology.apply. Pass proposal_id, request_id, idempotency_key "
+            "(actor_key is injected by the MCP server).",
+            lambda session, payload: OntologyMCPTools(session).apply_ontology_proposal(payload),
+        ),
+        _payload_tool(
             "challenge_ontology_review",
             "Challenge a reject/reuse semantic review with new rationale/evidence.",
             lambda session, payload: OntologyMCPTools(session).challenge_ontology_review(payload),
@@ -500,7 +509,8 @@ def build_mcp_server(settings: Settings | None = None) -> StdioMCPServer:
             "AtlasSynapse semantic memory tools. The MCP server injects actor_key "
             f"('{cfg.mcp_actor_key}'); clients must not guess it. Mutations still need "
             "request_id and idempotency_key. Prefer dry_run=true to preview writes. "
-            "No raw SQL or DDL."
+            "Ontology propose ≠ apply: after READY_TO_APPLY, call apply_ontology_proposal "
+            "to commit (server revalidates; no force). No raw SQL or DDL."
         ),
         tools=build_mcp_tools(),
     )

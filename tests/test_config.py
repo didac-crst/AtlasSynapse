@@ -46,6 +46,7 @@ def test_mcp_server_info() -> None:
     assert "get_proposal" in info.tools
     assert "challenge_ontology_review" in info.tools
     assert "answer_semantic_clarification" in info.tools
+    assert "apply_ontology_proposal" in info.tools
     assert "apply_proposal" not in info.tools
     assert "search_entities" in info.tools
     assert "search_statements" in info.tools
