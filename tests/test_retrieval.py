@@ -128,6 +128,101 @@ def test_search_entities_and_statements_with_signals(db_session: Session) -> Non
     assert statements.hits[0].signals.entity_proximity == 1.0
 
 
+def test_anchor_1hop_reaches_superseded_holds_for_historical_query(
+    db_session: Session,
+) -> None:
+    """Entity-valued superseded facts with empty object_string need 1-hop anchors."""
+    from datetime import UTC, datetime
+
+    from semantic_memory.repositories.statements import StatementRepository
+
+    writer = _ensure_writer(db_session, key="anchor-writer")
+    entities = EntityService(db_session)
+    statements = StatementService(db_session)
+
+    person = entities.create_entity(
+        CreateEntityRequest(
+            actor_key=writer,
+            request_id=uuid.uuid4(),
+            idempotency_key=f"a-person-{uuid.uuid4()}",
+            canonical_name="Anchorman",
+            class_key="Document",
+        )
+    )
+    role = entities.create_entity(
+        CreateEntityRequest(
+            actor_key=writer,
+            request_id=uuid.uuid4(),
+            idempotency_key=f"a-role-{uuid.uuid4()}",
+            canonical_name="Anchor Role Title",
+            class_key="Document",
+        )
+    )
+    assert person.entity is not None and role.entity is not None
+    current = statements.assert_statement(
+        AssertStatementRequest(
+            actor_key=writer,
+            request_id=uuid.uuid4(),
+            idempotency_key=f"a-cur-{uuid.uuid4()}",
+            subject_entity_id=person.entity.id,
+            predicate_key="relatedTo",
+            object_entity_id=role.entity.id,
+            valid_from=datetime(2025, 9, 1, tzinfo=UTC),
+        )
+    )
+    prior = statements.assert_statement(
+        AssertStatementRequest(
+            actor_key=writer,
+            request_id=uuid.uuid4(),
+            idempotency_key=f"a-prior-{uuid.uuid4()}",
+            subject_entity_id=person.entity.id,
+            predicate_key="relatedTo",
+            object_entity_id=role.entity.id,
+            valid_from=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+    )
+    assert current.statement is not None and prior.statement is not None
+    repo = StatementRepository(db_session)
+    row = repo.get(prior.statement.id)
+    assert row is not None
+    repo.mark_superseded(row, replacement_id=current.statement.id)
+    db_session.flush()
+
+    service = RetrievalService(db_session)
+    historical = service.search_semantic_memory(
+        SearchSemanticMemoryRequest(
+            query="Anchorman previous role",
+            limit=25,
+        )
+    )
+    hist_ids = {
+        hit.statement.id: hit
+        for hit in historical.hits
+        if hit.statement is not None
+    }
+    assert prior.statement.id in hist_ids
+    assert "anchor_1hop" in hist_ids[prior.statement.id].match_reasons
+    assert any("1-hop anchor" in note.lower() for note in historical.ranking_explanations)
+
+    # Current intent must not run historical anchor expansion / surface superseded.
+    current_search = service.search_semantic_memory(
+        SearchSemanticMemoryRequest(
+            query="Anchorman current role",
+            limit=25,
+        )
+    )
+    current_ids = {
+        hit.statement.id
+        for hit in current_search.hits
+        if hit.statement is not None
+    }
+    assert prior.statement.id not in current_ids
+    assert any(
+        "skipped (non-historical" in note.lower() or "non-historical intent" in note.lower()
+        for note in current_search.ranking_explanations
+    )
+
+
 def test_current_intent_prefers_effective_over_unbounded_description(
     db_session: Session,
 ) -> None:

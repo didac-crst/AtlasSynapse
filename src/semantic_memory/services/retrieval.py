@@ -69,6 +69,25 @@ def _clamp(value: float) -> float:
     return max(0.0, min(1.0, value))
 
 
+# Bounded 1-hop anchor expansion (not a general graph walker).
+_MAX_ANCHOR_ENTITIES = 3
+_MIN_ANCHOR_LEXICAL = 0.75
+_MAX_STATEMENTS_PER_ANCHOR = 40
+_MAX_ANCHOR_STATEMENTS_TOTAL = 80
+_ANCHOR_LEXICAL_FLOOR = 0.62
+_STRONG_ANCHOR_REASONS = frozenset(
+    {
+        "exact_text",
+        "exact_token_name",
+        # Sparse multi-term still means the entity name equals a query token —
+        # the structural blind-spot case (Didac in "Didac previous Airbus role").
+        "exact_token_name_sparse",
+        "all_tokens_present",
+        "phrase_contains",
+    }
+)
+
+
 class RetrievalService:
     def __init__(self, session: Session) -> None:
         self._session = session
@@ -470,6 +489,46 @@ class RetrievalService:
                 if hit.statement.id not in seen:
                     statement_hits.append(hit)
                     seen.add(hit.statement.id)
+
+        # Anchor expansion is historical-only: it exists to reach entity-valued
+        # superseded facts with empty object_string. Running it on current/default
+        # queries adds adjacency noise without a measured gain.
+        anchor_count = 0
+        if temporal_intent == TemporalIntent.HISTORICAL:
+            anchor_hits, anchor_count = self._anchor_expand_statements(
+                query=request.query,
+                entity_hits=entity_hits.hits,
+                focus_entity_id=request.entity_id,
+                as_of=request.as_of,
+                temporal_intent=temporal_intent,
+            )
+            seen_statement_ids = {hit.statement.id for hit in statement_hits}
+            for hit in anchor_hits:
+                if hit.statement.id in seen_statement_ids:
+                    existing_idx = next(
+                        i
+                        for i, row in enumerate(statement_hits)
+                        if row.statement.id == hit.statement.id
+                    )
+                    existing = statement_hits[existing_idx]
+                    if hit.ranking_score > existing.ranking_score:
+                        merged_reasons = list(
+                            dict.fromkeys([*hit.match_reasons, *existing.match_reasons])
+                        )
+                        statement_hits[existing_idx] = hit.model_copy(
+                            update={"match_reasons": merged_reasons}
+                        )
+                    else:
+                        merged_reasons = list(
+                            dict.fromkeys([*existing.match_reasons, *hit.match_reasons])
+                        )
+                        statement_hits[existing_idx] = existing.model_copy(
+                            update={"match_reasons": merged_reasons}
+                        )
+                else:
+                    statement_hits.append(hit)
+                    seen_statement_ids.add(hit.statement.id)
+
         hits: list[SemanticMemoryHit] = []
         for entity_hit in entity_hits.hits:
             hits.append(
@@ -519,6 +578,12 @@ class RetrievalService:
                     f"Temporal intent: {temporal_intent.value}. "
                     "Current/default search stays asserted-only and prefers effective facts; "
                     "historical intent includes superseded rows and boosts prior beliefs."
+                ),
+                (
+                    "Bounded 1-hop anchor expansion runs only for historical intent "
+                    f"(used {anchor_count} strong entity anchor(s); deduplicated)."
+                    if temporal_intent == TemporalIntent.HISTORICAL
+                    else "Bounded 1-hop anchor expansion skipped (non-historical intent)."
                 ),
                 "Vector search was not required and was not used.",
                 "ranking_score is for ordering only and is not a truth score.",
@@ -623,6 +688,132 @@ class RetrievalService:
             },
         )
 
+    def _select_strong_anchors(
+        self,
+        entity_hits: list[RankedEntityHit],
+        *,
+        focus_entity_id: uuid.UUID | None,
+    ) -> list[uuid.UUID]:
+        """Pick a few strong lexical entity anchors for 1-hop expansion."""
+        anchors: list[uuid.UUID] = []
+        seen: set[uuid.UUID] = set()
+        if focus_entity_id is not None:
+            anchors.append(focus_entity_id)
+            seen.add(focus_entity_id)
+        for hit in entity_hits:
+            if len(anchors) >= _MAX_ANCHOR_ENTITIES:
+                break
+            entity_id = hit.entity.id
+            if entity_id in seen:
+                continue
+            strong_reason = any(
+                reason in _STRONG_ANCHOR_REASONS for reason in hit.match_reasons
+            )
+            if hit.signals.lexical_relevance >= _MIN_ANCHOR_LEXICAL or strong_reason:
+                anchors.append(entity_id)
+                seen.add(entity_id)
+        return anchors
+
+    def _anchor_expand_statements(
+        self,
+        *,
+        query: str,
+        entity_hits: list[RankedEntityHit],
+        focus_entity_id: uuid.UUID | None,
+        as_of: datetime | None,
+        temporal_intent: TemporalIntent,
+    ) -> tuple[list[RankedStatementHit], int]:
+        """Expand 1-hop statements around strong entity anchors.
+
+        Reuses the normal statement scorer. Asserted-only by default; historical
+        intent also admits superseded rows. Retracted rows are never expanded.
+        """
+        anchors = self._select_strong_anchors(
+            entity_hits, focus_entity_id=focus_entity_id
+        )
+        if not anchors:
+            return [], 0
+
+        now = as_of or datetime.now(UTC)
+        allowed_statuses = {StatementStatus.ASSERTED.value}
+        if temporal_intent == TemporalIntent.HISTORICAL:
+            allowed_statuses.add(StatementStatus.SUPERSEDED.value)
+
+        collected: list[Statement] = []
+        seen_ids: set[uuid.UUID] = set()
+        for anchor_id in anchors:
+            identity_ids = self._entities.identity_group_ids(anchor_id)
+            rows = self._statements.list_for_entity_timeline(identity_ids)
+            per_anchor = 0
+            for statement in rows:
+                if statement.status not in allowed_statuses:
+                    continue
+                # Target the structural blind spot: entity-valued statements with
+                # little/no object text. Free-text rows are already covered lexically.
+                if statement.object_entity_id is None:
+                    continue
+                if statement.id in seen_ids:
+                    continue
+                collected.append(statement)
+                seen_ids.add(statement.id)
+                per_anchor += 1
+                if per_anchor >= _MAX_STATEMENTS_PER_ANCHOR:
+                    break
+            if len(collected) >= _MAX_ANCHOR_STATEMENTS_TOTAL:
+                collected = collected[:_MAX_ANCHOR_STATEMENTS_TOTAL]
+                break
+
+        if not collected:
+            return [], len(anchors)
+
+        name_map = self._entity_name_map_for_statements(collected)
+        evidence_stats = self._provenance_repo.evidence_stats_for_statements(
+            [row.id for row in collected]
+        )
+        specificity_cache: dict[uuid.UUID, float] = {}
+        # Map statement → best focus among anchors for proximity scoring.
+        anchor_set = set(anchors)
+        for anchor_id in list(anchors):
+            anchor_set.update(self._entities.identity_group_ids(anchor_id))
+
+        hits: list[RankedStatementHit] = []
+        for statement in collected:
+            focus = None
+            if statement.subject_entity_id in anchor_set:
+                focus = statement.subject_entity_id
+            elif (
+                statement.object_entity_id is not None
+                and statement.object_entity_id in anchor_set
+            ):
+                focus = statement.object_entity_id
+            count, reliability = evidence_stats.get(statement.id, (0, 0.0))
+            signals, reasons = self._score_statement(
+                statement,
+                query=query,
+                focus_entity_id=focus,
+                now=now,
+                evidence_count=count,
+                source_reliability=reliability,
+                specificity_cache=specificity_cache,
+                subject_name=name_map.get(statement.subject_entity_id),
+                object_name=(
+                    name_map.get(statement.object_entity_id)
+                    if statement.object_entity_id is not None
+                    else None
+                ),
+                temporal_intent=temporal_intent,
+                from_anchor=True,
+            )
+            hits.append(
+                RankedStatementHit(
+                    statement=self._statement_service.to_response(statement),
+                    signals=signals,
+                    ranking_score=signals.ranking_score,
+                    match_reasons=reasons,
+                )
+            )
+        return hits, len(anchors)
+
     def _alias_map_for_entities(
         self, entity_ids: list[uuid.UUID]
     ) -> dict[uuid.UUID, tuple[str, ...]]:
@@ -708,6 +899,7 @@ class RetrievalService:
         subject_name: str | None = None,
         object_name: str | None = None,
         temporal_intent: TemporalIntent | None = None,
+        from_anchor: bool = False,
     ) -> tuple[RankingSignals, list[str]]:
         notes: list[str] = []
         reasons: list[str] = []
@@ -717,15 +909,20 @@ class RetrievalService:
 
         lexical = 0.0
         if query:
-            lexical, lex_reasons, lex_notes = score_lexical_relevance(
-                query,
-                [
-                    statement.object_string,
-                    statement.normalized_object,
-                    subject_name,
-                    object_name,
-                ],
-            )
+            haystacks: list[str | None] = [
+                statement.object_string,
+                statement.normalized_object,
+            ]
+            if from_anchor and focus_entity_id is not None:
+                # Do not count the anchor's own name as lexical content — that
+                # would make every Didac-adjacent statement look like an exact hit.
+                if statement.subject_entity_id != focus_entity_id:
+                    haystacks.append(subject_name)
+                if statement.object_entity_id != focus_entity_id:
+                    haystacks.append(object_name)
+            else:
+                haystacks.extend([subject_name, object_name])
+            lexical, lex_reasons, lex_notes = score_lexical_relevance(query, haystacks)
             reasons.extend(lex_reasons)
             notes.extend(lex_notes)
             if not lex_reasons:
@@ -734,6 +931,29 @@ class RetrievalService:
         else:
             lexical = 0.4
             reasons.append("entity_linked_statement")
+
+        if from_anchor:
+            reasons.append("anchor_1hop")
+            notes.append(
+                "Candidate via bounded 1-hop expansion from a strong entity anchor "
+                "(entity-valued statements only)."
+            )
+            # Empty object_string entity links need a floor to compete.
+            # Superseded historical facts get a higher floor so they outrank
+            # unbounded adjacency noise (hasParticipant, etc.).
+            floor = _ANCHOR_LEXICAL_FLOOR
+            if (
+                intent == TemporalIntent.HISTORICAL
+                and statement.status == StatementStatus.SUPERSEDED.value
+            ):
+                floor = max(floor, 0.92)
+                reasons.append("anchor_historical_superseded_boost")
+            if lexical < floor:
+                lexical = floor
+                notes.append(
+                    f"Applied anchor lexical floor {floor:.2f} "
+                    "for entity-valued / low-text statements."
+                )
 
         temporal, temporal_reasons, temporal_notes = score_temporal_validity(
             valid_from=statement.valid_from,

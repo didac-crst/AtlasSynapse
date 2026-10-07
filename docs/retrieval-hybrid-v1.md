@@ -84,19 +84,45 @@ Report: [`benchmarks/retrieval/v1/temporal_v1_report.json`](../benchmarks/retrie
 - `What did AtlasSynapse previously think the Airbus role start date was?` → gold legacy description (`4206a351…`, started 1 Jan 2026) now **R@1**
 - Default/current search stays **asserted-only**; historical adds a superseded candidate pass
 
-### Remaining gaps (justify next layers)
+## Checkpoint: bounded 1-hop anchor expansion (`anchor_v1`)
 
-- Structured **superseded** `holdsRole` (`aa10530b…`) is still often unreachable by lexical text alone (empty `object_string`, names don’t mention Airbus) — needs entity anchoring or 1-hop expansion
-- `when-did-didac-start-current-role` can rank an event-named entity above `holdsRole` at R@1 (holdsRole still R@2) — mild predicate/intent gap
-- Near-duplicate Didac-adjacent noise remains; predicate intent would help more than embeddings
+**Historical-only.** Current/default paths skip expansion (avoids adjacency noise regressions).
+
+```text
+strong entity anchors (≤3, exact-name / high lexical)
+  → entity-valued 1-hop statements only
+  → asserted + superseded when historical
+  → same scorer + dedupe with lexical hits
+```
+
+Report: [`benchmarks/retrieval/v1/anchor_v1_report.json`](../benchmarks/retrieval/v1/anchor_v1_report.json)
+
+| Metric | Temporal v1 | Anchor v1 |
+| --- | ---: | ---: |
+| Recall@1 | 97.5% | **97.5%** |
+| Recall@3 | 100% | **100%** |
+| MRR | 0.988 | **0.988** |
+| Zero-hit | 0% | **0%** |
+
+### What it unlocks
+
+- `Didac previous Airbus role` / `What was Didac doing before this role?` → structured superseded `holdsRole` (`aa10530b…`) at **R@1** via `anchor_1hop`
+- `Didac current Airbus role` → no superseded leakage; asserted-only path unchanged
+- Latency: historical ~350ms LAN; current ~140ms (expansion skipped)
+
+### Remaining gaps
+
+- Historical superseded boost currently promotes *all* superseded entity-valued neighbors equally (holdsRole and hasGoal tie) — soft predicate intent would separate them
+- `when-did-didac-start-current-role` still has mild competition from non-role adjacency on some phrasings
+- Embeddings still not justified
 
 ## Implementation order
 
 1. ~~Benchmark + baseline~~ (`f82ecad`)
 2. ~~Tokenized multi-term lexical matching~~ (`ab49f57`)
-3. ~~Temporal intent / effective-state + legacy demotion~~ (this checkpoint)
-4. Entity anchoring / predicate intent — only if benchmark gaps remain material
-5. Bounded 1-hop graph expansion
+3. ~~Temporal intent / effective-state + legacy demotion~~ (`a7a7123`)
+4. ~~Bounded 1-hop anchor expansion (historical-only)~~ (this checkpoint)
+5. Soft predicate intent — only if role-vs-goal historical ties matter in practice
 6. Embeddings only after measuring remaining gaps
 
 Principle:
