@@ -86,19 +86,28 @@ flowchart TB
     m1[New knowledge] --> m2{Ontology sufficient?}
     m2 -->|yes| m3[Reuse semantics]
     m2 -->|no| m4[Propose]
-    m4 --> m5[Gates + semantic review]
-    m5 --> m6[Clarify if needed]
-    m6 --> m7[Authorized apply]
+    m4 --> m5[Gates]
+    m5 --> m6[Semantic review]
+    m6 -->|reuse| m3
+    m6 -->|reject| m7[Reject]
+    m6 -->|clarify| m8[Clarification]
+    m8 --> m9[Re-review]
+    m9 --> m6
+    m6 -->|ready| m10[Authorized apply]
   end
 
   classDef k fill:#E8F7F5,stroke:#2A8F85,color:#0F3F3B,stroke-width:1.5px
   classDef m fill:#EEF2F6,stroke:#5B6B7C,color:#1F2933,stroke-width:1.5px
   classDef decision fill:#F7F8FA,stroke:#94A3B8,color:#1F2933,stroke-width:1.5px
   classDef ok fill:#E8F7EF,stroke:#2F8F5B,color:#145C32,stroke-width:1.5px
+  classDef reject fill:#FDECEC,stroke:#C23B3B,color:#5C1414,stroke-width:1.5px
+  classDef clarifyNode fill:#EAF2FB,stroke:#3B6EA5,color:#163A5F,stroke-width:1.5px
   class k1,k2,k3,k4,k5,k6 k
-  class m1,m4,m5,m6,m7 m
+  class m1,m4,m5,m6,m9,m10 m
   class m2 decision
   class m3 ok
+  class m7 reject
+  class m8 clarifyNode
 ```
 
 MCP tool surfaces (`agent` / `advanced` / `admin` / `all`) are **visibility UX**,

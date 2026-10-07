@@ -7,6 +7,7 @@ name = "atlas-synapse"
 version = "0.1.0.dev5"
 description = "Semantic memory and evolving knowledge graph for AI agents"
 readme = "README.md"
+license = { text = "Apache-2.0" }
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.14",

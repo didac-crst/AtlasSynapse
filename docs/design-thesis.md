@@ -23,14 +23,16 @@ issues and workflows. An ERP knows products, orders, and transactions.
 
 That works when the domain and the questions are known.
 
-AI agents have a different problem. Over time they encounter people, projects,
-failures, decisions, contracts, experiments, suppliers, requirements, locations,
-evidence, commitments, and relationships that nobody anticipated when the
-database was designed.
+AI agents make this problem more acute. They encounter and attempt to
+operationalize changing knowledge autonomously and at higher frequency — people,
+projects, failures, decisions, contracts, experiments, suppliers, requirements,
+locations, evidence, commitments, and relationships that nobody anticipated when
+the database was designed.
 
-Continuously extending application tables for every new concept does not scale.
-It couples storage migrations to semantic discovery and forces every agent to
-wait on schema ownership.
+Continuously extending application schemas for every newly discovered semantic
+concept becomes increasingly costly when the domain is open-ended and
+cross-cutting. It couples storage migrations to semantic discovery and forces
+every agent to wait on schema ownership.
 
 ## Why raw text memory is insufficient
 
@@ -98,7 +100,7 @@ flowchart LR
   class Agents agent
 ```
 
-The same substrate can support engineering defect memory, supplier-quality
+This architecture can be applied to engineering defect memory, supplier-quality
 intelligence, audit evidence graphs, change-impact analysis, organizational
 handovers, and personal administration. The shared requirement is long-lived,
 connected knowledge whose concepts cannot all be known upfront.
@@ -165,17 +167,25 @@ flowchart TD
   enough -->|no| propose[Propose ontology change]
   propose --> gates[Deterministic validation]
   gates --> review[Semantic reuse / overlap review]
-  review --> clarify[Clarify if ambiguous]
-  clarify --> apply[Authorized apply]
+  review -->|reuse| reuseExisting[Reuse recommended]
+  review -->|reject| rejectSem[Reject]
+  review -->|clarify| clarify[Clarification]
+  clarify --> rereview[Re-review]
+  rereview --> review
+  review -->|ready| apply[Authorized apply]
 
   classDef start fill:#E8F7F5,stroke:#2A8F85,color:#0F3F3B,stroke-width:2px
   classDef process fill:#EEF2F6,stroke:#5B6B7C,color:#1F2933,stroke-width:1.5px
   classDef decision fill:#F7F8FA,stroke:#94A3B8,color:#1F2933,stroke-width:1.5px
   classDef ok fill:#E8F7EF,stroke:#2F8F5B,color:#145C32,stroke-width:1.5px
+  classDef reject fill:#FDECEC,stroke:#C23B3B,color:#5C1414,stroke-width:1.5px
+  classDef clarifyNode fill:#EAF2FB,stroke:#3B6EA5,color:#163A5F,stroke-width:1.5px
   class nk start
   class enough decision
-  class reuse ok
-  class propose,gates,review,clarify,apply process
+  class reuse,reuseExisting,apply ok
+  class propose,gates,review,rereview process
+  class rejectSem reject
+  class clarify clarifyNode
 ```
 
 An agent should not create a new concept merely because it cannot find one, and

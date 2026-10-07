@@ -17,6 +17,15 @@ AtlasSynapse gives it a world model.
 <strong>A governed semantic-memory layer for AI agents.</strong>
 </p>
 
+<p align="center">
+  <a href="https://github.com/didac-crst/atlas-synapse/actions/workflows/ci.yml"><img src="https://github.com/didac-crst/atlas-synapse/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <img src="https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white" alt="Python 3.12+" />
+  <img src="https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL" />
+  <img src="https://img.shields.io/badge/MCP-stdio-0F766E" alt="MCP" />
+  <img src="https://img.shields.io/badge/Docker-compose-2496ED?logo=docker&logoColor=white" alt="Docker" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="Apache 2.0" /></a>
+</p>
+
 <br>
 
 ---
@@ -84,9 +93,10 @@ Most software assumes its domain can be modeled in advance.
 A CRM knows customers and opportunities. A ticketing system knows issues. An ERP
 knows products and orders. That works when the domain and the questions are known.
 
-AI agents have a different problem. Over time they encounter people, projects,
+AI agents make this problem more acute. They encounter people, projects,
 failures, decisions, contracts, experiments, suppliers, requirements, locations,
-evidence, and relationships that nobody anticipated when the database was designed.
+evidence, and relationships autonomously and at higher frequency — often beyond
+what anyone anticipated when the database was designed.
 
 One option is to keep all of that as text. Another is to continuously extend
 application schemas. AtlasSynapse takes a third approach:
@@ -128,7 +138,7 @@ flowchart LR
 Source systems remain authoritative for operational data. AtlasSynapse preserves
 the meaning that connects information across them.
 
-The same substrate can support engineering defect memory, supplier-quality
+This architecture can be applied to engineering defect memory, supplier-quality
 intelligence, audit evidence graphs, change-impact analysis, organizational
 handovers, operational incident memory, and personal administration. The shared
 requirement is **long-lived, connected knowledge whose concepts cannot all be
@@ -140,28 +150,16 @@ For the full argument, see [Design thesis](docs/design-thesis.md).
 
 An agent should not need a fragile client-side sequence such as:
 
-```mermaid
-%%{init: {"theme":"base","themeVariables":{"fontFamily":"ui-sans-serif, system-ui, sans-serif","fontSize":"14px","lineColor":"#94A3B8"}}}%%
-flowchart LR
-  S[Search for Didac] --> G[Guess entity]
-  G --> C[Maybe create]
-  C --> A[Assert with ID]
-
-  classDef fragile fill:#F8FAFC,stroke:#CBD5E1,color:#64748B,stroke-width:1.5px
-  class S,G,C,A fragile
+```text
+search for Didac → guess the entity → maybe create one → assert with its ID
 ```
 
 That creates races and makes every agent invent its own identity policy.
 
 AtlasSynapse owns identity on the write path. An agent can submit:
 
-```mermaid
-%%{init: {"theme":"base","themeVariables":{"fontFamily":"ui-sans-serif, system-ui, sans-serif","fontSize":"14px","lineColor":"#2A8F85"}}}%%
-flowchart LR
-  Didac[Didac] -->|employedBy| Airbus[Airbus]
-
-  classDef ent fill:#EEF2F6,stroke:#5B6B7C,color:#1F2933,stroke-width:1.5px
-  class Didac,Airbus ent
+```text
+Didac → employedBy → Airbus
 ```
 
 using unresolved entity inputs. AtlasSynapse decides independently whether each
@@ -271,17 +269,25 @@ flowchart TD
   enough -->|no| propose[Propose change]
   propose --> gates[Deterministic gates]
   gates --> review[Semantic review]
-  review --> clarify[Clarify if needed]
-  clarify --> apply[Authorized apply]
+  review -->|reuse| reuseExisting[Reuse recommended]
+  review -->|reject| rejectSem[Reject]
+  review -->|clarify| clarify[Clarification]
+  clarify --> rereview[Re-review]
+  rereview --> review
+  review -->|ready| apply[Authorized apply]
 
   classDef start fill:#E8F7F5,stroke:#2A8F85,color:#0F3F3B,stroke-width:2px
   classDef process fill:#EEF2F6,stroke:#5B6B7C,color:#1F2933,stroke-width:1.5px
   classDef decision fill:#F7F8FA,stroke:#94A3B8,color:#1F2933,stroke-width:1.5px
   classDef ok fill:#E8F7EF,stroke:#2F8F5B,color:#145C32,stroke-width:1.5px
+  classDef reject fill:#FDECEC,stroke:#C23B3B,color:#5C1414,stroke-width:1.5px
+  classDef clarifyNode fill:#EAF2FB,stroke:#3B6EA5,color:#163A5F,stroke-width:1.5px
   class nk start
   class enough decision
-  class reuse ok
-  class propose,gates,review,clarify,apply process
+  class reuse,reuseExisting,apply ok
+  class propose,gates,review,rereview process
+  class rejectSem reject
+  class clarify clarifyNode
 ```
 
 An agent should not invent a concept merely because it cannot find one, and it
@@ -448,4 +454,6 @@ See the [development roadmap](docs/roadmap.md) for history and next focus.
 
 ---
 
-**AtlasSynapse gives AI agents a structured place to put the details that are too granular, connected, temporal, or evidence-dependent to live comfortably inside ordinary conversational memory — and a governed way to evolve the language used to represent them.**
+**AtlasSynapse gives AI agents a structured place to put the details that are too granular, connected, temporal, or evidence-dependent to live comfortably inside ordinary conversational memory — and a governed way to evolve the semantic model used to represent them.**
+
+Licensed under the [Apache License 2.0](LICENSE).

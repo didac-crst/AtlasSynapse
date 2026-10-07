@@ -132,12 +132,12 @@ The original numbered phases stop at 15b. Subsequent work is tracked as
 | Capability | PR / notes |
 | --- | --- |
 | Identity-resolution layer + semantic review (shadow adjudication) | #11 |
-| Source-content revisions and content hashing | #11 era |
-| Server-owned assert-by-name / identity on statement writes | stack → #15 |
-| Full-path dry-run mutation previews (savepoint rollback) | stack → #15 |
-| Resumable write/identity clarification handles | stack → #15 |
-| Mutation result envelopes (`return_mode`, effective_state, correct_statement) | stack → #15 |
-| MCP agent surfaces, concurrent dispatch, latency diagnosis | stack → #15 |
+| Source-content revisions and content hashing | #11 |
+| Server-owned assert-by-name / identity on statement writes | #12, landed via #15 |
+| Full-path dry-run mutation previews (savepoint rollback) | #13, landed via #15 |
+| Resumable write/identity clarification handles | #14, landed via #15 |
+| Mutation result envelopes (`return_mode`, effective_state, correct_statement) | #15 |
+| MCP agent surfaces, concurrent dispatch, latency diagnosis | #15 |
 | Hybrid retrieval v1 + frozen gold-set regression benchmark | #15 |
 
 Phases 0–15b above remain the historical archive of the original roadmap.
@@ -157,7 +157,7 @@ Prefer evidence from observed failure modes over speculative automation:
 
 - Milestone A: phases 0–5, usable deterministic memory. — Done.
 - Milestone B: phases 6–9, semantic graph memory. — Done.
-- Milestone C: phases 10–12, governed self-evolving ontology. — Done.
+- Milestone C: phases 10–12, governed ontology evolution. — Done.
 - Milestone D: phase 13 retrieval/LLM observability. — Done.
 - Milestone E: phase 14 production readiness. — Done.
 - Milestone F: phases 15a–15b feedback + admin inspection. — Done.
