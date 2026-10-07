@@ -7,7 +7,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from semantic_memory.models.enums import (
     AliasTargetType,
@@ -19,6 +19,7 @@ from semantic_memory.models.enums import (
     ValueKind,
 )
 from semantic_memory.schemas.common import MutationEnvelope
+from semantic_memory.schemas.dry_run import OperationMode
 from semantic_memory.schemas.semantic_review import (
     ClarificationRequestResponse,
     SemanticReviewResponse,
@@ -26,7 +27,10 @@ from semantic_memory.schemas.semantic_review import (
 
 
 class ProposeClassRequest(MutationEnvelope):
-    namespace_key: str = Field(default="core")
+    namespace_key: str = Field(
+        default="core",
+        description="Ontology namespace. Use 'core' for production; 'smoke' for disposable tests.",
+    )
     key: str = Field(min_length=1)
     label: str | None = None
     description: str | None = None
@@ -36,15 +40,37 @@ class ProposeClassRequest(MutationEnvelope):
 
 
 class ProposePredicateRequest(MutationEnvelope):
-    namespace_key: str = Field(default="core")
+    """Propose a predicate.
+
+    Write fields use ``domain_keys`` / ``range_keys``. Read APIs return
+    ``domain_class_keys`` / ``range_class_keys``; those aliases are also accepted
+    here so clients are not forced to rename.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    namespace_key: str = Field(
+        default="core",
+        description="Ontology namespace. Use 'core' for production; 'smoke' for disposable tests.",
+    )
     key: str = Field(min_length=1)
     label: str | None = None
     description: str | None = None
     value_kind: ValueKind
     datatype: str | None = None
     cardinality: Cardinality = Cardinality.MANY
-    domain_keys: list[str] = Field(default_factory=list)
-    range_keys: list[str] = Field(default_factory=list)
+    domain_keys: list[str] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("domain_keys", "domain_class_keys"),
+        serialization_alias="domain_keys",
+        description="Domain class keys (not domain_class_keys from get_predicate).",
+    )
+    range_keys: list[str] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("range_keys", "range_class_keys"),
+        serialization_alias="range_keys",
+        description="Range class keys (not range_class_keys from get_predicate).",
+    )
     is_symmetric: bool = False
     is_transitive: bool = False
     summary: str | None = None
@@ -105,6 +131,7 @@ class ProposalOutcome(StrEnum):
     REUSE_RECOMMENDED = "REUSE_RECOMMENDED"
     MANUAL_REVIEW = "MANUAL_REVIEW"
     APPLIED = "APPLIED"
+    WOULD_APPLY = "WOULD_APPLY"
 
 
 class ProposalResponse(BaseModel):
@@ -136,3 +163,8 @@ class ApplyProposalResponse(BaseModel):
     outcome: ProposalOutcome
     proposal: ProposalResponse
     request_id: uuid.UUID
+    dry_run: bool = False
+    operation_mode: OperationMode = OperationMode.EXECUTE
+    would_persist: bool | None = None
+    projected: bool = False
+    """When true, ``proposal`` / ``changes`` describe a dry-run projection, not committed state."""

@@ -19,6 +19,7 @@ from semantic_memory.api.proposals import router as proposals_router
 from semantic_memory.api.provenance import router as provenance_router
 from semantic_memory.api.retrieval import router as retrieval_router
 from semantic_memory.api.statements import router as statements_router
+from semantic_memory.api.timing_middleware import ReadTimingMiddleware
 from semantic_memory.config import Settings, get_settings
 from semantic_memory.db import configure_engine
 from semantic_memory.observability.logging import configure_logging
@@ -38,6 +39,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         redoc_url=None,
     )
     app.state.settings = cfg
+    # Outer middleware runs first on the way in; timing wraps auth + handlers.
+    app.add_middleware(ReadTimingMiddleware)
     app.add_middleware(HttpApiTokenMiddleware, settings=cfg)
     register_exception_handlers(app)
     app.include_router(health_router)

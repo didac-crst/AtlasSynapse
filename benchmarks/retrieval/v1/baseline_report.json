@@ -1,0 +1,986 @@
+{
+  "summary": {
+    "n_cases": 40,
+    "n_errors": 0,
+    "limit": 25,
+    "base": "http://10.10.0.12:5060",
+    "recall_at_1": 9,
+    "recall_at_1_pct": 22.5,
+    "recall_at_3": 9,
+    "recall_at_3_pct": 22.5,
+    "recall_at_10": 9,
+    "recall_at_10_pct": 22.5,
+    "mrr": 1.0,
+    "zero_hit_cases": 30,
+    "zero_hit_rate_pct": 75.0,
+    "superseded_in_topk_cases": 0,
+    "superseded_hit_rate_pct": 0.0,
+    "diagnostic_zero": 2,
+    "diagnostic_n": 2,
+    "multi_token_zero": 13,
+    "multi_token_n": 13,
+    "lexical_ok_recall_at_3": 9,
+    "lexical_ok_n": 11
+  },
+  "errors": [],
+  "results": [
+    {
+      "case_id": "didac-current-airbus-role",
+      "query": "Didac current Airbus role",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "multi_concept",
+        "temporal",
+        "graph",
+        "diagnostic"
+      ]
+    },
+    {
+      "case_id": "didac-airbus",
+      "query": "Didac Airbus",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "multi_token",
+        "graph",
+        "diagnostic"
+      ]
+    },
+    {
+      "case_id": "current-airbus-role",
+      "query": "current Airbus role",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "temporal",
+        "multi_token"
+      ]
+    },
+    {
+      "case_id": "didac-current-role",
+      "query": "Didac current role",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "temporal",
+        "predicate_intent"
+      ]
+    },
+    {
+      "case_id": "where-does-didac-work",
+      "query": "Where does Didac work?",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "predicate_intent",
+        "graph"
+      ]
+    },
+    {
+      "case_id": "what-role-does-didac-currently-hold",
+      "query": "What role does Didac currently hold?",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "temporal",
+        "predicate_intent"
+      ]
+    },
+    {
+      "case_id": "when-did-didac-start-current-role",
+      "query": "When did Didac start his current role?",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "temporal",
+        "quality"
+      ]
+    },
+    {
+      "case_id": "airbus-role",
+      "query": "Airbus role",
+      "hit_count": 1,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "ede59f01-2d8c-41c3-91d9-a0706e7f976a",
+          "predicate": "description",
+          "status": "asserted",
+          "score": 0.5238
+        }
+      ],
+      "tags": [
+        "lexical_ok"
+      ]
+    },
+    {
+      "case_id": "quality-engineering-role-title",
+      "query": "Quality Engineering End-to-End Analytics Manager",
+      "hit_count": 4,
+      "relevant_ranks": [
+        1,
+        3,
+        4
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "entity",
+          "id": "0e96df15-9a13-4e2f-a505-61c559b111ac",
+          "name": "Quality Engineering End-to-End Analytics Manager",
+          "score": 0.6488
+        },
+        {
+          "type": "entity",
+          "id": "baa441e6-5cbb-416a-a169-71597ff54b65",
+          "name": "Start Quality Engineering End-to-End Analytics Manager role",
+          "score": 0.5888
+        },
+        {
+          "type": "statement",
+          "id": "4206a351-385d-43bc-9ef3-20cf63dfe08d",
+          "predicate": "description",
+          "status": "asserted",
+          "score": 0.5238
+        },
+        {
+          "type": "statement",
+          "id": "ede59f01-2d8c-41c3-91d9-a0706e7f976a",
+          "predicate": "description",
+          "status": "asserted",
+          "score": 0.5238
+        }
+      ],
+      "tags": [
+        "lexical_ok",
+        "exact"
+      ]
+    },
+    {
+      "case_id": "didac-simple",
+      "query": "Didac",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "entity",
+          "id": "c87bdec9-5757-4278-ae88-d5fe291a2b36",
+          "name": "Didac",
+          "score": 0.6488
+        },
+        {
+          "type": "entity",
+          "id": "35d0252c-fd9a-416f-9428-ae03d18c4c6b",
+          "name": "Cambridge First Certificate in English achieved by Didac",
+          "score": 0.5897
+        },
+        {
+          "type": "entity",
+          "id": "13d8b5d6-1f81-4d36-bace-5c47432765ff",
+          "name": "Cisco CCNA certification achieved by Didac",
+          "score": 0.5897
+        },
+        {
+          "type": "entity",
+          "id": "641fea6e-389e-4baa-bcc8-81b0889fe092",
+          "name": "Birth of Didac",
+          "score": 0.5897
+        },
+        {
+          "type": "entity",
+          "id": "66b1aad7-ba14-48f7-a863-2302975df53d",
+          "name": "didac-crst.com",
+          "score": 0.5897
+        }
+      ],
+      "tags": [
+        "lexical_ok",
+        "entity"
+      ]
+    },
+    {
+      "case_id": "airbus-simple",
+      "query": "Airbus",
+      "hit_count": 11,
+      "relevant_ranks": [
+        1
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "entity",
+          "id": "e20c5090-74a6-454c-b56f-13319d2ca0cf",
+          "name": "Airbus",
+          "score": 0.6488
+        },
+        {
+          "type": "entity",
+          "id": "318dcf55-c71f-4635-be7e-19f8426ed8d0",
+          "name": "IT Infrastructure Project Manager VIE at Airbus",
+          "score": 0.5897
+        },
+        {
+          "type": "entity",
+          "id": "5e50e401-81cd-4640-ab36-46e06bf3ce70",
+          "name": "Flight Data Analyst at Airbus",
+          "score": 0.5888
+        },
+        {
+          "type": "entity",
+          "id": "7bb4c4a7-a5d5-4d42-846d-d40dae108b0e",
+          "name": "IS Project Leader at Airbus",
+          "score": 0.5888
+        },
+        {
+          "type": "statement",
+          "id": "68c31ede-fa32-4ee1-beb9-995ac5663729",
+          "predicate": "description",
+          "status": "asserted",
+          "score": 0.5247
+        }
+      ],
+      "tags": [
+        "lexical_ok",
+        "entity"
+      ]
+    },
+    {
+      "case_id": "where-did-didac-study",
+      "query": "Where did Didac study?",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "predicate_intent",
+        "graph"
+      ]
+    },
+    {
+      "case_id": "when-was-didac-at-inpg",
+      "query": "When was Didac at INPG?",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "temporal",
+        "graph"
+      ]
+    },
+    {
+      "case_id": "inpg-simple",
+      "query": "INPG",
+      "hit_count": 4,
+      "relevant_ranks": [
+        1
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "entity",
+          "id": "2c127b32-a1f3-4b3f-b224-b76b4d8f0884",
+          "name": "INPG",
+          "score": 0.6488
+        },
+        {
+          "type": "entity",
+          "id": "29909634-9997-4a9b-9b2c-67529b6d555a",
+          "name": "Electronics and Radiofrequency double degree at INPG ENSERG",
+          "score": 0.5897
+        },
+        {
+          "type": "entity",
+          "id": "fcd1ae4a-d149-417e-81ef-fd5623234132",
+          "name": "MSc Electronic Engineering at INPG/UPC",
+          "score": 0.5888
+        },
+        {
+          "type": "statement",
+          "id": "959b9168-7077-4263-8d8e-436b3835f43a",
+          "predicate": "description",
+          "status": "asserted",
+          "score": 0.5247
+        }
+      ],
+      "tags": [
+        "lexical_ok",
+        "entity"
+      ]
+    },
+    {
+      "case_id": "didac-goals",
+      "query": "What are Didac's current goals?",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "predicate_intent",
+        "temporal"
+      ]
+    },
+    {
+      "case_id": "didac-goals-short",
+      "query": "Didac goals",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "multi_token",
+        "predicate_intent"
+      ]
+    },
+    {
+      "case_id": "who-is-floriane",
+      "query": "Who is Floriane?",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "entity",
+        "family"
+      ]
+    },
+    {
+      "case_id": "floriane-simple",
+      "query": "Floriane",
+      "hit_count": 3,
+      "relevant_ranks": [
+        1
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "entity",
+          "id": "f74f7e7d-48e3-48e5-9ef7-b7daadb2aad6",
+          "name": "Floriane",
+          "score": 0.6489
+        },
+        {
+          "type": "statement",
+          "id": "f0dac3be-fe24-4182-882e-3d1a89d412a2",
+          "predicate": "description",
+          "status": "asserted",
+          "score": 0.5239
+        },
+        {
+          "type": "statement",
+          "id": "57e45cad-f001-4f1f-a800-dae41998d958",
+          "predicate": "description",
+          "status": "asserted",
+          "score": 0.5239
+        }
+      ],
+      "tags": [
+        "lexical_ok",
+        "entity"
+      ]
+    },
+    {
+      "case_id": "didac-children",
+      "query": "What children does Didac have?",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "family",
+        "graph"
+      ]
+    },
+    {
+      "case_id": "didac-daughters",
+      "query": "Didac daughters",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "family",
+        "multi_token"
+      ]
+    },
+    {
+      "case_id": "siena-simple",
+      "query": "Siena",
+      "hit_count": 2,
+      "relevant_ranks": [
+        1
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "entity",
+          "id": "04e6c1e9-ceae-4945-951e-94bc23e6b3d3",
+          "name": "Siena",
+          "score": 0.6489
+        },
+        {
+          "type": "statement",
+          "id": "2c803536-926b-47c2-958b-0fc4e16c83bb",
+          "predicate": "description",
+          "status": "asserted",
+          "score": 0.5239
+        }
+      ],
+      "tags": [
+        "lexical_ok",
+        "entity"
+      ]
+    },
+    {
+      "case_id": "elma-simple",
+      "query": "Elma",
+      "hit_count": 2,
+      "relevant_ranks": [
+        1
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "entity",
+          "id": "501a7ca0-23e1-4fb6-a9dd-d3edc521994e",
+          "name": "Elma",
+          "score": 0.6489
+        },
+        {
+          "type": "statement",
+          "id": "2c803536-926b-47c2-958b-0fc4e16c83bb",
+          "predicate": "description",
+          "status": "asserted",
+          "score": 0.5239
+        }
+      ],
+      "tags": [
+        "lexical_ok",
+        "entity"
+      ]
+    },
+    {
+      "case_id": "didac-spouse",
+      "query": "Didac spouse",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "family",
+        "multi_token"
+      ]
+    },
+    {
+      "case_id": "previous-role-start-date-belief",
+      "query": "What did AtlasSynapse previously think the Airbus role start date was?",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "historical",
+        "superseded"
+      ]
+    },
+    {
+      "case_id": "didac-former-roles",
+      "query": "What was Didac doing before this role?",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "historical",
+        "predicate_intent"
+      ]
+    },
+    {
+      "case_id": "toulouse",
+      "query": "Toulouse",
+      "hit_count": 7,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "entity",
+          "id": "9eb5d50e-cff9-40de-87ee-73f95883ca87",
+          "name": "Toulouse",
+          "score": 0.6488
+        },
+        {
+          "type": "entity",
+          "id": "6c368f18-ed14-4948-97a9-1432cc617ddd",
+          "name": "Toulouse, France",
+          "score": 0.5889
+        },
+        {
+          "type": "entity",
+          "id": "5b4d9100-621a-4dd7-8542-5d4f49919c22",
+          "name": "Move from Hamburg to Toulouse",
+          "score": 0.5888
+        },
+        {
+          "type": "statement",
+          "id": "788d9919-149b-4abe-a107-4a4dcd49bb70",
+          "predicate": "description",
+          "status": "asserted",
+          "score": 0.5247
+        },
+        {
+          "type": "statement",
+          "id": "562b2e58-ed08-46e1-a4a2-6a1629c31a1c",
+          "predicate": "description",
+          "status": "asserted",
+          "score": 0.5239
+        }
+      ],
+      "tags": [
+        "lexical_ok",
+        "place"
+      ]
+    },
+    {
+      "case_id": "hamburg-airbus",
+      "query": "Didac Hamburg Airbus",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "multi_token",
+        "historical"
+      ]
+    },
+    {
+      "case_id": "semantic-consulting-goal",
+      "query": "Semantic and knowledge architecture consulting",
+      "hit_count": 1,
+      "relevant_ranks": [
+        1
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "entity",
+          "id": "b504526d-9223-4900-b103-8f13c6a013dc",
+          "name": "Semantic and knowledge architecture consulting",
+          "score": 0.6488
+        }
+      ],
+      "tags": [
+        "lexical_ok",
+        "goal"
+      ]
+    },
+    {
+      "case_id": "enterprise-ai-goal",
+      "query": "Enterprise AI ontology prototypes",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "multi_token",
+        "goal"
+      ]
+    },
+    {
+      "case_id": "didac-works-at-airbus",
+      "query": "Does Didac work at Airbus?",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "graph",
+        "multi_concept"
+      ]
+    },
+    {
+      "case_id": "current-employer",
+      "query": "Didac current employer",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "temporal",
+        "predicate_intent"
+      ]
+    },
+    {
+      "case_id": "job-title-airbus",
+      "query": "Didac job title at Airbus",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "multi_concept",
+        "predicate_intent"
+      ]
+    },
+    {
+      "case_id": "studied-in-grenoble",
+      "query": "Didac studied in Grenoble",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "multi_token",
+        "historical"
+      ]
+    },
+    {
+      "case_id": "languages",
+      "query": "What languages does Didac speak?",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "graph"
+      ]
+    },
+    {
+      "case_id": "effective-role-not-superseded",
+      "query": "Didac Quality Engineering End-to-End Analytics Manager",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "quality",
+        "effective"
+      ]
+    },
+    {
+      "case_id": "legacy-description-vs-structured",
+      "query": "Airbus Toulouse started 1 January 2026",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "quality",
+        "legacy_text"
+      ]
+    },
+    {
+      "case_id": "role-at-airbus-only",
+      "query": "role at Airbus",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "lexical_ok"
+      ]
+    },
+    {
+      "case_id": "who-is-didac",
+      "query": "Who is Didac?",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "entity"
+      ]
+    },
+    {
+      "case_id": "didac-position",
+      "query": "Didac position",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "predicate_intent",
+        "multi_token"
+      ]
+    },
+    {
+      "case_id": "didac-job",
+      "query": "Didac job",
+      "hit_count": 0,
+      "relevant_ranks": [],
+      "first_relevant_rank": null,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": true,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [],
+      "tags": [
+        "predicate_intent",
+        "multi_token"
+      ]
+    }
+  ]
+}

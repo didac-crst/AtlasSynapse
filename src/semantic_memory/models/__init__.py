@@ -29,6 +29,8 @@ from semantic_memory.models.enums import (
     SemanticReviewStage,
     StatementStatus,
     ValueKind,
+    WriteClarificationResolution,
+    WriteClarificationStatus,
 )
 from semantic_memory.models.feedback import AgentFeedback
 from semantic_memory.models.governance import (
@@ -59,7 +61,13 @@ from semantic_memory.models.ontology import (
     OntologyPredicateRange,
     OntologyPredicateRevision,
 )
-from semantic_memory.models.operations import Actor, IdempotencyRecord, IngestionBatch, OperationLog
+from semantic_memory.models.operations import (
+    Actor,
+    IdempotencyRecord,
+    IngestionBatch,
+    OperationLog,
+    WriteClarificationRequest,
+)
 from semantic_memory.models.provenance import (
     ExternalReference,
     Source,
@@ -120,6 +128,9 @@ __all__ = [
     "OntologySemanticReview",
     "SemanticClarificationStatus",
     "OperationLog",
+    "WriteClarificationRequest",
+    "WriteClarificationStatus",
+    "WriteClarificationResolution",
     "OperationStatus",
     "ProposalStatus",
     "ProposalType",

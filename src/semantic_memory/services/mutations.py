@@ -18,10 +18,15 @@ from semantic_memory.exceptions import (
 )
 from semantic_memory.models import Actor
 from semantic_memory.models.enums import OperationStatus
+from semantic_memory.observability.logging import get_logger
 from semantic_memory.repositories.idempotency import IdempotencyRepository, hash_request_payload
 from semantic_memory.repositories.operations import OperationLogRepository
 from semantic_memory.schemas.common import MutationEnvelope
+from semantic_memory.schemas.dry_run import OperationMode
+from semantic_memory.services.dry_run import annotate_dry_run_result
 from semantic_memory.services.redaction import prepare_audit_payload
+
+logger = get_logger("semantic_memory.mutations")
 
 
 class MutationRunner:
@@ -57,18 +62,35 @@ class MutationRunner:
             idempotency_key=request.idempotency_key,
             request_payload=audit_request,
         )
+        operation_mode = OperationMode.DRY_RUN if request.dry_run else OperationMode.EXECUTE
+        logger.info(
+            "mutation_start",
+            extra={
+                "event": "mutation_start",
+                "operation": operation_name,
+                "operation_mode": operation_mode.value,
+                "request_id": str(request.request_id),
+                "actor_id": str(actor.id),
+            },
+        )
 
         try:
-            with self._session.begin_nested():
-                result = self._execute_with_idempotency(
-                    actor_id=actor.id,
-                    operation_name=operation_name,
-                    request=request,
-                    request_hash=request_hash,
-                    response_model=response_model,
+            if request.dry_run:
+                result = self._execute_dry_run(
                     execute=execute,
-                    operation_log_id=operation.id,
+                    response_model=response_model,
                 )
+            else:
+                with self._session.begin_nested():
+                    result = self._execute_with_idempotency(
+                        actor_id=actor.id,
+                        operation_name=operation_name,
+                        request=request,
+                        request_hash=request_hash,
+                        response_model=response_model,
+                        execute=execute,
+                        operation_log_id=operation.id,
+                    )
             response_payload = prepare_audit_payload(
                 result.model_dump(mode="json"),
                 mode=self._settings.raw_payload_retention,
@@ -77,6 +99,16 @@ class MutationRunner:
                 operation,
                 status=OperationStatus.SUCCESS,
                 response_payload=response_payload,
+            )
+            logger.info(
+                "mutation_finish",
+                extra={
+                    "event": "mutation_finish",
+                    "operation": operation_name,
+                    "operation_mode": operation_mode.value,
+                    "request_id": str(request.request_id),
+                    "status": OperationStatus.SUCCESS.value,
+                },
             )
             return result
         except DomainError as exc:
@@ -88,6 +120,17 @@ class MutationRunner:
             )
             if exc.request_id is None:
                 exc.request_id = str(request.request_id)
+            logger.info(
+                "mutation_finish",
+                extra={
+                    "event": "mutation_finish",
+                    "operation": operation_name,
+                    "operation_mode": operation_mode.value,
+                    "request_id": str(request.request_id),
+                    "status": OperationStatus.REJECTED.value,
+                    "error_code": exc.error_code,
+                },
+            )
             raise
         except IntegrityError as exc:
             error = DbConstraintError(
@@ -110,6 +153,28 @@ class MutationRunner:
                 error_message="Unexpected mutation failure",
             )
             raise
+
+    def _execute_dry_run[T: BaseModel](
+        self,
+        *,
+        execute: Callable[[], T],
+        response_model: type[T],
+    ) -> T:
+        """Run the full mutation body inside a savepoint, then always roll it back.
+
+        Idempotency is skipped: dry-runs must not reserve keys or cache responses.
+        Knowledge/provenance rows created during execute are discarded; the
+        surrounding operation_log row remains (operational observability only).
+        """
+        nested = self._session.begin_nested()
+        try:
+            result = execute()
+            snapshot = result.model_dump(mode="json")
+            nested.rollback()
+        except Exception:
+            nested.rollback()
+            raise
+        return annotate_dry_run_result(response_model.model_validate(snapshot))
 
     def _execute_with_idempotency[T: BaseModel](
         self,

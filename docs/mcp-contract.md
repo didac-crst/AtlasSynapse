@@ -4,6 +4,10 @@ The MCP adapter exposes semantic operations only. It must not expose raw SQL, DD
 
 The production transport is stdio via `semantic-memory-mcp` (MCP 2024-11-05 newline-delimited JSON-RPC). Tool handlers stay thin translations over services; HTTP MCP transport is not implemented yet.
 
+**Tool surfaces:** `MCP_TOOL_SURFACE=agent` (default) advertises **12** intent-shaped
+tools to ChatGPT. `advanced` / `admin` / `all` expand the catalog. Visibility is
+UX only — capabilities still authorize writes. See `docs/mcp-agent-surface.md`.
+
 ## Read tools
 
 ```text
@@ -49,9 +53,29 @@ propose_predicate
 propose_constraint
 propose_alias
 propose_class_parent
+apply_ontology_proposal
 challenge_ontology_review
 answer_semantic_clarification
+answer_identity_clarification
 ```
+
+`READY_TO_APPLY` means eligible for an apply attempt, not a guarantee. Call
+`apply_ontology_proposal` with `proposal_id`, `request_id`, and `idempotency_key`
+(the MCP server injects `actor_key`). The server revalidates gates and live
+ontology state before commit; there is no force/skip path.
+
+Ontology write tools advertise **typed** `payload` schemas (not free-form maps).
+Notable field names:
+
+| Tool | Required / easy-to-miss fields |
+| --- | --- |
+| `propose_predicate` | `value_kind`, `domain_keys`, `range_keys` (aliases `domain_class_keys` / `range_class_keys` accepted). `get_predicate` still returns `domain_class_keys` / `range_class_keys`. |
+| `answer_semantic_clarification` | `clarification_request_id`, **`response`** (not `answer`) |
+| `apply_ontology_proposal` | `proposal_id`, `request_id`, `idempotency_key` |
+
+Use `namespace_key: "smoke"` for disposable smoke-test ontology. Production
+biography/business concepts stay in `core`. The `smoke` namespace is seeded empty
+at bootstrap; lexical review for `core` proposals does not search `smoke`.
 
 When semantic review cannot decide whether a proposal is new vs overlapping an
 existing concept, AtlasSynapse returns `manual_review` and issues a deterministic
@@ -89,6 +113,89 @@ Agents use `report_feedback` to record quality observations. Admin list/resolve 
 
 Every mutation accepts actor context, request ID, and an idempotency key. The adapter validates request schemas and delegates to services. Service results are translated into typed response schemas.
 
+**MCP actor injection:** the MCP transport injects a server-configured `actor_key` (`MCP_ACTOR_KEY`, default `chatgpt`) into every mutation envelope and ensures that actor exists. MCP clients must not guess or supply `actor_key`. HTTP/API callers still pass `actor_key` explicitly for multi-actor operation.
+
+### Statement write identity (server-owned)
+
+`assert_statement`, `assert_batch` statement items, and `supersede_statement` accept either:
+
+- a resolved UUID (`subject_entity_id` / `object_entity_id`), or
+- an unresolved `EntityInput` (`subject` / `object`) with `canonical_name` + `class_key` (and optional aliases / external refs).
+
+**Callers must not resolve or create entities themselves before asserting.** AtlasSynapse runs the resolve-or-clarify primitive on each unresolved side:
+
+| Resolution | Action |
+| --- | --- |
+| `MATCH` | reuse existing entity |
+| `NO_MATCH` | create entity, then assert |
+| `AMBIGUOUS` | clarify; no statement (or entity) is persisted |
+
+Single `assert_statement` returns `outcome=CLARIFY` with `subject_identity` / `object_identity`. Batch rows land in the `ambiguous` bucket with `error_code=AMBIGUOUS_ENTITY` and the same identity details. Multi-side asserts use a savepoint so a later ambiguous side rolls back earlier creates. Atomic `assert_batch` rolls back the whole batch on any ambiguous/rejected/ontology-required item.
+
+`ingest_source_content` is provenance-only; it does not create statements or bypass identity. Predicates are never auto-created from statement writes.
+
+### Dry-run
+
+Every mutation envelope accepts `dry_run` (default `false`).
+
+```text
+dry_run = false  → execute and persist (normal)
+dry_run = true   → same decision path; return what would happen; persist no knowledge
+```
+
+Dry-run runs the full identity / validation / review pipeline inside a savepoint and always rolls that savepoint back. It is **not** a simplified preview path and is distinct from a future `validate_only` (structural checks only).
+
+Invariant: `dry_run=true` produces no durable knowledge, provenance, or idempotency side effects. An `operation_log` row is still written with `operation_mode=dry_run` in the response payload for operational observability (not knowledge history).
+
+When identity is `AMBIGUOUS`, AtlasSynapse also issues a durable **control-plane** `clarification_request_id` (outside the dry-run rollback). See below.
+
+### Statement `return_mode` (agent projections)
+
+Statement write tools accept `return_mode`: `minimal` | `standard` (default) |
+`contextual`. See `docs/mutation-result-context.md`. Generic ontology/admin
+mutations do **not** inherit this field.
+
+`standard` responses include `changes`, `effective_state` (subject+predicate,
+effective-only, bounded), and identity fields so ChatGPT can explain the
+transition without an immediate read-back.
+
+### Identity/write clarification
+
+On `outcome=CLARIFY` (dry-run or execute), the response includes:
+
+```json
+{
+  "outcome": "CLARIFY",
+  "clarification_request_id": "uuid",
+  "subject_identity": { "...": "..." },
+  "object_identity": { "...": "..." },
+  "clarification": {
+    "question": "Which Didac do you mean (subject)?",
+    "reason": "multiple_identity_candidates",
+    "candidates": [],
+    "resume_with": "answer_identity_clarification"
+  }
+}
+```
+
+The handle is operational state in Postgres (`write_clarification_request`): frozen mutation payload, ambiguous path, candidate IDs, `expires_at` (~30 minutes), status `open|resolved|expired|superseded`. It is not knowledge. GC removes terminal rows after ~7 days.
+
+Resume with `answer_identity_clarification`:
+
+```json
+{
+  "clarification_request_id": "uuid",
+  "resolution": "chosen_entity" | "create_new" | "reject",
+  "chosen_entity_id": "uuid"
+}
+```
+
+AtlasSynapse resumes the frozen operation server-side. Stored candidates are the context of the question; before persisting, safety checks re-run against **current prod**. If the graph changed materially, a fresh `clarification_request_id` is issued (prior handle `superseded`) rather than committing on stale assumptions.
+
+**Dry-run clarifications never upgrade to execute.** Answering a handle created from `dry_run=true` forces `dry_run` on resume. Production writes require a separate explicit execute request (preview ≠ write).
+
+**One-shot + expiry.** Handles are `open` until answered. Answering an `expired` / `resolved` / `superseded` ID fails cleanly; AtlasSynapse does not silently recreate or resume.
+
 ## Error envelope
 
 Every error contains:
@@ -111,4 +218,8 @@ Unknown predicates do not create ontology implicitly. They may include suggested
 
 ## Capabilities
 
-The expected default ChatGPT actor capabilities are `knowledge.read`, `knowledge.write`, `ontology.read`, `ontology.propose`, and `feedback.create`. Direct ontology application and feedback administration are reserved for privileged actors.
+The expected default ChatGPT MCP actor capabilities are `knowledge.read`,
+`knowledge.write`, `ontology.read`, `ontology.propose`, `ontology.apply`, and
+`feedback.create`. Feedback administration remains reserved for privileged
+actors. `ontology.apply` is required for `apply_ontology_proposal`; treat its
+presence on the live MCP actor as a deploy acceptance check.

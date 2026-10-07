@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
@@ -25,15 +26,34 @@ from semantic_memory.schemas.entities import (
     CreateEntityRequest,
     CreateEntityResponse,
     EntityAliasEntry,
+    EntityInput,
     EntityResponse,
     EntityTypeResponse,
     ExternalReferenceResponse,
     ResolutionOutcome,
 )
+from semantic_memory.schemas.identity import (
+    EvidenceStrength,
+    IdentityAction,
+    IdentityEvidence,
+    IdentityResolutionOutcome,
+    IdentityResolutionResult,
+)
 from semantic_memory.services.actors import ActorService
 from semantic_memory.services.identity import IdentityService, ResolutionResult
+from semantic_memory.services.identity_write import log_write_side_resolution
 from semantic_memory.services.mutations import MutationRunner
 from semantic_memory.validation.normalization import normalize_text
+
+
+@dataclass(frozen=True)
+class WriteSideResolution:
+    """Result of resolving one statement side for a write."""
+
+    entity_id: uuid.UUID | None
+    identity: IdentityResolutionResult | None
+    clarify: bool
+    created: bool = False
 
 
 class EntityService:
@@ -89,6 +109,264 @@ class EntityService:
             response_model=EntityResponse,
             constraint_name="entity_write",
             execute=lambda: self._add_entity_alias_body(request=request),
+        )
+
+    def resolve_or_clarify_for_write(
+        self,
+        *,
+        entity_id: uuid.UUID | None = None,
+        entity_input: EntityInput | None = None,
+        actor_id: uuid.UUID,
+        request_id: uuid.UUID,
+        side: str = "entity",
+        force_create: bool = False,
+    ) -> WriteSideResolution:
+        """Resolve-or-clarify primitive for statement subject/object writes.
+
+        MATCH reuses; AMBIGUOUS returns clarify without insert; NO_MATCH creates
+        when class context is present. Callers that must avoid side effects when
+        another side clarifies should wrap this in a savepoint.
+
+        This is the only supported path for unresolved identities on statement
+        writes. Callers must not resolve or create entities themselves.
+        ``force_create`` is reserved for write-clarification resume (create_new).
+        """
+        result = self._resolve_or_clarify_for_write(
+            entity_id=entity_id,
+            entity_input=entity_input,
+            actor_id=actor_id,
+            request_id=request_id,
+            force_create=force_create,
+        )
+        identity = result.identity
+        log_write_side_resolution(
+            side=side,
+            resolution=None if identity is None else identity.resolution.value,
+            action=None if identity is None else identity.action.value,
+            clarify=result.clarify,
+            entity_created=result.created,
+            entity_id=result.entity_id,
+            decision_basis=None if identity is None else identity.decision_basis,
+            request_id=request_id,
+        )
+        return result
+
+    def _resolve_or_clarify_for_write(
+        self,
+        *,
+        entity_id: uuid.UUID | None = None,
+        entity_input: EntityInput | None = None,
+        actor_id: uuid.UUID,
+        request_id: uuid.UUID,
+        force_create: bool = False,
+    ) -> WriteSideResolution:
+        if entity_id is not None and entity_input is not None:
+            raise ValidationFailedError(
+                "Provide only one of entity_id or entity_input",
+                details={},
+                request_id=str(request_id),
+            )
+        if entity_id is None and entity_input is None:
+            raise ValidationFailedError(
+                "Provide entity_id or entity_input",
+                details={},
+                request_id=str(request_id),
+            )
+
+        has_input_id = entity_input is not None and entity_input.entity_id is not None
+        if entity_id is not None or has_input_id:
+            resolved_id = entity_id if entity_id is not None else entity_input.entity_id  # type: ignore[union-attr]
+            assert resolved_id is not None
+            return self._resolution_for_provided_id(
+                entity_id=resolved_id,
+                request_id=request_id,
+            )
+
+        assert entity_input is not None
+        assert entity_input.canonical_name is not None
+        assert entity_input.class_key is not None
+
+        ontology_class = self._ontology.get_class_by_key(
+            namespace_key=entity_input.namespace_key,
+            class_key=entity_input.class_key,
+        )
+        if ontology_class is None:
+            raise UnknownClassError(
+                f"Unknown class '{entity_input.namespace_key}:{entity_input.class_key}'",
+                details={
+                    "namespace_key": entity_input.namespace_key,
+                    "class_key": entity_input.class_key,
+                },
+                request_id=str(request_id),
+            )
+
+        if force_create:
+            return self._force_create_from_input(
+                entity_input=entity_input,
+                actor_id=actor_id,
+                request_id=request_id,
+                class_id=ontology_class.id,
+            )
+
+        primary_ref = entity_input.external_refs[0] if entity_input.external_refs else None
+        resolution = self._identity.resolve_for_create(
+            canonical_name=entity_input.canonical_name,
+            class_id=ontology_class.id,
+            external_source_system=None if primary_ref is None else primary_ref.source_system,
+            external_id=None if primary_ref is None else primary_ref.external_id,
+            acquire_lock=lambda: self._entities.acquire_identity_lock(
+                class_id=ontology_class.id,
+                canonical_name=entity_input.canonical_name or "",
+            ),
+        )
+        identity = resolution.identity
+
+        if resolution.outcome == ResolutionOutcome.AMBIGUOUS:
+            return WriteSideResolution(
+                entity_id=None,
+                identity=identity,
+                clarify=True,
+                created=False,
+            )
+
+        if resolution.outcome == ResolutionOutcome.REUSE:
+            assert resolution.entity is not None
+            return WriteSideResolution(
+                entity_id=resolution.entity.id,
+                identity=identity,
+                clarify=False,
+                created=False,
+            )
+
+        create_request = CreateEntityRequest(
+            actor_key="__write_side__",
+            request_id=request_id,
+            idempotency_key=str(uuid.uuid4()),
+            canonical_name=entity_input.canonical_name,
+            class_key=entity_input.class_key,
+            namespace_key=entity_input.namespace_key,
+            aliases=list(entity_input.aliases),
+            external_reference=primary_ref,
+        )
+        entity = self._create_new_entity(
+            request=create_request,
+            actor_id=actor_id,
+            class_id=ontology_class.id,
+        )
+        for extra_ref in entity_input.external_refs[1:]:
+            self._entities.add_external_reference(
+                entity_id=entity.id,
+                source_system=extra_ref.source_system,
+                external_id=extra_ref.external_id,
+                uri=extra_ref.uri,
+                label=extra_ref.label,
+            )
+        if identity is not None:
+            identity = identity.model_copy(
+                update={
+                    "entity_id": entity.id,
+                    "action": IdentityAction.CREATE,
+                }
+            )
+        return WriteSideResolution(
+            entity_id=entity.id,
+            identity=identity,
+            clarify=False,
+            created=True,
+        )
+
+    def _force_create_from_input(
+        self,
+        *,
+        entity_input: EntityInput,
+        actor_id: uuid.UUID,
+        request_id: uuid.UUID,
+        class_id: uuid.UUID,
+    ) -> WriteSideResolution:
+        assert entity_input.canonical_name is not None
+        assert entity_input.class_key is not None
+        primary_ref = entity_input.external_refs[0] if entity_input.external_refs else None
+        create_request = CreateEntityRequest(
+            actor_key="__write_side__",
+            request_id=request_id,
+            idempotency_key=str(uuid.uuid4()),
+            canonical_name=entity_input.canonical_name,
+            class_key=entity_input.class_key,
+            namespace_key=entity_input.namespace_key,
+            aliases=list(entity_input.aliases),
+            external_reference=primary_ref,
+        )
+        self._entities.acquire_identity_lock(
+            class_id=class_id,
+            canonical_name=entity_input.canonical_name,
+        )
+        entity = self._create_new_entity(
+            request=create_request,
+            actor_id=actor_id,
+            class_id=class_id,
+        )
+        for extra_ref in entity_input.external_refs[1:]:
+            self._entities.add_external_reference(
+                entity_id=entity.id,
+                source_system=extra_ref.source_system,
+                external_id=extra_ref.external_id,
+                uri=extra_ref.uri,
+                label=extra_ref.label,
+            )
+        identity = IdentityResolutionResult(
+            resolution=IdentityResolutionOutcome.NO_MATCH,
+            action=IdentityAction.CREATE,
+            entity_id=entity.id,
+            decision_basis="write_clarification_create_new",
+            no_candidate=True,
+            reasons=[
+                IdentityEvidence(
+                    signal="write_clarification_create_new",
+                    strength=EvidenceStrength.DECISIVE,
+                    value=entity_input.canonical_name,
+                    evidence_refs=[f"entity:{entity.id}"],
+                )
+            ],
+        )
+        return WriteSideResolution(
+            entity_id=entity.id,
+            identity=identity,
+            clarify=False,
+            created=True,
+        )
+
+    def _resolution_for_provided_id(
+        self,
+        *,
+        entity_id: uuid.UUID,
+        request_id: uuid.UUID,
+    ) -> WriteSideResolution:
+        entity = self._entities.get(entity_id)
+        if entity is None or entity.status != EntityStatus.ACTIVE.value:
+            raise UnknownEntityError(
+                f"Entity {entity_id} was not found or is inactive",
+                details={"entity_id": str(entity_id)},
+                request_id=str(request_id),
+            )
+        identity = IdentityResolutionResult(
+            resolution=IdentityResolutionOutcome.MATCH,
+            action=IdentityAction.REUSE,
+            entity_id=entity.id,
+            decision_basis="provided_entity_id",
+            reasons=[
+                IdentityEvidence(
+                    signal="provided_entity_id",
+                    strength=EvidenceStrength.DECISIVE,
+                    value=str(entity.id),
+                    evidence_refs=[f"entity:{entity.id}"],
+                )
+            ],
+        )
+        return WriteSideResolution(
+            entity_id=entity.id,
+            identity=identity,
+            clarify=False,
+            created=False,
         )
 
     def _add_entity_alias_body(self, *, request: AddEntityAliasRequest) -> EntityResponse:

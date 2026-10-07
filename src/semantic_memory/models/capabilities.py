@@ -20,5 +20,6 @@ DEFAULT_AGENT_CAPABILITIES: tuple[Capability, ...] = (
     Capability.KNOWLEDGE_WRITE,
     Capability.ONTOLOGY_READ,
     Capability.ONTOLOGY_PROPOSE,
+    Capability.ONTOLOGY_APPLY,
     Capability.FEEDBACK_CREATE,
 )

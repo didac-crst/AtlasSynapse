@@ -3,6 +3,10 @@
 Per MCP 2024-11-05 stdio transport, messages are delimited by newlines and must
 not contain embedded newlines. Handlers remain plain callables that return
 JSON-serializable dicts.
+
+``tools/call`` may run concurrently (thread pool) while stdout writes stay
+serialized under a lock. JSON-RPC response ``id`` correlates replies; response
+order need not match request order.
 """
 
 from __future__ import annotations
@@ -10,9 +14,14 @@ from __future__ import annotations
 import json
 import logging
 import sys
+import threading
+import time
 from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any, BinaryIO
+
+from semantic_memory.mcp.surfaces import McpToolSurface
 
 ToolHandler = Callable[..., dict[str, Any]]
 logger = logging.getLogger(__name__)
@@ -30,10 +39,11 @@ class ToolSpec:
             "additionalProperties": True,
         }
     )
+    surface: McpToolSurface = McpToolSurface.ADVANCED
 
 
 class StdioMCPServer:
-    """Very small MCP server over newline-delimited JSON stdio."""
+    """MCP server over newline-delimited JSON stdio."""
 
     def __init__(
         self,
@@ -43,31 +53,74 @@ class StdioMCPServer:
         tools: list[ToolSpec],
         stdin: BinaryIO | None = None,
         stdout: BinaryIO | None = None,
+        max_inflight: int = 8,
     ) -> None:
+        if max_inflight < 1:
+            raise ValueError("max_inflight must be >= 1")
         self._name = name
         self._instructions = instructions
         self._tools = {tool.name: tool for tool in tools}
         self._stdin: BinaryIO = stdin or sys.stdin.buffer
         self._stdout: BinaryIO = stdout or sys.stdout.buffer
+        self._max_inflight = max_inflight
+        self._write_lock = threading.Lock()
 
     def run(self) -> None:
-        while True:
-            try:
-                message = self._read_message()
-            except (json.JSONDecodeError, TypeError, UnicodeDecodeError, ValueError):
-                self._write_message(
-                    {
-                        "jsonrpc": "2.0",
-                        "id": None,
-                        "error": {"code": -32700, "message": "Parse error"},
-                    }
-                )
-                continue
-            if message is None:
-                return
-            response = self._dispatch(message)
-            if response is not None:
-                self._write_message(response)
+        """Read forever; dispatch ``tools/call`` concurrently up to ``max_inflight``.
+
+        stdio/JSON-RPC do not require serial execution. This server keeps stdout
+        writes locked and correlates responses via JSON-RPC ``id``.
+        """
+        pending: set[Future[None]] = set()
+        with ThreadPoolExecutor(
+            max_workers=self._max_inflight, thread_name_prefix="mcp-tool"
+        ) as pool:
+            while True:
+                try:
+                    message = self._read_message()
+                except (json.JSONDecodeError, TypeError, UnicodeDecodeError, ValueError):
+                    self._safe_write(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": None,
+                            "error": {"code": -32700, "message": "Parse error"},
+                        }
+                    )
+                    continue
+                if message is None:
+                    break
+
+                method = message.get("method")
+                if method == "tools/call" and self._max_inflight > 1:
+                    future = pool.submit(self._dispatch_and_write, message)
+                    pending.add(future)
+
+                    def _done(fut: Future[None], *, _pending: set[Future[None]] = pending) -> None:
+                        _pending.discard(fut)
+                        try:
+                            fut.result()
+                        except Exception:
+                            logger.exception("MCP concurrent tools/call worker failed")
+
+                    future.add_done_callback(_done)
+                else:
+                    # Serial path: initialize/list/ping, or max_inflight==1.
+                    self._dispatch_and_write(message)
+
+            for fut in list(pending):
+                try:
+                    fut.result()
+                except Exception:
+                    logger.exception("MCP worker failed during shutdown drain")
+
+    def _dispatch_and_write(self, message: dict[str, Any]) -> None:
+        response = self._dispatch(message)
+        if response is not None:
+            self._safe_write(response)
+
+    def _safe_write(self, message: dict[str, Any]) -> None:
+        with self._write_lock:
+            self._write_message(message)
 
     def _read_message(self) -> dict[str, Any] | None:
         while True:
@@ -83,7 +136,7 @@ class StdioMCPServer:
             return data
 
     def _write_message(self, message: dict[str, Any]) -> None:
-        # Compact JSON with no literal newlines (NDJSON-safe).
+        # Compact JSON with no literal newlines (NDJSON-safe). Caller holds lock.
         body = json.dumps(message, separators=(",", ":"), ensure_ascii=False)
         self._stdout.write(body.encode("utf-8"))
         self._stdout.write(b"\n")
@@ -113,7 +166,8 @@ class StdioMCPServer:
                     "instructions": (
                         f"{self._instructions} "
                         f"semantic_review_mode={cfg.get('semantic_review_mode')} "
-                        f"version={cfg.get('version')}."
+                        f"version={cfg.get('version')} "
+                        f"mcp_max_inflight={self._max_inflight}."
                     ),
                 },
             }
@@ -148,9 +202,20 @@ class StdioMCPServer:
                     "id": msg_id,
                     "error": {"code": -32601, "message": f"Unknown tool: {name}"},
                 }
+            started = time.perf_counter()
             try:
                 result = tool.handler(**arguments)
             except TypeError:
+                logger.info(
+                    "mcp_tool_timing",
+                    extra={
+                        "event": "mcp_tool_timing",
+                        "tool": name,
+                        "ok": False,
+                        "error": "invalid_arguments",
+                        "timings_ms": {"total": round((time.perf_counter() - started) * 1000, 3)},
+                    },
+                )
                 return {
                     "jsonrpc": "2.0",
                     "id": msg_id,
@@ -166,6 +231,16 @@ class StdioMCPServer:
                 }
             except Exception:
                 logger.exception("MCP tool %s failed", name)
+                logger.info(
+                    "mcp_tool_timing",
+                    extra={
+                        "event": "mcp_tool_timing",
+                        "tool": name,
+                        "ok": False,
+                        "error": "exception",
+                        "timings_ms": {"total": round((time.perf_counter() - started) * 1000, 3)},
+                    },
+                )
                 return {
                     "jsonrpc": "2.0",
                     "id": msg_id,
@@ -179,6 +254,24 @@ class StdioMCPServer:
                         "isError": True,
                     },
                 }
+            serialize_started = time.perf_counter()
+            text = json.dumps(result, ensure_ascii=False)
+            serialize_ms = round((time.perf_counter() - serialize_started) * 1000, 3)
+            total_ms = round((time.perf_counter() - started) * 1000, 3)
+            logger.info(
+                "mcp_tool_timing",
+                extra={
+                    "event": "mcp_tool_timing",
+                    "tool": name,
+                    "ok": True,
+                    "response_bytes": len(text.encode("utf-8")),
+                    "timings_ms": {
+                        "handler": round(total_ms - serialize_ms, 3),
+                        "serialization": serialize_ms,
+                        "total": total_ms,
+                    },
+                },
+            )
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
@@ -186,7 +279,7 @@ class StdioMCPServer:
                     "content": [
                         {
                             "type": "text",
-                            "text": json.dumps(result, ensure_ascii=False),
+                            "text": text,
                         }
                     ],
                     "structuredContent": result,

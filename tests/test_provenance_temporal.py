@@ -366,3 +366,88 @@ def test_failed_assert_does_not_poison_idempotency(db_session: Session) -> None:
         )
     )
     assert ok.outcome.value == "CREATE"
+
+
+def test_correct_statement_supersedes_with_new_validity(db_session: Session) -> None:
+    from semantic_memory.schemas.statements import CorrectStatementRequest
+
+    _ensure_writer(db_session)
+    doc_id = _create_entity(db_session, name="Correct Doc", class_key="Document")
+    statements = StatementService(db_session)
+    original = statements.assert_statement(
+        AssertStatementRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            subject_entity_id=doc_id,
+            predicate_key="description",
+            object_string="studied",
+        )
+    )
+    assert original.statement is not None
+
+    dry = statements.correct_statement(
+        CorrectStatementRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            statement_id=original.statement.id,
+            valid_from=datetime(2007, 9, 1, tzinfo=UTC),
+            valid_to=datetime(2009, 1, 31, tzinfo=UTC),
+            dry_run=True,
+        )
+    )
+    assert dry.would_persist is False or dry.dry_run is True
+    assert dry.previous_statement.id == original.statement.id
+    assert dry.statement.valid_from == datetime(2007, 9, 1, tzinfo=UTC)
+    assert dry.statement.valid_to == datetime(2009, 1, 31, tzinfo=UTC)
+    # Dry-run must leave original asserted.
+    still = statements.get(original.statement.id)
+    assert still.status == StatementStatus.ASSERTED
+
+    applied = statements.correct_statement(
+        CorrectStatementRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            statement_id=original.statement.id,
+            valid_from=datetime(2007, 9, 1, tzinfo=UTC),
+            valid_to=datetime(2009, 1, 31, tzinfo=UTC),
+        )
+    )
+    assert applied.previous_statement.status == StatementStatus.SUPERSEDED
+    assert applied.previous_statement.superseded_by_statement_id == applied.statement.id
+    assert applied.statement.object_string == "studied"
+    assert applied.statement.valid_from == datetime(2007, 9, 1, tzinfo=UTC)
+    assert applied.statement.valid_to == datetime(2009, 1, 31, tzinfo=UTC)
+
+
+def test_supersede_defaults_from_previous_when_fields_omitted(db_session: Session) -> None:
+    _ensure_writer(db_session)
+    doc_id = _create_entity(db_session, name="Default Doc", class_key="Document")
+    statements = StatementService(db_session)
+    original = statements.assert_statement(
+        AssertStatementRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            subject_entity_id=doc_id,
+            predicate_key="description",
+            object_string="v1",
+            valid_from=datetime(2000, 1, 1, tzinfo=UTC),
+        )
+    )
+    assert original.statement is not None
+    superseded = statements.supersede_statement(
+        SupersedeStatementRequest(
+            actor_key="writer",
+            request_id=uuid.uuid4(),
+            idempotency_key=str(uuid.uuid4()),
+            previous_statement_id=original.statement.id,
+            object_string="v2",
+        )
+    )
+    assert superseded.statement.subject_entity_id == doc_id
+    assert superseded.statement.predicate_key == "description"
+    assert superseded.statement.object_string == "v2"
+    assert superseded.statement.valid_from == datetime(2000, 1, 1, tzinfo=UTC)

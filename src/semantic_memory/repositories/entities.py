@@ -35,15 +35,37 @@ class EntityRepository:
 
     def resolve_survivor_id(self, entity_id: uuid.UUID) -> uuid.UUID:
         """Follow merged_into links to the surviving active entity id."""
-        current_id = entity_id
-        seen: set[uuid.UUID] = set()
-        while current_id not in seen:
-            seen.add(current_id)
-            entity = self.get(current_id)
-            if entity is None or entity.merged_into_entity_id is None:
-                return current_id
-            current_id = entity.merged_into_entity_id
-        return current_id
+        return self.resolve_survivor_ids([entity_id])[entity_id]
+
+    def resolve_survivor_ids(self, entity_ids: list[uuid.UUID]) -> dict[uuid.UUID, uuid.UUID]:
+        """Bulk resolve merged_into chains for many entity ids (one/few SELECTs)."""
+        if not entity_ids:
+            return {}
+        unique = list(dict.fromkeys(entity_ids))
+        by_id: dict[uuid.UUID, Entity] = {}
+        pending = set(unique)
+        while pending:
+            missing = [eid for eid in pending if eid not in by_id]
+            pending = set()
+            if not missing:
+                break
+            for entity in self._session.scalars(select(Entity).where(Entity.id.in_(missing))).all():
+                by_id[entity.id] = entity
+                nxt = entity.merged_into_entity_id
+                if nxt is not None and nxt not in by_id:
+                    pending.add(nxt)
+        result: dict[uuid.UUID, uuid.UUID] = {}
+        for entity_id in unique:
+            current_id = entity_id
+            seen: set[uuid.UUID] = set()
+            while current_id not in seen:
+                seen.add(current_id)
+                node = by_id.get(current_id)
+                if node is None or node.merged_into_entity_id is None:
+                    break
+                current_id = node.merged_into_entity_id
+            result[entity_id] = current_id
+        return result
 
     def identity_group_ids(self, entity_id: uuid.UUID) -> list[uuid.UUID]:
         """Survivor plus every entity merged into it (for read-side graph views)."""

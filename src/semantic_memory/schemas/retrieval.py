@@ -7,7 +7,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from semantic_memory.models.enums import EntityStatus, StatementStatus
 from semantic_memory.schemas.conflicts import ConflictResponse
@@ -71,18 +71,64 @@ class SearchEntitiesResponse(BaseModel):
     ranking_explanations: list[str] = Field(default_factory=list)
 
 
+class TemporalState(StrEnum):
+    """How statement validity bounds are populated (not a truth judgment).
+
+    ``unbounded`` means both bounds are null (temporally unspecified), not
+    "valid forever".
+    """
+
+    BOUNDED = "bounded"
+    OPEN_END = "open_end"
+    OPEN_START = "open_start"
+    UNBOUNDED = "unbounded"
+
+
 class SearchStatementsRequest(BaseModel):
+    """Typed statement search. Unknown fields are rejected (extra=forbid)."""
+
+    model_config = ConfigDict(extra="forbid")
+
     query: str | None = None
-    entity_id: uuid.UUID | None = None
+    subject_entity_id: uuid.UUID | None = None
+    object_entity_id: uuid.UUID | None = None
+    entity_id: uuid.UUID | None = Field(
+        default=None,
+        description=(
+            "Match statements where this entity is subject OR object. "
+            "Do not combine with subject_entity_id/object_entity_id."
+        ),
+    )
     predicate_key: str | None = None
-    namespace_key: str = "core"
+    namespace_key: str | None = Field(
+        default=None,
+        description=(
+            "When set with predicate_key, scopes predicate resolution (default core). "
+            "When set alone, restricts to predicates in that namespace."
+        ),
+    )
     status: StatementStatus | None = StatementStatus.ASSERTED
     as_of: datetime | None = None
+    temporal_state: TemporalState | None = None
     limit: int = Field(default=25, ge=1, le=100)
+    offset: int = Field(default=0, ge=0)
+
+    @model_validator(mode="after")
+    def _entity_filter_modes(self) -> SearchStatementsRequest:
+        end_filters = self.subject_entity_id is not None or self.object_entity_id is not None
+        if self.entity_id is not None and end_filters:
+            raise ValueError(
+                "Use subject_entity_id and/or object_entity_id, or entity_id "
+                "(either end), not both modes together"
+            )
+        return self
 
 
 class SearchStatementsResponse(BaseModel):
     query: str | None = None
+    total: int = 0
+    limit: int = 25
+    offset: int = 0
     hits: list[RankedStatementHit] = Field(default_factory=list)
     ranking_explanations: list[str] = Field(default_factory=list)
 

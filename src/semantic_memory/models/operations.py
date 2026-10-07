@@ -11,7 +11,13 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from semantic_memory.models.base import Base, CreatedAtMixin, TimestampMixin, UUIDPrimaryKeyMixin
-from semantic_memory.models.enums import ActorStatus, ActorType, BatchStatus, OperationStatus
+from semantic_memory.models.enums import (
+    ActorStatus,
+    ActorType,
+    BatchStatus,
+    OperationStatus,
+    WriteClarificationStatus,
+)
 
 
 class Actor(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -129,3 +135,62 @@ class IdempotencyRecord(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         UUID(as_uuid=True),
         ForeignKey("operation_log.id"),
     )
+
+
+class WriteClarificationRequest(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
+    """Ephemeral control-plane handle for identity ambiguity on writes.
+
+    Not knowledge: stores a frozen mutation payload and candidate context so a
+    later answer can resume server-side. Survives dry-run savepoint rollback.
+    """
+
+    __tablename__ = "write_clarification_request"
+    __table_args__ = (
+        CheckConstraint(
+            f"status IN ({', '.join(repr(v.value) for v in WriteClarificationStatus)})",
+            name="status",
+        ),
+        CheckConstraint(
+            "operation_mode IN ('execute', 'dry_run')",
+            name="operation_mode",
+        ),
+        CheckConstraint(
+            "ambiguous_path IN ('subject', 'object')",
+            name="ambiguous_path",
+        ),
+        Index("ix_write_clarification_request_status", "status"),
+        Index("ix_write_clarification_request_actor_id", "actor_id"),
+        Index("ix_write_clarification_request_expires_at", "expires_at"),
+        Index("ix_write_clarification_request_original_request_id", "original_request_id"),
+    )
+
+    actor_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("actor.id"),
+        nullable=False,
+    )
+    operation_name: Mapped[str] = mapped_column(Text, nullable=False)
+    operation_mode: Mapped[str] = mapped_column(String(16), nullable=False)
+    original_request_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    ambiguous_path: Mapped[str] = mapped_column(String(16), nullable=False)
+    frozen_request: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    identity_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    candidate_entity_ids: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default=WriteClarificationStatus.OPEN.value
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    supersedes_clarification_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("write_clarification_request.id"),
+        nullable=True,
+    )
+    resolution: Mapped[str | None] = mapped_column(String(32))
+    chosen_entity_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    answered_by_actor_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("actor.id"),
+        nullable=True,
+    )
+    answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resulting_request_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))

@@ -14,6 +14,8 @@ Classes and predicates use namespace/key uniqueness. Revisions are immutable. Pa
 
 Entities are preserved through merge and deprecation states. Statements have a subject, predicate, exactly one typed object, temporal fields, lifecycle status, and actor. Entity merge keeps the source row for audit, copies aliases onto the survivor, and reassigns statement subject/object FKs to the survivor (exact duplicate asserted edges are retracted). Read paths also follow `merged_into_entity_id` for identity-group views.
 
+Statement writes accept unresolved `EntityInput` references; identity MATCH/NO_MATCH/AMBIGUOUS is decided server-side before insert. Callers should pass names with class context and must not pre-resolve or invent entity UUIDs.
+
 ## Provenance
 
 `source`, `statement_evidence`, and `external_reference`.

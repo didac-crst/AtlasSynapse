@@ -29,6 +29,11 @@ from semantic_memory.schemas.entities import CreateEntityRequest, ResolutionOutc
 from semantic_memory.schemas.statements import AssertionOutcome, AssertStatementRequest
 from semantic_memory.services.actors import ActorService
 from semantic_memory.services.entities import EntityService
+from semantic_memory.services.identity_write import (
+    CLARIFY_ERROR_CODE,
+    CLARIFY_MESSAGE,
+    identity_clarify_details,
+)
 from semantic_memory.services.mutations import MutationRunner
 from semantic_memory.services.statements import StatementService
 
@@ -134,6 +139,13 @@ class BatchService:
                                 outcome=BatchItemOutcome.AMBIGUOUS,
                                 entity=entity_result,
                                 candidates=entity_result.candidates,
+                                error_code=CLARIFY_ERROR_CODE,
+                                message=CLARIFY_MESSAGE,
+                                details={
+                                    "identity": None
+                                    if entity_result.identity is None
+                                    else entity_result.identity.model_dump(mode="json"),
+                                },
                             )
                         )
                         continue
@@ -159,14 +171,20 @@ class BatchService:
 
                 for statement_item in request.statements:
                     try:
-                        subject_id = self._resolve_ref(
-                            entity_id=statement_item.subject_entity_id,
-                            client_item_id=statement_item.subject_client_item_id,
-                            client_entity_ids=client_entity_ids,
-                            preload=preload,
-                            field_name="subject",
-                        )
+                        subject_id: uuid.UUID | None = None
+                        subject_input = statement_item.subject
+                        if statement_item.subject_entity_id is not None or (
+                            statement_item.subject_client_item_id is not None
+                        ):
+                            subject_id = self._resolve_ref(
+                                entity_id=statement_item.subject_entity_id,
+                                client_item_id=statement_item.subject_client_item_id,
+                                client_entity_ids=client_entity_ids,
+                                preload=preload,
+                                field_name="subject",
+                            )
                         object_entity_id = statement_item.object_entity_id
+                        object_input = statement_item.object
                         if statement_item.object_client_item_id is not None:
                             object_entity_id = self._resolve_ref(
                                 entity_id=None,
@@ -195,9 +213,11 @@ class BatchService:
                         ),
                         trace_id=request.trace_id,
                         subject_entity_id=subject_id,
+                        subject=subject_input,
                         predicate_key=statement_item.predicate_key,
                         namespace_key=statement_item.namespace_key,
                         object_entity_id=object_entity_id,
+                        object=object_input,
                         object_string=statement_item.object_string,
                         object_number=statement_item.object_number,
                         object_boolean=statement_item.object_boolean,
@@ -232,6 +252,22 @@ class BatchService:
                                 error_code=exc.error_code,
                                 message=exc.message,
                                 details=exc.details,
+                            )
+                        )
+                        continue
+
+                    if statement_result.outcome == AssertionOutcome.CLARIFY:
+                        ambiguous.append(
+                            BatchItemResult(
+                                client_item_id=statement_item.client_item_id,
+                                outcome=BatchItemOutcome.AMBIGUOUS,
+                                statement=statement_result,
+                                error_code=CLARIFY_ERROR_CODE,
+                                message=CLARIFY_MESSAGE,
+                                details=identity_clarify_details(
+                                    subject_identity=statement_result.subject_identity,
+                                    object_identity=statement_result.object_identity,
+                                ),
                             )
                         )
                         continue

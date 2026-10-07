@@ -7,6 +7,7 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 from semantic_memory.config import get_settings
@@ -273,15 +274,25 @@ def test_stale_revision_returns_revision_conflict(db_session: Session) -> None:
 
 
 def test_unauthorized_actor_cannot_apply(db_session: Session) -> None:
-    proposer = _ensure_proposer(db_session)
+    # ensure() always stamps configured agent defaults (incl. ontology.apply);
+    # seed a propose-only actor directly to exercise the capability gate.
+    ActorRepository(db_session).create(
+        key="propose-only",
+        actor_type=ActorType.AGENT,
+        status=ActorStatus.ACTIVE,
+        capabilities=[
+            Capability.ONTOLOGY_READ.value,
+            Capability.ONTOLOGY_PROPOSE.value,
+        ],
+    )
     service = ProposalService(db_session)
     proposed = service.propose_class(
-        ProposeClassRequest(**_envelope(proposer), key="Faculty", parent_keys=["Person"])
+        ProposeClassRequest(**_envelope("propose-only"), key="Faculty", parent_keys=["Person"])
     )
     assert proposed.outcome == ProposalOutcome.MANUAL_REVIEW
     with pytest.raises(UnauthorizedOperationError) as exc:
         service.apply_proposal(
-            ApplyProposalRequest(**_envelope(proposer), proposal_id=proposed.proposal.id)
+            ApplyProposalRequest(**_envelope("propose-only"), proposal_id=proposed.proposal.id)
         )
     assert exc.value.error_code == "UNAUTHORIZED_OPERATION"
     with pytest.raises(UnknownClassError):
@@ -407,7 +418,7 @@ def test_http_propose_and_apply_endpoints(client: TestClient) -> None:
     denied = client.post(
         "/v1/ontology/proposals/apply",
         json={
-            "actor_key": "http-proposer",
+            "actor_key": "missing-applier",
             "request_id": str(uuid.uuid4()),
             "idempotency_key": f"http-apply-{uuid.uuid4()}",
             "proposal_id": proposal_id,
@@ -415,10 +426,11 @@ def test_http_propose_and_apply_endpoints(client: TestClient) -> None:
     )
     assert denied.status_code == 403
 
+    # Default agent capabilities include ontology.apply.
     applied = client.post(
         "/v1/ontology/proposals/apply",
         json={
-            "actor_key": "system",
+            "actor_key": "http-proposer",
             "request_id": str(uuid.uuid4()),
             "idempotency_key": f"http-apply-ok-{uuid.uuid4()}",
             "proposal_id": proposal_id,
@@ -517,10 +529,51 @@ def test_apply_revalidates_cycles(db_session: Session) -> None:
         )
 
 
-def test_mcp_proposal_tools_do_not_expose_apply(db_session: Session) -> None:
-    tools = MCPPlaceholder.from_settings().tools
+def test_apply_proposal_dry_run_is_explicitly_projected(db_session: Session) -> None:
+    """Dry-run apply must not look like a committed APPLIED response."""
+    from semantic_memory.schemas.dry_run import OperationMode
+
+    proposer = _ensure_proposer(db_session, "dry-apply-proposer")
+    applier = _ensure_applier(db_session, "dry-apply-applier")
+    service = ProposalService(db_session)
+    suffix = uuid.uuid4().hex[:8]
+    proposed = service.propose_class(
+        ProposeClassRequest(
+            **_envelope(proposer),
+            key=f"DryRunLab{suffix}",
+            label="Dry Run Lab",
+            parent_keys=["Organization"],
+        )
+    )
+    before_classes = db_session.scalar(select(func.count()).select_from(OntologyClass))
+    preview = service.apply_proposal(
+        ApplyProposalRequest(
+            **_envelope(applier),
+            proposal_id=proposed.proposal.id,
+            dry_run=True,
+        )
+    )
+    assert preview.dry_run is True
+    assert preview.operation_mode == OperationMode.DRY_RUN
+    assert preview.would_persist is True
+    assert preview.projected is True
+    assert preview.outcome == ProposalOutcome.WOULD_APPLY
+    assert preview.proposal.status == ProposalStatus.ACCEPTED  # projected snapshot
+    after_classes = db_session.scalar(select(func.count()).select_from(OntologyClass))
+    assert after_classes == before_classes
+    persisted = service.get_proposal(proposed.proposal.id)
+    assert persisted.status == ProposalStatus.IN_REVIEW
+    assert persisted.changes == []
+
+
+def test_mcp_proposal_tools_expose_apply_ontology_proposal(db_session: Session) -> None:
+    from semantic_memory.config import Settings
+
+    tools = MCPPlaceholder.from_settings(Settings(mcp_tool_surface="all")).tools
     assert "propose_class" in tools
-    assert "get_proposal" in tools
+    assert "get_ontology_proposal" in tools
+    assert "get_proposal" in tools  # advanced alias
+    assert "apply_ontology_proposal" in tools
     assert "apply_proposal" not in tools
 
     proposer = _ensure_proposer(db_session, "mcp-proposer")
@@ -536,3 +589,67 @@ def test_mcp_proposal_tools_do_not_expose_apply(db_session: Session) -> None:
     )
     assert result["outcome"] == "MANUAL_REVIEW"
     assert "error_code" not in result
+
+
+def test_mcp_apply_ontology_proposal_commits_and_is_idempotent(
+    engine: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sqlalchemy.orm import sessionmaker
+
+    suffix = uuid.uuid4().hex[:8]
+    monkeypatch.setenv("MCP_ACTOR_KEY", f"mcp-apply-actor-{suffix}")
+    monkeypatch.setenv(
+        "DEFAULT_ACTOR_CAPABILITIES",
+        '["knowledge.read","knowledge.write","ontology.read","ontology.propose","ontology.apply","feedback.create"]',
+    )
+    get_settings.cache_clear()
+
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+    session = SessionLocal()
+    try:
+        adapter = OntologyMCPTools(session)
+        class_key = f"McpApplyClass{suffix}"
+        proposed = adapter.propose_class(
+            {
+                "request_id": str(uuid.uuid4()),
+                "idempotency_key": f"mcp-propose-{suffix}",
+                "key": class_key,
+                "parent_keys": ["Thing"],
+            }
+        )
+        assert "error_code" not in proposed, proposed
+        proposal_id = proposed["proposal"]["id"]
+
+        apply_key = f"mcp-apply-{suffix}"
+        applied = adapter.apply_ontology_proposal(
+            {
+                "proposal_id": proposal_id,
+                "request_id": str(uuid.uuid4()),
+                "idempotency_key": apply_key,
+            }
+        )
+        assert applied.get("outcome") == "APPLIED", applied
+        assert applied["proposal"]["status"] == "accepted"
+        assert OntologyService(session).get_class(class_key=class_key) is not None
+
+        retry = adapter.apply_ontology_proposal(
+            {
+                "proposal_id": proposal_id,
+                "request_id": str(uuid.uuid4()),
+                "idempotency_key": apply_key,
+            }
+        )
+        assert retry.get("outcome") == "APPLIED", retry
+        assert retry["proposal"]["id"] == proposal_id
+
+        rejected = adapter.apply_ontology_proposal(
+            {
+                "proposal_id": proposal_id,
+                "request_id": str(uuid.uuid4()),
+                "idempotency_key": f"mcp-apply-again-{suffix}",
+            }
+        )
+        assert rejected.get("error_code") == "VALIDATION_FAILED", rejected
+    finally:
+        session.close()
+        get_settings.cache_clear()

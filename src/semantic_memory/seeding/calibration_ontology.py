@@ -84,6 +84,15 @@ CALIBRATION_PREDICATES: tuple[
         ("Goal",),
     ),
     (
+        "targetDate",
+        "Intended target or deadline datetime for a Goal. "
+        "Not when the goal became active (use hasGoal.valid_from for that).",
+        ValueKind.DATETIME,
+        Cardinality.ONE,
+        ("Goal",),
+        (),
+    ),
+    (
         "hasSkill",
         "Links an agent to a skill.",
         ValueKind.ENTITY,

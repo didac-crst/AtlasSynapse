@@ -18,7 +18,7 @@ feedback.manage
 admin
 ```
 
-The normal ChatGPT integration receives knowledge/ontology read-write/propose plus `feedback.create`. Direct ontology application and feedback administration are reserved for privileged actors.
+The normal ChatGPT MCP actor receives knowledge read/write, ontology read/propose/apply, and `feedback.create`. Feedback administration remains reserved for privileged actors.
 
 ## Mutation envelope
 

@@ -109,11 +109,45 @@ class Settings(BaseSettings):
     identity_review_timeout_seconds: float = Field(
         default=30.0, alias="IDENTITY_REVIEW_TIMEOUT_SECONDS", gt=0
     )
+    write_clarification_ttl_minutes: int = Field(
+        default=30, alias="WRITE_CLARIFICATION_TTL_MINUTES", ge=1, le=24 * 60
+    )
+    write_clarification_gc_days: int = Field(
+        default=7, alias="WRITE_CLARIFICATION_GC_DAYS", ge=1, le=90
+    )
     embedding_mode: Literal["disabled", "mock"] = Field(
         default="disabled",
         alias="EMBEDDING_MODE",
     )
     mcp_transport: Literal["stdio", "http"] = Field(default="stdio", alias="MCP_TRANSPORT")
+    mcp_max_inflight: int = Field(
+        default=8,
+        alias="MCP_MAX_INFLIGHT",
+        ge=1,
+        le=64,
+        description=(
+            "Max concurrent MCP tools/call handlers. Stdout writes remain serialized. "
+            "Set to 1 to force single-flight dispatch (legacy behavior)."
+        ),
+    )
+    mcp_tool_surface: Literal["agent", "advanced", "admin", "all"] = Field(
+        default="agent",
+        alias="MCP_TOOL_SURFACE",
+        description=(
+            "Which MCP tools/list catalog to advertise. agent=intent-shaped default for "
+            "ChatGPT; advanced=agent+investigation primitives; admin/all=full registry. "
+            "Visibility is UX only — capability gates still enforce authorization."
+        ),
+    )
+    mcp_actor_key: str = Field(
+        default="chatgpt",
+        alias="MCP_ACTOR_KEY",
+        min_length=1,
+        description=(
+            "Server-owned actor key injected into all MCP mutation envelopes. "
+            "MCP clients must not guess or supply actor_key."
+        ),
+    )
     http_host: str = Field(default="0.0.0.0", alias="HTTP_HOST")
     http_port: int = Field(default=8000, alias="HTTP_PORT", ge=1, le=65535)
     http_api_token: str = Field(default="", alias="HTTP_API_TOKEN")

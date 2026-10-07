@@ -4,6 +4,7 @@ from semantic_memory.schemas.actors import ActorEnsureRequest, ActorResponse
 from semantic_memory.schemas.entities import (
     CreateEntityRequest,
     CreateEntityResponse,
+    EntityInput,
     EntityResponse,
     ResolutionOutcome,
 )
@@ -24,6 +25,7 @@ __all__ = [
     "AssertionOutcome",
     "CreateEntityRequest",
     "CreateEntityResponse",
+    "EntityInput",
     "EntityResponse",
     "ErrorEnvelope",
     "HealthResponse",

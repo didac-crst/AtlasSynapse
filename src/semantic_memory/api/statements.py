@@ -14,6 +14,7 @@ from semantic_memory.schemas.provenance import ExplainStatementResponse
 from semantic_memory.schemas.statements import (
     AssertStatementRequest,
     AssertStatementResponse,
+    CorrectStatementRequest,
     RetractStatementRequest,
     RetractStatementResponse,
     StatementResponse,
@@ -21,8 +22,13 @@ from semantic_memory.schemas.statements import (
     SupersedeStatementResponse,
     TimelineResponse,
 )
+from semantic_memory.schemas.write_clarifications import (
+    AnswerIdentityClarificationRequest,
+    AnswerIdentityClarificationResponse,
+)
 from semantic_memory.services.provenance import ProvenanceService
 from semantic_memory.services.statements import StatementService
+from semantic_memory.services.write_clarifications import WriteClarificationService
 
 router = APIRouter(prefix="/v1", tags=["statements"])
 DbSession = Annotated[Session, Depends(get_db_session)]
@@ -35,6 +41,16 @@ def assert_statement(
     return run_audited_mutation(
         session, lambda: StatementService(session).assert_statement(request)
     )
+
+
+@router.post(
+    "/statements/answer-identity-clarification",
+    response_model=AnswerIdentityClarificationResponse,
+)
+def answer_identity_clarification(
+    request: AnswerIdentityClarificationRequest, session: DbSession
+) -> AnswerIdentityClarificationResponse:
+    return run_audited_mutation(session, lambda: WriteClarificationService(session).answer(request))
 
 
 @router.get("/statements/{statement_id}", response_model=StatementResponse)
@@ -53,6 +69,15 @@ def supersede_statement(
 ) -> SupersedeStatementResponse:
     return run_audited_mutation(
         session, lambda: StatementService(session).supersede_statement(request)
+    )
+
+
+@router.post("/statements/correct", response_model=SupersedeStatementResponse)
+def correct_statement(
+    request: CorrectStatementRequest, session: DbSession
+) -> SupersedeStatementResponse:
+    return run_audited_mutation(
+        session, lambda: StatementService(session).correct_statement(request)
     )
 
 
