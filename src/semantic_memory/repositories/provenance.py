@@ -242,6 +242,45 @@ class ProvenanceRepository:
             ).all()
         )
 
+    def evidence_stats_for_statements(
+        self, statement_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, tuple[int, float]]:
+        """Return ``{statement_id: (evidence_count, max_source_reliability)}``.
+
+        Two grouped queries (O(1) round-trips). Semantics match per-statement
+        ``COUNT(evidence)`` + ``MAX(source.reliability)``. Missing ids are absent
+        (callers treat as ``(0, 0.0)``).
+        """
+        if not statement_ids:
+            return {}
+        counts = dict(
+            self._session.execute(
+                select(StatementEvidence.statement_id, func.count())
+                .where(StatementEvidence.statement_id.in_(statement_ids))
+                .group_by(StatementEvidence.statement_id)
+            ).all()
+        )
+        reliabilities = dict(
+            self._session.execute(
+                select(StatementEvidence.statement_id, func.max(Source.reliability))
+                .select_from(StatementEvidence)
+                .join(Source, Source.id == StatementEvidence.source_id)
+                .where(StatementEvidence.statement_id.in_(statement_ids))
+                .group_by(StatementEvidence.statement_id)
+            ).all()
+        )
+        result: dict[uuid.UUID, tuple[int, float]] = {}
+        for statement_id in set(counts) | set(reliabilities):
+            count = int(counts.get(statement_id, 0) or 0)
+            max_rel = reliabilities.get(statement_id)
+            reliability = 0.0
+            if max_rel is not None:
+                reliability = (
+                    float(max_rel) if not isinstance(max_rel, Decimal) else float(max_rel)
+                )
+            result[statement_id] = (count, reliability)
+        return result
+
     def find_evidence(
         self,
         *,

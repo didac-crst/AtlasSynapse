@@ -415,3 +415,138 @@ def test_http_rejects_unknown_statement_search_query_param(client: TestClient) -
         params={"subject_entity_id": str(uuid.uuid4()), "not_supported": "1"},
     )
     assert response.status_code == 422
+
+
+def test_neighborhood_batched_ranking_matches_solo_scoring(db_session: Session) -> None:
+    """Hard merge gate: batching must not change ranking_score or edge order."""
+    from datetime import UTC, datetime
+
+    from semantic_memory.models import StatementStatus
+
+    writer = _ensure_writer(db_session, key="rank-gate-writer")
+    entities = EntityService(db_session)
+    statements = StatementService(db_session)
+    provenance = ProvenanceService(db_session)
+    suffix = uuid.uuid4().hex[:8]
+    subject = entities.create_entity(
+        CreateEntityRequest(
+            actor_key=writer,
+            request_id=uuid.uuid4(),
+            idempotency_key=f"rg-s-{uuid.uuid4()}",
+            canonical_name=f"Rank Gate Subject {suffix}",
+            class_key="Document",
+        )
+    )
+    assert subject.entity is not None
+    subject_id = subject.entity.id
+    reliabilities = [Decimal("0.1000"), Decimal("0.9500"), Decimal("0.5000"), None]
+    statement_ids: list[uuid.UUID] = []
+    for i, rel in enumerate(reliabilities):
+        peer = entities.create_entity(
+            CreateEntityRequest(
+                actor_key=writer,
+                request_id=uuid.uuid4(),
+                idempotency_key=f"rg-o-{i}-{uuid.uuid4()}",
+                canonical_name=f"Rank Gate Peer {i} {suffix}",
+                class_key="Document",
+            )
+        )
+        assert peer.entity is not None
+        asserted = statements.assert_statement(
+            AssertStatementRequest(
+                actor_key=writer,
+                request_id=uuid.uuid4(),
+                idempotency_key=f"rg-st-{i}-{uuid.uuid4()}",
+                subject_entity_id=subject_id,
+                predicate_key="relatedTo",
+                object_entity_id=peer.entity.id,
+            )
+        )
+        assert asserted.statement is not None
+        statement_ids.append(asserted.statement.id)
+        if rel is not None:
+            source = provenance.ensure_source(
+                EnsureSourceRequest(
+                    actor_key=writer,
+                    request_id=uuid.uuid4(),
+                    idempotency_key=f"rg-src-{i}-{uuid.uuid4()}",
+                    source_system="test",
+                    external_id=f"rg-src-{i}-{uuid.uuid4()}",
+                    title=f"Rank Source {i}",
+                    reliability=rel,
+                )
+            )
+            provenance.add_evidence(
+                AddEvidenceRequest(
+                    actor_key=writer,
+                    request_id=uuid.uuid4(),
+                    idempotency_key=f"rg-ev-{i}-{uuid.uuid4()}",
+                    statement_id=asserted.statement.id,
+                    source=SourceInput(source_id=source.source.id),
+                    excerpt=f"evidence {i}",
+                )
+            )
+
+    service = RetrievalService(db_session)
+    as_of = datetime(2026, 6, 1, 12, 0, 0, tzinfo=UTC)
+    identity_ids = set(service._entities.identity_group_ids(subject_id))
+    survivor_id = service._entities.resolve_survivor_id(subject_id)
+    timeline = service._statements.list_for_entity_timeline(list(identity_ids))
+    candidates = [
+        row
+        for row in timeline
+        if row.status == StatementStatus.ASSERTED.value and row.id in set(statement_ids)
+    ]
+    assert len(candidates) == len(statement_ids)
+
+    evidence_stats = service._provenance_repo.evidence_stats_for_statements(
+        [row.id for row in candidates]
+    )
+    specificity_cache: dict[uuid.UUID, float] = {}
+    batched_scores: dict[uuid.UUID, float] = {}
+    for row in candidates:
+        count, reliability = evidence_stats.get(row.id, (0, 0.0))
+        batched, _ = service._score_statement(
+            row,
+            query=None,
+            focus_entity_id=survivor_id,
+            now=as_of,
+            evidence_count=count,
+            source_reliability=reliability,
+            specificity_cache=specificity_cache,
+        )
+        solo, _ = service._score_statement(
+            row,
+            query=None,
+            focus_entity_id=survivor_id,
+            now=as_of,
+            evidence_count=None,
+            source_reliability=None,
+            specificity_cache=None,
+        )
+        assert batched.ranking_score == solo.ranking_score
+        assert batched.evidence_presence == solo.evidence_presence
+        assert batched.source_reliability == solo.source_reliability
+        assert batched.ontology_specificity == solo.ontology_specificity
+        batched_scores[row.id] = batched.ranking_score
+
+    expected_order = sorted(
+        batched_scores.keys(), key=lambda sid: batched_scores[sid], reverse=True
+    )
+    neighborhood = service.get_entity_neighborhood(subject_id, limit=50, as_of=as_of)
+    got_ids = [edge.statement.id for edge in neighborhood.edges]
+    assert got_ids == expected_order
+    # Distinctive order: highest reliability edge ahead of unevidenced.
+    high_rel_id = statement_ids[1]
+    no_ev_id = statement_ids[3]
+    assert got_ids.index(high_rel_id) < got_ids.index(no_ev_id)
+
+
+def test_resolve_survivor_ids_matches_single(db_session: Session) -> None:
+    from semantic_memory.repositories.entities import EntityRepository
+
+    subject_id, peer_id, _ = _seed_graph(db_session)
+    entities = EntityRepository(db_session)
+    bulk = entities.resolve_survivor_ids([subject_id, peer_id, subject_id])
+    assert bulk[subject_id] == entities.resolve_survivor_id(subject_id)
+    assert bulk[peer_id] == entities.resolve_survivor_id(peer_id)

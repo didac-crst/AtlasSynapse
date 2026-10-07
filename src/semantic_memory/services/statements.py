@@ -89,6 +89,10 @@ class StatementService:
                 f"Statement {statement_id} was not found",
                 details={"statement_id": str(statement_id)},
             )
+        return self.to_response(statement)
+
+    def to_response(self, statement: Statement) -> StatementResponse:
+        """Map an already-loaded ORM statement to the API DTO (no extra PK fetch)."""
         return self._to_response(statement)
 
     def assert_statement(

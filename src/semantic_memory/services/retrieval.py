@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import Select, func, or_, select
@@ -23,15 +22,14 @@ from semantic_memory.models import (
     OntologyClass,
     OntologyNamespace,
     OntologyPredicate,
-    Source,
     Statement,
-    StatementEvidence,
     StatementStatus,
 )
 from semantic_memory.observability.request_context import set_last_timings
 from semantic_memory.observability.timing import RequestTimer
 from semantic_memory.repositories.entities import EntityRepository
 from semantic_memory.repositories.ontology import OntologyRepository
+from semantic_memory.repositories.provenance import ProvenanceRepository
 from semantic_memory.repositories.statements import StatementRepository
 from semantic_memory.schemas.retrieval import (
     MemoryHitType,
@@ -72,6 +70,7 @@ class RetrievalService:
         self._entities = EntityRepository(session)
         self._statements = StatementRepository(session)
         self._ontology = OntologyRepository(session)
+        self._provenance_repo = ProvenanceRepository(session)
         self._entity_service = EntityService(session)
         self._statement_service = StatementService(session)
         self._provenance = ProvenanceService(session)
@@ -209,14 +208,25 @@ class RetrievalService:
             or request.object_entity_id
             or request.entity_id
         )
+        evidence_stats = self._provenance_repo.evidence_stats_for_statements(
+            [row.id for row in rows]
+        )
+        specificity_cache: dict[uuid.UUID, float] = {}
         hits: list[RankedStatementHit] = []
         for statement in rows:
+            count, reliability = evidence_stats.get(statement.id, (0, 0.0))
             signals, reasons = self._score_statement(
-                statement, query=request.query, focus_entity_id=focus, now=now
+                statement,
+                query=request.query,
+                focus_entity_id=focus,
+                now=now,
+                evidence_count=count,
+                source_reliability=reliability,
+                specificity_cache=specificity_cache,
             )
             hits.append(
                 RankedStatementHit(
-                    statement=self._statement_service.get(statement.id),
+                    statement=self._statement_service.to_response(statement),
                     signals=signals,
                     ranking_score=signals.ranking_score,
                     match_reasons=reasons,
@@ -289,8 +299,10 @@ class RetrievalService:
             statements = self._statements.list_for_entity_timeline(list(identity_ids))
         now = as_of or datetime.now(UTC)
         edges: list[NeighborhoodEdge] = []
-        seen_statement_ids: set[uuid.UUID] = set()
         with timer.measure("ranking_assemble"):
+            candidates: list[tuple[Statement, str, uuid.UUID | None]] = []
+            seen_statement_ids: set[uuid.UUID] = set()
+            neighbor_ids: list[uuid.UUID] = []
             for statement in statements:
                 if statement.status != StatementStatus.ASSERTED.value:
                     continue
@@ -313,21 +325,42 @@ class RetrievalService:
                     direction = "outgoing"
                     neighbor = survivor_id
                 if neighbor is not None:
-                    neighbor = self._entities.resolve_survivor_id(neighbor)
-                signals, _ = self._score_statement(
-                    statement, query=None, focus_entity_id=survivor_id, now=now
+                    neighbor_ids.append(neighbor)
+                candidates.append((statement, direction, neighbor))
+
+            survivor_map = self._entities.resolve_survivor_ids(neighbor_ids)
+            evidence_stats = self._provenance_repo.evidence_stats_for_statements(
+                [statement.id for statement, _, _ in candidates]
+            )
+            specificity_cache: dict[uuid.UUID, float] = {}
+            scored: list[tuple[Statement, str, uuid.UUID | None, RankingSignals]] = []
+            for statement, direction, neighbor in candidates:
+                resolved_neighbor = (
+                    survivor_map.get(neighbor, neighbor) if neighbor is not None else None
                 )
+                count, reliability = evidence_stats.get(statement.id, (0, 0.0))
+                signals, _ = self._score_statement(
+                    statement,
+                    query=None,
+                    focus_entity_id=survivor_id,
+                    now=now,
+                    evidence_count=count,
+                    source_reliability=reliability,
+                    specificity_cache=specificity_cache,
+                )
+                scored.append((statement, direction, resolved_neighbor, signals))
+            scored.sort(key=lambda item: item[3].ranking_score, reverse=True)
+            scored = scored[:limit]
+            for statement, direction, neighbor, signals in scored:
                 edges.append(
                     NeighborhoodEdge(
-                        statement=self._statement_service.get(statement.id),
+                        statement=self._statement_service.to_response(statement),
                         direction=direction,
                         neighbor_entity_id=neighbor,
                         signals=signals,
                         ranking_score=signals.ranking_score,
                     )
                 )
-            edges.sort(key=lambda item: item.ranking_score, reverse=True)
-            edges = edges[:limit]
         response = NeighborhoodResponse(
             entity_id=survivor_id if entity_id in identity_ids else entity_id,
             edges=edges,
@@ -556,6 +589,9 @@ class RetrievalService:
         query: str | None,
         focus_entity_id: uuid.UUID | None,
         now: datetime,
+        evidence_count: int | None = None,
+        source_reliability: float | None = None,
+        specificity_cache: dict[uuid.UUID, float] | None = None,
     ) -> tuple[RankingSignals, list[str]]:
         notes: list[str] = []
         reasons: list[str] = []
@@ -587,16 +623,16 @@ class RetrievalService:
         recency = _clamp(1.0 - (age_seconds / (86400.0 * 365.0)))
         notes.append("Recency decays over about one year from asserted_at.")
 
-        evidence_count = self._session.scalar(
-            select(func.count())
-            .select_from(StatementEvidence)
-            .where(StatementEvidence.statement_id == statement.id)
-        )
-        evidence_presence = 1.0 if (evidence_count or 0) > 0 else 0.0
+        if evidence_count is None or source_reliability is None:
+            stats = self._provenance_repo.evidence_stats_for_statements([statement.id])
+            count, reliability = stats.get(statement.id, (0, 0.0))
+            if evidence_count is None:
+                evidence_count = count
+            if source_reliability is None:
+                source_reliability = reliability
+        evidence_presence = 1.0 if evidence_count > 0 else 0.0
         if evidence_presence:
             reasons.append("has_evidence")
-
-        reliability = self._max_source_reliability(statement.id)
         notes.append("Source reliability uses the max reliability among linked sources.")
 
         proximity = 0.0
@@ -609,7 +645,32 @@ class RetrievalService:
                 reasons.append("focus_entity_adjacent")
                 notes.append("Statement is adjacent to the focus entity.")
 
-        predicate = self._session.get(OntologyPredicate, statement.predicate_id)
+        specificity = self._ontology_specificity(
+            statement.predicate_id, cache=specificity_cache
+        )
+        notes.append("Ontology specificity rises with domain/range constraints.")
+
+        signals = RankingSignals(
+            lexical_relevance=lexical,
+            temporal_validity=temporal,
+            recency=recency,
+            evidence_presence=evidence_presence,
+            source_reliability=source_reliability,
+            entity_proximity=proximity,
+            ontology_specificity=specificity,
+            notes=notes,
+        )
+        return signals, reasons
+
+    def _ontology_specificity(
+        self,
+        predicate_id: uuid.UUID,
+        *,
+        cache: dict[uuid.UUID, float] | None = None,
+    ) -> float:
+        if cache is not None and predicate_id in cache:
+            return cache[predicate_id]
+        predicate = self._session.get(OntologyPredicate, predicate_id)
         specificity = 0.5
         if predicate is not None:
             revision = self._ontology.get_current_predicate_revision(predicate)
@@ -620,19 +681,9 @@ class RetrievalService:
                 0 if revision is None else len(self._ontology.list_range_class_ids(revision.id))
             )
             specificity = _clamp(0.3 + 0.15 * (domains + ranges))
-            notes.append("Ontology specificity rises with domain/range constraints.")
-
-        signals = RankingSignals(
-            lexical_relevance=lexical,
-            temporal_validity=temporal,
-            recency=recency,
-            evidence_presence=evidence_presence,
-            source_reliability=reliability,
-            entity_proximity=proximity,
-            ontology_specificity=specificity,
-            notes=notes,
-        )
-        return signals, reasons
+        if cache is not None:
+            cache[predicate_id] = specificity
+        return specificity
 
     def _temporal_validity(self, statement: Statement, now: datetime) -> float:
         if statement.valid_from is None and statement.valid_to is None:
@@ -642,16 +693,3 @@ class RetrievalService:
         if statement.valid_to is not None and now > statement.valid_to:
             return 0.2
         return 1.0
-
-    def _max_source_reliability(self, statement_id: uuid.UUID) -> float:
-        value = self._session.scalar(
-            select(func.max(Source.reliability))
-            .select_from(StatementEvidence)
-            .join(Source, Source.id == StatementEvidence.source_id)
-            .where(StatementEvidence.statement_id == statement_id)
-        )
-        if value is None:
-            return 0.0
-        if isinstance(value, Decimal):
-            return float(value)
-        return float(value)
