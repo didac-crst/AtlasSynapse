@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import Any
 
-from semantic_memory.models import StatementStatus
+from sqlalchemy.orm import Session
+
+from semantic_memory.models import Statement, StatementStatus
 from semantic_memory.models.enums import ValueKind
+from semantic_memory.repositories.entities import EntityRepository
+from semantic_memory.repositories.statements import StatementRepository
 from semantic_memory.schemas.dry_run import StatementWriteAction
 from semantic_memory.schemas.identity import IdentityAction, IdentityResolutionResult
 from semantic_memory.schemas.statements import (
@@ -27,9 +31,6 @@ from semantic_memory.schemas.statements import (
     StatementReturnMode,
     SupersedeStatementResponse,
 )
-
-if TYPE_CHECKING:
-    from semantic_memory.services.statements import StatementService
 
 
 def build_clarification_action(
@@ -166,8 +167,15 @@ def apply_return_mode_retract(
 class MutationProjectionMixin:
     """Helpers mixed into StatementService for effective_state / contextual slices."""
 
+    _session: Session
+    _entities: EntityRepository
+    _statements: StatementRepository
+
+    def to_response(self, statement: Statement) -> StatementResponse:
+        raise NotImplementedError
+
     def _build_effective_state(
-        self: StatementService,
+        self,
         *,
         subject_entity_id: uuid.UUID,
         predicate_id: uuid.UUID,
@@ -183,7 +191,7 @@ class MutationProjectionMixin:
         # rewritten to survivor (FK preserved on merge).
         identity_ids = set(self._entities.identity_group_ids(survivor))
         if identity_ids - {survivor}:
-            extra: list = []
+            extra: list[Statement] = []
             for eid in identity_ids:
                 if eid == survivor:
                     continue
@@ -220,7 +228,7 @@ class MutationProjectionMixin:
         )
 
     def _build_contextual_slice(
-        self: StatementService,
+        self,
         *,
         statement: StatementResponse,
     ) -> MutationContextSlice:
@@ -294,12 +302,12 @@ class MutationProjectionMixin:
         )
 
     def _project_assert(
-        self: StatementService,
+        self,
         response: AssertStatementResponse,
         *,
         mode: StatementReturnMode,
     ) -> AssertStatementResponse:
-        updates: dict = {}
+        updates: dict[str, Any] = {}
         if response.outcome == AssertionOutcome.CLARIFY:
             updates["clarification"] = build_clarification_action(
                 subject_identity=response.subject_identity,
@@ -345,14 +353,14 @@ class MutationProjectionMixin:
         return apply_return_mode_assert(enriched, mode=mode)
 
     def _project_supersede(
-        self: StatementService,
+        self,
         response: SupersedeStatementResponse,
         *,
         mode: StatementReturnMode,
         created: AssertStatementResponse | None = None,
     ) -> SupersedeStatementResponse:
         action = response.statement_action or StatementWriteAction.SUPERSEDE
-        updates: dict = {
+        updates: dict[str, Any] = {
             "outcome": AssertionOutcome.SUPERSEDE,
             "statement_action": action,
             "changes": MutationChanges(
@@ -381,14 +389,14 @@ class MutationProjectionMixin:
         return apply_return_mode_supersede(enriched, mode=mode)
 
     def _project_retract(
-        self: StatementService,
+        self,
         response: RetractStatementResponse,
         *,
         mode: StatementReturnMode,
     ) -> RetractStatementResponse:
         action = response.statement_action or StatementWriteAction.RETRACT
         stmt = response.statement
-        updates: dict = {
+        updates: dict[str, Any] = {
             "outcome": AssertionOutcome.RETRACT,
             "statement_action": action,
             "changes": MutationChanges(

@@ -60,10 +60,10 @@ class EntityRepository:
             seen: set[uuid.UUID] = set()
             while current_id not in seen:
                 seen.add(current_id)
-                entity = by_id.get(current_id)
-                if entity is None or entity.merged_into_entity_id is None:
+                node = by_id.get(current_id)
+                if node is None or node.merged_into_entity_id is None:
                     break
-                current_id = entity.merged_into_entity_id
+                current_id = node.merged_into_entity_id
             result[entity_id] = current_id
         return result
 

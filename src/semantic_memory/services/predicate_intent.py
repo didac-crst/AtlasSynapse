@@ -155,12 +155,14 @@ def build_predicate_lexicon(session: Session, *, namespace_key: str = "core") ->
                 OntologyAlias.predicate_id.in_(predicate_ids)
             )
         ).all()
-        for predicate_id, alias in alias_rows:
-            key = key_by_id.get(predicate_id)
-            if key is None or not alias:
+        for alias_predicate_id, alias in alias_rows:
+            if alias_predicate_id is None or alias is None:
                 continue
-            tokens_by_key.setdefault(key, set()).update(lexical_tokens(alias))
-            tokens_by_key[key].update(_camel_parts(alias))
+            predicate_key = key_by_id.get(alias_predicate_id)
+            if predicate_key is None:
+                continue
+            tokens_by_key.setdefault(predicate_key, set()).update(lexical_tokens(alias))
+            tokens_by_key[predicate_key].update(_camel_parts(alias))
 
     counts: Counter[str] = Counter()
     for cues in tokens_by_key.values():
