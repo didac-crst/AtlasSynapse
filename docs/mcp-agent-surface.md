@@ -25,7 +25,7 @@ HTTP APIs are unchanged.
 | Catalog | Tool count |
 | --- | ---: |
 | Full registry (`all`) | **41** (incl. aliases) |
-| Default `agent` | **13** |
+| Default `agent` | **12** |
 
 Roughly a **~70% reduction** in tools presented to ChatGPT.
 
@@ -45,9 +45,11 @@ answer_semantic_clarification
 
 propose_class
 propose_predicate
-get_proposal / get_ontology_proposal
+get_ontology_proposal
 apply_ontology_proposal
 ```
+
+(`get_proposal` remains on the advanced surface as an alias.)
 
 ### Why these are agent-shaped
 
@@ -61,6 +63,10 @@ apply_ontology_proposal
 | `retract_statement` | “Withdraw this fact” |
 | `answer_identity_clarification` | “Which Didac?” |
 | `propose_*` / `apply_*` | Ontology change lifecycle |
+
+Ontology `apply_ontology_proposal` with `dry_run=true` returns `outcome=WOULD_APPLY`,
+`projected=true`, and statement-style `operation_mode` / `would_persist` fields — the
+embedded proposal snapshot is a projection, not committed state.
 
 ## Hidden from agent (and why)
 

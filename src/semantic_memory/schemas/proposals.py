@@ -19,6 +19,7 @@ from semantic_memory.models.enums import (
     ValueKind,
 )
 from semantic_memory.schemas.common import MutationEnvelope
+from semantic_memory.schemas.dry_run import OperationMode
 from semantic_memory.schemas.semantic_review import (
     ClarificationRequestResponse,
     SemanticReviewResponse,
@@ -130,6 +131,7 @@ class ProposalOutcome(StrEnum):
     REUSE_RECOMMENDED = "REUSE_RECOMMENDED"
     MANUAL_REVIEW = "MANUAL_REVIEW"
     APPLIED = "APPLIED"
+    WOULD_APPLY = "WOULD_APPLY"
 
 
 class ProposalResponse(BaseModel):
@@ -161,3 +163,8 @@ class ApplyProposalResponse(BaseModel):
     outcome: ProposalOutcome
     proposal: ProposalResponse
     request_id: uuid.UUID
+    dry_run: bool = False
+    operation_mode: OperationMode = OperationMode.EXECUTE
+    would_persist: bool | None = None
+    projected: bool = False
+    """When true, ``proposal`` / ``changes`` describe a dry-run projection, not committed state."""

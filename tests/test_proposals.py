@@ -518,10 +518,50 @@ def test_apply_revalidates_cycles(db_session: Session) -> None:
         )
 
 
+def test_apply_proposal_dry_run_is_explicitly_projected(db_session: Session) -> None:
+    """Dry-run apply must not look like a committed APPLIED response."""
+    from semantic_memory.schemas.dry_run import OperationMode
+
+    proposer = _ensure_proposer(db_session, "dry-apply-proposer")
+    applier = _ensure_applier(db_session, "dry-apply-applier")
+    service = ProposalService(db_session)
+    suffix = uuid.uuid4().hex[:8]
+    proposed = service.propose_class(
+        ProposeClassRequest(
+            **_envelope(proposer),
+            key=f"DryRunLab{suffix}",
+            label="Dry Run Lab",
+            parent_keys=["Organization"],
+        )
+    )
+    before_classes = db_session.scalar(select(func.count()).select_from(OntologyClass))
+    preview = service.apply_proposal(
+        ApplyProposalRequest(
+            **_envelope(applier),
+            proposal_id=proposed.proposal.id,
+            dry_run=True,
+        )
+    )
+    assert preview.dry_run is True
+    assert preview.operation_mode == OperationMode.DRY_RUN
+    assert preview.would_persist is True
+    assert preview.projected is True
+    assert preview.outcome == ProposalOutcome.WOULD_APPLY
+    assert preview.proposal.status == ProposalStatus.ACCEPTED  # projected snapshot
+    after_classes = db_session.scalar(select(func.count()).select_from(OntologyClass))
+    assert after_classes == before_classes
+    persisted = service.get_proposal(proposed.proposal.id)
+    assert persisted.status == ProposalStatus.IN_REVIEW
+    assert persisted.changes == []
+
+
 def test_mcp_proposal_tools_expose_apply_ontology_proposal(db_session: Session) -> None:
-    tools = MCPPlaceholder.from_settings().tools
+    from semantic_memory.config import Settings
+
+    tools = MCPPlaceholder.from_settings(Settings(mcp_tool_surface="all")).tools
     assert "propose_class" in tools
-    assert "get_proposal" in tools
+    assert "get_ontology_proposal" in tools
+    assert "get_proposal" in tools  # advanced alias
     assert "apply_ontology_proposal" in tools
     assert "apply_proposal" not in tools
 

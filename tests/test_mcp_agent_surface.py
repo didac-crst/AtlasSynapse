@@ -19,8 +19,10 @@ def test_agent_surface_is_small_and_intent_shaped() -> None:
     tools = build_mcp_tools(settings=Settings(mcp_tool_surface="agent"))
     names = {tool.name for tool in tools}
     assert names == set(AGENT_TOOL_NAMES)
-    assert len(names) <= 13
+    assert len(names) == 12
     assert "search_memory" in names
+    assert "get_ontology_proposal" in names
+    assert "get_proposal" not in names  # advanced alias only — no agent duplicate
     assert "get_relevant_context" in names
     assert "assert_statement" in names
     assert "correct_statement" in names
@@ -105,7 +107,7 @@ def test_agent_scenario_coverage_catalog() -> None:
         "Store new fact": {"assert_statement"},
         "Resolve ambiguous Didac": {"answer_identity_clarification", "assert_statement"},
         "Propose ontology concept": {"propose_class", "propose_predicate"},
-        "Apply approved proposal": {"get_proposal", "get_ontology_proposal", "apply_ontology_proposal"},
+        "Apply approved proposal": {"get_ontology_proposal", "apply_ontology_proposal"},
     }
     for scenario, required_any in scenarios.items():
         assert names & required_any, f"{scenario} missing tools from {required_any}"

@@ -57,7 +57,8 @@ def test_mcp_server_info_all_surface() -> None:
     assert "search_ontology" in info.tools
     assert "get_ontology_context" in info.tools
     assert "propose_class" in info.tools
-    assert "get_proposal" in info.tools
+    assert "get_ontology_proposal" in info.tools
+    assert "get_proposal" in info.tools  # advanced alias
     assert "challenge_ontology_review" in info.tools
     assert "answer_semantic_clarification" in info.tools
     assert "apply_ontology_proposal" in info.tools

@@ -72,6 +72,14 @@ def annotate_dry_run_result[T: BaseModel](result: T) -> T:
         updates["statement_action"] = infer_statement_action(result)
     if "entity_action" in fields:
         updates["entity_action"] = infer_entity_action(result)
+    if "projected" in fields:
+        updates["projected"] = True
+    # Ontology apply: do not look like a real commit when rolled back.
+    outcome = result.model_dump(mode="python").get("outcome")
+    if "outcome" in fields and str(outcome) == "APPLIED":
+        from semantic_memory.schemas.proposals import ProposalOutcome
+
+        updates["outcome"] = ProposalOutcome.WOULD_APPLY
     if not updates:
         return result
     return result.model_copy(update=updates)

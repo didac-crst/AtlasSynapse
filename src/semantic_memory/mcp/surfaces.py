@@ -55,8 +55,7 @@ AGENT_TOOL_NAMES: frozenset[str] = frozenset(
         "answer_identity_clarification",
         "propose_class",
         "propose_predicate",
-        "get_proposal",
-        "get_ontology_proposal",  # alias of get_proposal
+        "get_ontology_proposal",
         "apply_ontology_proposal",
         "answer_semantic_clarification",
     }

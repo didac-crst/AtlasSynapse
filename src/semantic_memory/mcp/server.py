@@ -480,18 +480,20 @@ def build_all_mcp_tools() -> list[ToolSpec]:
             surface=McpToolSurface.ADVANCED,
         ),
         ToolSpec(
-            name="get_proposal",
+            name="get_ontology_proposal",
             description="Fetch an ontology proposal by id.",
             handler=get_proposal_handler,
             input_schema=get_proposal_schema,
             surface=McpToolSurface.AGENT,
         ),
         ToolSpec(
-            name="get_ontology_proposal",
-            description="Fetch an ontology proposal by id (alias of get_proposal).",
+            name="get_proposal",
+            description=(
+                "Fetch an ontology proposal by id (advanced alias of get_ontology_proposal)."
+            ),
             handler=get_proposal_handler,
             input_schema=get_proposal_schema,
-            surface=McpToolSurface.AGENT,
+            surface=McpToolSurface.ADVANCED,
         ),
         _payload_tool(
             "propose_class",
