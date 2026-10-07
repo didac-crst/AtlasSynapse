@@ -51,6 +51,12 @@ class StdioMCPServer:
         self._stdout: BinaryIO = stdout or sys.stdout.buffer
 
     def run(self) -> None:
+        """Serve requests one-at-a-time on this thread.
+
+        This single-flight loop is an implementation choice: JSON-RPC request
+        ids could support concurrent dispatch with synchronized stdout writes.
+        stdio transport itself does not require serial execution.
+        """
         while True:
             try:
                 message = self._read_message()
@@ -137,6 +143,8 @@ class StdioMCPServer:
                 },
             }
         if method == "tools/call":
+            import time
+
             name = str(params.get("name") or "")
             arguments = params.get("arguments") or {}
             if not isinstance(arguments, dict):
@@ -148,9 +156,22 @@ class StdioMCPServer:
                     "id": msg_id,
                     "error": {"code": -32601, "message": f"Unknown tool: {name}"},
                 }
+            started = time.perf_counter()
             try:
                 result = tool.handler(**arguments)
             except TypeError:
+                logger.info(
+                    "mcp_tool_timing",
+                    extra={
+                        "event": "mcp_tool_timing",
+                        "tool": name,
+                        "ok": False,
+                        "error": "invalid_arguments",
+                        "timings_ms": {
+                            "total": round((time.perf_counter() - started) * 1000, 3)
+                        },
+                    },
+                )
                 return {
                     "jsonrpc": "2.0",
                     "id": msg_id,
@@ -166,6 +187,18 @@ class StdioMCPServer:
                 }
             except Exception:
                 logger.exception("MCP tool %s failed", name)
+                logger.info(
+                    "mcp_tool_timing",
+                    extra={
+                        "event": "mcp_tool_timing",
+                        "tool": name,
+                        "ok": False,
+                        "error": "exception",
+                        "timings_ms": {
+                            "total": round((time.perf_counter() - started) * 1000, 3)
+                        },
+                    },
+                )
                 return {
                     "jsonrpc": "2.0",
                     "id": msg_id,
@@ -179,6 +212,24 @@ class StdioMCPServer:
                         "isError": True,
                     },
                 }
+            serialize_started = time.perf_counter()
+            text = json.dumps(result, ensure_ascii=False)
+            serialize_ms = round((time.perf_counter() - serialize_started) * 1000, 3)
+            total_ms = round((time.perf_counter() - started) * 1000, 3)
+            logger.info(
+                "mcp_tool_timing",
+                extra={
+                    "event": "mcp_tool_timing",
+                    "tool": name,
+                    "ok": True,
+                    "response_bytes": len(text.encode("utf-8")),
+                    "timings_ms": {
+                        "handler": round(total_ms - serialize_ms, 3),
+                        "serialization": serialize_ms,
+                        "total": total_ms,
+                    },
+                },
+            )
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
@@ -186,7 +237,7 @@ class StdioMCPServer:
                     "content": [
                         {
                             "type": "text",
-                            "text": json.dumps(result, ensure_ascii=False),
+                            "text": text,
                         }
                     ],
                     "structuredContent": result,

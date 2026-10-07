@@ -28,6 +28,8 @@ from semantic_memory.models import (
     StatementEvidence,
     StatementStatus,
 )
+from semantic_memory.observability.request_context import set_last_timings
+from semantic_memory.observability.timing import RequestTimer
 from semantic_memory.repositories.entities import EntityRepository
 from semantic_memory.repositories.ontology import OntologyRepository
 from semantic_memory.repositories.statements import StatementRepository
@@ -76,6 +78,7 @@ class RetrievalService:
         self._conflicts = ConflictService(session)
 
     def search_entities(self, request: SearchEntitiesRequest) -> SearchEntitiesResponse:
+        timer = RequestTimer(operation="search_entities")
         pattern = _ilike_contains(request.query)
         stmt = (
             select(Entity)
@@ -100,22 +103,24 @@ class RetrievalService:
                 OntologyClass.key == request.class_key,
                 OntologyNamespace.key == request.namespace_key,
             )
-        rows = list(self._session.scalars(stmt).all())
+        with timer.measure("db"):
+            rows = list(self._session.scalars(stmt).all())
         now = request.as_of or datetime.now(UTC)
         hits: list[RankedEntityHit] = []
-        for entity in rows:
-            signals, reasons = self._score_entity(entity, query=request.query, now=now)
-            hits.append(
-                RankedEntityHit(
-                    entity=self._entity_service.get(entity.id),
-                    signals=signals,
-                    ranking_score=signals.ranking_score,
-                    match_reasons=reasons,
+        with timer.measure("ranking"):
+            for entity in rows:
+                signals, reasons = self._score_entity(entity, query=request.query, now=now)
+                hits.append(
+                    RankedEntityHit(
+                        entity=self._entity_service.get(entity.id),
+                        signals=signals,
+                        ranking_score=signals.ranking_score,
+                        match_reasons=reasons,
+                    )
                 )
-            )
-        hits.sort(key=lambda item: item.ranking_score, reverse=True)
-        hits = hits[: request.limit]
-        return SearchEntitiesResponse(
+            hits.sort(key=lambda item: item.ranking_score, reverse=True)
+            hits = hits[: request.limit]
+        response = SearchEntitiesResponse(
             query=request.query,
             hits=hits,
             ranking_explanations=[
@@ -123,6 +128,8 @@ class RetrievalService:
                 "ranking_score is for ordering only and is not a truth score.",
             ],
         )
+        set_last_timings(timer.finish())
+        return response
 
     def search_statements(self, request: SearchStatementsRequest) -> SearchStatementsResponse:
         empty = SearchStatementsResponse(
@@ -266,64 +273,72 @@ class RetrievalService:
         limit: int = 50,
         as_of: datetime | None = None,
     ) -> NeighborhoodResponse:
-        entity = self._entities.get(entity_id)
+        timer = RequestTimer(operation="get_entity_neighborhood")
+        with timer.measure("db_entity"):
+            entity = self._entities.get(entity_id)
         if entity is None:
             raise UnknownEntityError(
                 f"Entity {entity_id} was not found",
                 details={"entity_id": str(entity_id)},
             )
         # Statement FKs are preserved on merge; reads follow the identity group.
-        identity_ids = set(self._entities.identity_group_ids(entity_id))
-        survivor_id = self._entities.resolve_survivor_id(entity_id)
-        statements = self._statements.list_for_entity_timeline(list(identity_ids))
+        with timer.measure("db_identity"):
+            identity_ids = set(self._entities.identity_group_ids(entity_id))
+            survivor_id = self._entities.resolve_survivor_id(entity_id)
+        with timer.measure("db_statements"):
+            statements = self._statements.list_for_entity_timeline(list(identity_ids))
         now = as_of or datetime.now(UTC)
         edges: list[NeighborhoodEdge] = []
         seen_statement_ids: set[uuid.UUID] = set()
-        for statement in statements:
-            if statement.status != StatementStatus.ASSERTED.value:
-                continue
-            if statement.id in seen_statement_ids:
-                continue
-            seen_statement_ids.add(statement.id)
-            subject_in_group = statement.subject_entity_id in identity_ids
-            object_in_group = (
-                statement.object_entity_id is not None
-                and statement.object_entity_id in identity_ids
-            )
-            if subject_in_group and not object_in_group:
-                direction = "outgoing"
-                neighbor = statement.object_entity_id
-            elif object_in_group and not subject_in_group:
-                direction = "incoming"
-                neighbor = statement.subject_entity_id
-            else:
-                # Self-loop within the merged identity group.
-                direction = "outgoing"
-                neighbor = survivor_id
-            if neighbor is not None:
-                neighbor = self._entities.resolve_survivor_id(neighbor)
-            signals, _ = self._score_statement(
-                statement, query=None, focus_entity_id=survivor_id, now=now
-            )
-            edges.append(
-                NeighborhoodEdge(
-                    statement=self._statement_service.get(statement.id),
-                    direction=direction,
-                    neighbor_entity_id=neighbor,
-                    signals=signals,
-                    ranking_score=signals.ranking_score,
+        with timer.measure("ranking_assemble"):
+            for statement in statements:
+                if statement.status != StatementStatus.ASSERTED.value:
+                    continue
+                if statement.id in seen_statement_ids:
+                    continue
+                seen_statement_ids.add(statement.id)
+                subject_in_group = statement.subject_entity_id in identity_ids
+                object_in_group = (
+                    statement.object_entity_id is not None
+                    and statement.object_entity_id in identity_ids
                 )
-            )
-        edges.sort(key=lambda item: item.ranking_score, reverse=True)
-        return NeighborhoodResponse(
+                if subject_in_group and not object_in_group:
+                    direction = "outgoing"
+                    neighbor = statement.object_entity_id
+                elif object_in_group and not subject_in_group:
+                    direction = "incoming"
+                    neighbor = statement.subject_entity_id
+                else:
+                    # Self-loop within the merged identity group.
+                    direction = "outgoing"
+                    neighbor = survivor_id
+                if neighbor is not None:
+                    neighbor = self._entities.resolve_survivor_id(neighbor)
+                signals, _ = self._score_statement(
+                    statement, query=None, focus_entity_id=survivor_id, now=now
+                )
+                edges.append(
+                    NeighborhoodEdge(
+                        statement=self._statement_service.get(statement.id),
+                        direction=direction,
+                        neighbor_entity_id=neighbor,
+                        signals=signals,
+                        ranking_score=signals.ranking_score,
+                    )
+                )
+            edges.sort(key=lambda item: item.ranking_score, reverse=True)
+            edges = edges[:limit]
+        response = NeighborhoodResponse(
             entity_id=survivor_id if entity_id in identity_ids else entity_id,
-            edges=edges[:limit],
+            edges=edges,
             ranking_explanations=[
                 "Neighborhood edges are ordered by temporal validity, recency, and evidence.",
                 "Merged entity aliases are included; neighbor ids resolve to surviving entities.",
                 "ranking_score is for ordering only and is not a truth score.",
             ],
         )
+        set_last_timings(timer.finish())
+        return response
 
     def search_semantic_memory(
         self, request: SearchSemanticMemoryRequest
@@ -396,6 +411,7 @@ class RetrievalService:
         )
 
     def get_relevant_context(self, request: RelevantContextRequest) -> RelevantContextResponse:
+        timer = RequestTimer(operation="get_relevant_context")
         entity = None
         timeline = None
         neighborhood = None
@@ -408,37 +424,48 @@ class RetrievalService:
         ]
 
         if request.statement_id is not None:
-            explanation = self._provenance.explain_statement(request.statement_id)
-            statement = self._statement_service.get(request.statement_id)
-            subject_id = statement.subject_entity_id
-            entity = self._entity_service.get(subject_id)
-            timeline = self._statement_service.get_timeline(subject_id)
-            neighborhood = self.get_entity_neighborhood(subject_id, as_of=request.as_of)
-            conflicts = self._conflicts.find_conflicts(statement_id=request.statement_id).conflicts
+            with timer.measure("statement_path"):
+                explanation = self._provenance.explain_statement(request.statement_id)
+                statement = self._statement_service.get(request.statement_id)
+                subject_id = statement.subject_entity_id
+                entity = self._entity_service.get(subject_id)
+                timeline = self._statement_service.get_timeline(subject_id)
+                neighborhood = self.get_entity_neighborhood(subject_id, as_of=request.as_of)
+                conflicts = self._conflicts.find_conflicts(
+                    statement_id=request.statement_id
+                ).conflicts
 
         if request.entity_id is not None:
-            entity = self._entity_service.get(request.entity_id)
-            timeline = self._statement_service.get_timeline(request.entity_id)
-            neighborhood = self.get_entity_neighborhood(request.entity_id, as_of=request.as_of)
-            conflicts = self._conflicts.find_conflicts(entity_id=request.entity_id).conflicts
-            statements = self.search_statements(
-                SearchStatementsRequest(
-                    entity_id=request.entity_id,
-                    as_of=request.as_of,
-                    limit=request.limit,
+            with timer.measure("entity_get"):
+                entity = self._entity_service.get(request.entity_id)
+            with timer.measure("timeline"):
+                timeline = self._statement_service.get_timeline(request.entity_id)
+            with timer.measure("neighborhood"):
+                neighborhood = self.get_entity_neighborhood(
+                    request.entity_id, as_of=request.as_of
                 )
-            ).hits
+            with timer.measure("conflicts"):
+                conflicts = self._conflicts.find_conflicts(entity_id=request.entity_id).conflicts
+            with timer.measure("statements"):
+                statements = self.search_statements(
+                    SearchStatementsRequest(
+                        entity_id=request.entity_id,
+                        as_of=request.as_of,
+                        limit=request.limit,
+                    )
+                ).hits
 
         if request.query:
-            memory = self.search_semantic_memory(
-                SearchSemanticMemoryRequest(
-                    query=request.query,
-                    entity_id=request.entity_id,
-                    namespace_key=request.namespace_key,
-                    as_of=request.as_of,
-                    limit=request.limit,
+            with timer.measure("semantic_memory"):
+                memory = self.search_semantic_memory(
+                    SearchSemanticMemoryRequest(
+                        query=request.query,
+                        entity_id=request.entity_id,
+                        namespace_key=request.namespace_key,
+                        as_of=request.as_of,
+                        limit=request.limit,
+                    )
                 )
-            )
             ranking_explanations.extend(memory.ranking_explanations)
             if not statements:
                 statements = [
@@ -463,6 +490,8 @@ class RetrievalService:
                 details={},
             )
 
+        timings = timer.finish()
+        set_last_timings(timings)
         return RelevantContextResponse(
             entity=entity,
             timeline=timeline,
@@ -471,7 +500,11 @@ class RetrievalService:
             conflicts=conflicts,
             explanation=explanation,
             ranking_explanations=ranking_explanations,
-            metadata={"vector_search_used": False, "llm_used": False},
+            metadata={
+                "vector_search_used": False,
+                "llm_used": False,
+                "timings_ms": timings.get("timings_ms"),
+            },
         )
 
     def _score_entity(
