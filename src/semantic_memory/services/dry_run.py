@@ -40,6 +40,10 @@ def infer_statement_action(result: BaseModel) -> StatementWriteAction:
         return StatementWriteAction.WOULD_REUSE
     if outcome == "CREATE":
         return StatementWriteAction.WOULD_CREATE
+    if outcome == "SUPERSEDE":
+        return StatementWriteAction.WOULD_SUPERSEDE
+    if outcome == "RETRACT":
+        return StatementWriteAction.WOULD_RETRACT
     return StatementWriteAction.NOT_WRITTEN
 
 

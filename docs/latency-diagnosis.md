@@ -171,23 +171,22 @@ Roughly **90% of end-to-end latency is above the tunnel**, not in AtlasSynapse,
 the Pi, Postgres, or MCP stdio. Stop chasing the ChatGPT ~2.5 s feel inside
 this service. Detail: `docs/mcp-path-benchmark.md`.
 
-Remaining work under our control is architectural / agent UX, not “hosting is slow”:
+**Latency project closed.** Remaining work is agent interaction design, not hosting speed:
 
 1. ~~Concurrent MCP dispatch~~ — `perf/mcp-concurrent-dispatch`
-2. ~~Neighborhood N+1 batching~~ — `perf/neighborhood-batching` (this branch)
-3. **Mutation result envelopes** — `feat/mutation-result-context` (agent interaction)
-4. Prefer aggregate tools; later: MCP tool-surface simplification
+2. ~~Neighborhood N+1 batching~~ — `perf/neighborhood-batching` (LAN p50 179 / 338 ms)
+3. ~~Mutation result envelopes~~ — `feat/mutation-result-context` (`return_mode`, effective_state)
+4. Next arch question: **MCP tool-surface simplification** (ChatGPT default vs admin tools)
 
 ## Smallest proposed fixes (status)
 
-1. ~~Benchmark local MCP vs tunnel MCP vs ChatGPT MCP~~ — done (`mcp-path-benchmark`).
-2. ~~Concurrent MCP dispatch~~ — done (`mcp-concurrent-dispatch`).
-3. ~~Remove neighborhood N+1~~ — done on `perf/neighborhood-batching`:
-   bulk evidence stats, bulk survivor resolve, ontology specificity memo,
-   DTO only after sort+limit. Golden-ranking equivalence is the merge gate.
-   **No further low-level read latency work** unless fresh measurements justify it.
+1. ~~Benchmark local MCP vs tunnel MCP vs ChatGPT MCP~~ — done.
+2. ~~Concurrent MCP dispatch~~ — done.
+3. ~~Remove neighborhood N+1~~ — done. **No further low-level read latency work**
+   unless fresh measurements justify it.
 4. Prefer aggregate tools (`get_relevant_context`) to amortize connector latency.
 5. Uvicorn workers / DB tuning — not justified.
+6. ~~Mutation `standard` envelopes~~ — done (`feat/mutation-result-context`).
 
 ## Instrumentation added on this branch
 

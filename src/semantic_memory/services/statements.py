@@ -46,6 +46,7 @@ from semantic_memory.services.identity_write import (
     CLARIFY_MESSAGE,
     identity_clarify_details,
 )
+from semantic_memory.services.mutation_projections import MutationProjectionMixin
 from semantic_memory.services.mutations import MutationRunner
 from semantic_memory.services.write_clarifications import WriteClarificationService
 from semantic_memory.validation.literals import (
@@ -70,7 +71,7 @@ class _ClarifySides(Exception):
         self.object_identity = object_identity
 
 
-class StatementService:
+class StatementService(MutationProjectionMixin):
     def __init__(self, session: Session) -> None:
         self._session = session
         self._actors = ActorService(session)
@@ -127,7 +128,18 @@ class StatementService:
                 result=result,
                 actor_id=actor.id,
             )
-            result = result.model_copy(update={"clarification_request_id": clar.id})
+            from semantic_memory.services.mutation_projections import build_clarification_action
+
+            result = result.model_copy(
+                update={
+                    "clarification_request_id": clar.id,
+                    "clarification": build_clarification_action(
+                        subject_identity=result.subject_identity,
+                        object_identity=result.object_identity,
+                        clarification_request_id=clar.id,
+                    ),
+                }
+            )
         return result
 
     def assert_statement_resumed(
@@ -255,10 +267,17 @@ class StatementService:
         # (e.g. correcting an undated duplicate onto a correctly bounded one).
         previous.superseded_by_statement_id = created.statement.id
         self._session.flush()
-        return SupersedeStatementResponse(
+        raw = SupersedeStatementResponse(
             previous_statement=self._to_response(previous),
             statement=created.statement,
             request_id=request.request_id,
+            reused=created.reused,
+            conflict_ids=list(created.conflict_ids),
+            subject_identity=created.subject_identity,
+            object_identity=created.object_identity,
+        )
+        return self._project_supersede(
+            raw, mode=request.return_mode, created=created
         )
 
     def _correct_to_supersede(self, request: CorrectStatementRequest) -> SupersedeStatementRequest:
@@ -269,6 +288,7 @@ class StatementService:
             "idempotency_key": request.idempotency_key,
             "trace_id": request.trace_id,
             "dry_run": request.dry_run,
+            "return_mode": request.return_mode,
             "previous_statement_id": request.statement_id,
         }
         for name in (
@@ -367,11 +387,12 @@ class StatementService:
                 request_id=str(request.request_id),
             )
         if statement.status == StatementStatus.RETRACTED.value:
-            return RetractStatementResponse(
+            raw = RetractStatementResponse(
                 statement=self._to_response(statement),
                 request_id=request.request_id,
                 reason=request.reason,
             )
+            return self._project_retract(raw, mode=request.return_mode)
         if statement.status != StatementStatus.ASSERTED.value:
             raise InvalidStateTransitionError(
                 "Only asserted statements can be retracted",
@@ -386,11 +407,12 @@ class StatementService:
             meta["retract_reason"] = request.reason
             statement.metadata_json = meta
         self._statements.mark_retracted(statement)
-        return RetractStatementResponse(
+        raw = RetractStatementResponse(
             statement=self._to_response(statement),
             request_id=request.request_id,
             reason=request.reason,
         )
+        return self._project_retract(raw, mode=request.return_mode)
 
     def _assert_new(
         self,
@@ -446,14 +468,15 @@ class StatementService:
                     actor_id=actor_id,
                     confidence=confidence,
                 )
-                return response.model_copy(
+                with_identity = response.model_copy(
                     update={
                         "subject_identity": subject_side.identity,
                         "object_identity": None if object_side is None else object_side.identity,
                     }
                 )
+                return self._project_assert(with_identity, mode=request.return_mode)
         except _ClarifySides as clarify:
-            return AssertStatementResponse(
+            clarify_response = AssertStatementResponse(
                 outcome=AssertionOutcome.CLARIFY,
                 statement=None,
                 request_id=request.request_id,
@@ -461,6 +484,7 @@ class StatementService:
                 subject_identity=clarify.subject_identity,
                 object_identity=clarify.object_identity,
             )
+            return self._project_assert(clarify_response, mode=request.return_mode)
 
     def _resolve_subject_side(
         self,

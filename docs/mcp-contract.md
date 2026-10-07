@@ -145,6 +145,16 @@ Invariant: `dry_run=true` produces no durable knowledge, provenance, or idempote
 
 When identity is `AMBIGUOUS`, AtlasSynapse also issues a durable **control-plane** `clarification_request_id` (outside the dry-run rollback). See below.
 
+### Statement `return_mode` (agent projections)
+
+Statement write tools accept `return_mode`: `minimal` | `standard` (default) |
+`contextual`. See `docs/mutation-result-context.md`. Generic ontology/admin
+mutations do **not** inherit this field.
+
+`standard` responses include `changes`, `effective_state` (subject+predicate,
+effective-only, bounded), and identity fields so ChatGPT can explain the
+transition without an immediate read-back.
+
 ### Identity/write clarification
 
 On `outcome=CLARIFY` (dry-run or execute), the response includes:
@@ -154,7 +164,13 @@ On `outcome=CLARIFY` (dry-run or execute), the response includes:
   "outcome": "CLARIFY",
   "clarification_request_id": "uuid",
   "subject_identity": { "...": "..." },
-  "object_identity": { "...": "..." }
+  "object_identity": { "...": "..." },
+  "clarification": {
+    "question": "Which Didac do you mean (subject)?",
+    "reason": "multiple_identity_candidates",
+    "candidates": [],
+    "resume_with": "answer_identity_clarification"
+  }
 }
 ```
 

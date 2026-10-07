@@ -13,13 +13,17 @@ class OperationMode(StrEnum):
 
 
 class StatementWriteAction(StrEnum):
-    """What assert would do (or did) to the statement graph."""
+    """What a statement mutation would do (or did) to the statement graph."""
 
     CREATE = "CREATE"
     REUSE = "REUSE"
+    SUPERSEDE = "SUPERSEDE"
+    RETRACT = "RETRACT"
     NOT_WRITTEN = "NOT_WRITTEN"
     WOULD_CREATE = "WOULD_CREATE"
     WOULD_REUSE = "WOULD_REUSE"
+    WOULD_SUPERSEDE = "WOULD_SUPERSEDE"
+    WOULD_RETRACT = "WOULD_RETRACT"
 
 
 class EntityWriteAction(StrEnum):
