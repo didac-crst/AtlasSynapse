@@ -213,9 +213,7 @@ class StdioMCPServer:
                         "tool": name,
                         "ok": False,
                         "error": "invalid_arguments",
-                        "timings_ms": {
-                            "total": round((time.perf_counter() - started) * 1000, 3)
-                        },
+                        "timings_ms": {"total": round((time.perf_counter() - started) * 1000, 3)},
                     },
                 )
                 return {
@@ -240,9 +238,7 @@ class StdioMCPServer:
                         "tool": name,
                         "ok": False,
                         "error": "exception",
-                        "timings_ms": {
-                            "total": round((time.perf_counter() - started) * 1000, 3)
-                        },
+                        "timings_ms": {"total": round((time.perf_counter() - started) * 1000, 3)},
                     },
                 )
                 return {

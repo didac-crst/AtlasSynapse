@@ -50,9 +50,7 @@ def assert_statement(
 def answer_identity_clarification(
     request: AnswerIdentityClarificationRequest, session: DbSession
 ) -> AnswerIdentityClarificationResponse:
-    return run_audited_mutation(
-        session, lambda: WriteClarificationService(session).answer(request)
-    )
+    return run_audited_mutation(session, lambda: WriteClarificationService(session).answer(request))
 
 
 @router.get("/statements/{statement_id}", response_model=StatementResponse)

@@ -32,8 +32,7 @@ def test_detect_current_and_historical_cues() -> None:
 
 def test_current_beats_soft_past_when_current_present() -> None:
     assert (
-        detect_temporal_intent("When did Didac start his current role?")
-        == TemporalIntent.CURRENT
+        detect_temporal_intent("When did Didac start his current role?") == TemporalIntent.CURRENT
     )
 
 

@@ -206,12 +206,9 @@ def test_predicate_intent_prefers_holds_role_over_has_goal_on_historical_anchor(
     memory = service.search_semantic_memory(
         SearchSemanticMemoryRequest(query="PredIntentPerson previous role", limit=25)
     )
+    assert any("predicate intent" in note.lower() for note in memory.ranking_explanations)
     assert any(
-        "predicate intent" in note.lower() for note in memory.ranking_explanations
-    )
-    assert any(
-        hit.statement is not None and hit.statement.id == linked.statement.id
-        for hit in memory.hits
+        hit.statement is not None and hit.statement.id == linked.statement.id for hit in memory.hits
     )
 
 
@@ -282,11 +279,7 @@ def test_anchor_1hop_reaches_superseded_holds_for_historical_query(
             limit=25,
         )
     )
-    hist_ids = {
-        hit.statement.id: hit
-        for hit in historical.hits
-        if hit.statement is not None
-    }
+    hist_ids = {hit.statement.id: hit for hit in historical.hits if hit.statement is not None}
     assert prior.statement.id in hist_ids
     assert "anchor_1hop" in hist_ids[prior.statement.id].match_reasons
     assert any("1-hop anchor" in note.lower() for note in historical.ranking_explanations)
@@ -298,11 +291,7 @@ def test_anchor_1hop_reaches_superseded_holds_for_historical_query(
             limit=25,
         )
     )
-    current_ids = {
-        hit.statement.id
-        for hit in current_search.hits
-        if hit.statement is not None
-    }
+    current_ids = {hit.statement.id for hit in current_search.hits if hit.statement is not None}
     assert prior.statement.id not in current_ids
     assert any(
         "skipped (non-historical" in note.lower() or "non-historical intent" in note.lower()
@@ -355,9 +344,7 @@ def test_current_intent_prefers_effective_over_unbounded_description(
             idempotency_key=f"t-leg-{uuid.uuid4()}",
             subject_entity_id=role.entity.id,
             predicate_key="relatedTo",
-            object_string=(
-                "Temporal Role Title at Org somewhere, started 1 January 2026"
-            ),
+            object_string=("Temporal Role Title at Org somewhere, started 1 January 2026"),
         )
     )
     assert effective.statement is not None and legacy.statement is not None
@@ -366,13 +353,9 @@ def test_current_intent_prefers_effective_over_unbounded_description(
     memory = service.search_semantic_memory(
         SearchSemanticMemoryRequest(query="Temporal Person current role", limit=25)
     )
-    statement_ids = [
-        hit.statement.id for hit in memory.hits if hit.statement is not None
-    ]
+    statement_ids = [hit.statement.id for hit in memory.hits if hit.statement is not None]
     assert effective.statement.id in statement_ids
-    assert statement_ids.index(effective.statement.id) < statement_ids.index(
-        legacy.statement.id
-    )
+    assert statement_ids.index(effective.statement.id) < statement_ids.index(legacy.statement.id)
 
 
 def test_tokenized_multi_term_and_punctuation_insensitive_search(
@@ -393,17 +376,13 @@ def test_tokenized_multi_term_and_punctuation_insensitive_search(
     assert exact.hits[0].signals.lexical_relevance == 1.0
 
     # Multi-term query should surface both named entities without full-string containment.
-    multi = service.search_semantic_memory(
-        SearchSemanticMemoryRequest(query="Ada Atlas", limit=25)
-    )
+    multi = service.search_semantic_memory(SearchSemanticMemoryRequest(query="Ada Atlas", limit=25))
     entity_ids = {hit.entity.id for hit in multi.hits if hit.entity is not None}
     assert subject_id in entity_ids
     assert peer_id in entity_ids
 
     # Entity-valued statements are searchable via subject/object names, not only object_string.
-    by_object_name = service.search_statements(
-        SearchStatementsRequest(query="Atlas Org", limit=25)
-    )
+    by_object_name = service.search_statements(SearchStatementsRequest(query="Atlas Org", limit=25))
     assert statement_id in {hit.statement.id for hit in by_object_name.hits}
 
 
@@ -504,9 +483,7 @@ def test_search_statements_subject_and_object_filters(db_session: Session) -> No
     assert all(hit.statement.object_entity_id == peer_id for hit in as_object.hits)
 
     # Subject filter must not return statements where the entity is only the object.
-    only_as_object = service.search_statements(
-        SearchStatementsRequest(subject_entity_id=peer_id)
-    )
+    only_as_object = service.search_statements(SearchStatementsRequest(subject_entity_id=peer_id))
     assert all(hit.statement.subject_entity_id == peer_id for hit in only_as_object.hits)
     assert statement_id not in {hit.statement.id for hit in only_as_object.hits}
 
@@ -526,9 +503,7 @@ def test_search_statements_unknown_field_rejected(db_session: Session) -> None:
         )
 
     mcp = RetrievalMCPTools(db_session)
-    result = mcp.search_statements(
-        {"subject_entity_id": str(uuid.uuid4()), "bogus_field": "x"}
-    )
+    result = mcp.search_statements({"subject_entity_id": str(uuid.uuid4()), "bogus_field": "x"})
     assert result.get("error_code") == "VALIDATION_FAILED"
 
 
@@ -596,9 +571,7 @@ def test_search_statements_pagination_is_stable(db_session: Session) -> None:
     offset = 0
     while True:
         page = service.search_statements(
-            SearchStatementsRequest(
-                subject_entity_id=subject.entity.id, limit=2, offset=offset
-            )
+            SearchStatementsRequest(subject_entity_id=subject.entity.id, limit=2, offset=offset)
         )
         all_pages.extend(hit.statement.id for hit in page.hits)
         if offset + page.limit >= page.total:

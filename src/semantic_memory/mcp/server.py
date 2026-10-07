@@ -580,11 +580,7 @@ def build_mcp_tools(settings: Settings | None = None) -> list[ToolSpec]:
     """Tools visible under the configured MCP_TOOL_SURFACE."""
     cfg = settings or get_settings()
     mode = McpToolSurfaceMode(cfg.mcp_tool_surface)
-    return [
-        tool
-        for tool in build_all_mcp_tools()
-        if surface_visible(mode, tool.surface)
-    ]
+    return [tool for tool in build_all_mcp_tools() if surface_visible(mode, tool.surface)]
 
 
 def _agent_instructions(cfg: Settings) -> str:

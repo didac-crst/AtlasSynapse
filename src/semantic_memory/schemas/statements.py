@@ -361,4 +361,3 @@ class TimelineEntry(BaseModel):
 class TimelineResponse(BaseModel):
     entity_id: uuid.UUID
     entries: list[TimelineEntry] = Field(default_factory=list)
-

@@ -22,9 +22,7 @@ def mcp_payload_schema(
     properties = deepcopy(raw.get("properties") or {})
     for field_name in exclude_fields:
         properties.pop(field_name, None)
-    required = [
-        name for name in (raw.get("required") or []) if name not in exclude_fields
-    ]
+    required = [name for name in (raw.get("required") or []) if name not in exclude_fields]
     payload: dict[str, Any] = {
         "type": "object",
         "properties": properties,

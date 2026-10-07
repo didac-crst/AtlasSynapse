@@ -225,8 +225,7 @@ def score_lexical_relevance(
         score = 0.45 + 0.25 * coverage
         reasons.append("multi_token_partial")
         notes.append(
-            f"Matched {len(matched)}/{len(tokens)} content tokens "
-            "(partial multi-term overlap)."
+            f"Matched {len(matched)}/{len(tokens)} content tokens (partial multi-term overlap)."
         )
     elif len(tokens) == 1:
         score = 0.70

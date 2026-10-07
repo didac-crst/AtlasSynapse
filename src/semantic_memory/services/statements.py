@@ -276,9 +276,7 @@ class StatementService(MutationProjectionMixin):
             subject_identity=created.subject_identity,
             object_identity=created.object_identity,
         )
-        return self._project_supersede(
-            raw, mode=request.return_mode, created=created
-        )
+        return self._project_supersede(raw, mode=request.return_mode, created=created)
 
     def _correct_to_supersede(self, request: CorrectStatementRequest) -> SupersedeStatementRequest:
         fields_set = request.model_fields_set

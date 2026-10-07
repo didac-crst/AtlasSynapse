@@ -275,9 +275,7 @@ class ProvenanceRepository:
             max_rel = reliabilities.get(statement_id)
             reliability = 0.0
             if max_rel is not None:
-                reliability = (
-                    float(max_rel) if not isinstance(max_rel, Decimal) else float(max_rel)
-                )
+                reliability = float(max_rel) if not isinstance(max_rel, Decimal) else float(max_rel)
             result[statement_id] = (count, reliability)
         return result
 

@@ -124,9 +124,7 @@ class AnswerSemanticClarificationRequest(MutationEnvelope):
     clarification_request_id: uuid.UUID
     response: str = Field(
         min_length=1,
-        description=(
-            "Clarification answer text. Field name is `response` (not `answer`)."
-        ),
+        description=("Clarification answer text. Field name is `response` (not `answer`)."),
     )
     evidence_refs: list[Any] = Field(default_factory=list)
     proposed_revision: dict[str, Any] | None = None

@@ -112,9 +112,7 @@ class PredicateLexicon:
         return self.key_by_id.get(predicate_id)
 
 
-def build_predicate_lexicon(
-    session: Session, *, namespace_key: str = "core"
-) -> PredicateLexicon:
+def build_predicate_lexicon(session: Session, *, namespace_key: str = "core") -> PredicateLexicon:
     """Load active predicates and derive cue tokens from ontology text."""
     rows = session.execute(
         select(
@@ -215,15 +213,12 @@ def score_predicate_intent(
         score = min(1.0, 0.60 + 0.20 * min(3, len(distinctive_overlap)))
         reasons.append("predicate_intent_ontology")
         notes.append(
-            f"Distinctive ontology cues {sorted(distinctive_overlap)[:6]} "
-            f"for {predicate_key}."
+            f"Distinctive ontology cues {sorted(distinctive_overlap)[:6]} for {predicate_key}."
         )
     elif len(overlap) >= 2:
         score = min(1.0, 0.50 + 0.15 * min(3, len(overlap)))
         reasons.append("predicate_intent_ontology")
-        notes.append(
-            f"Multi-token ontology cues {sorted(overlap)[:6]} for {predicate_key}."
-        )
+        notes.append(f"Multi-token ontology cues {sorted(overlap)[:6]} for {predicate_key}.")
     # Shared single-token ontology stems (e.g. bare "role") do not boost alone.
 
     if nl_hit:

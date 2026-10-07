@@ -185,9 +185,7 @@ class RetrievalService:
             ],
         )
         temporal_intent = detect_temporal_intent(request.query)
-        predicate_lexicon = (
-            build_predicate_lexicon(self._session) if request.query else None
-        )
+        predicate_lexicon = build_predicate_lexicon(self._session) if request.query else None
         stmt = select(Statement)
         if request.status is not None:
             stmt = stmt.where(Statement.status == request.status.value)
@@ -213,9 +211,7 @@ class RetrievalService:
             if predicate is None:
                 return empty.model_copy(
                     update={
-                        "ranking_explanations": [
-                            "Unknown predicate_key; no statements matched."
-                        ]
+                        "ranking_explanations": ["Unknown predicate_key; no statements matched."]
                     }
                 )
             stmt = stmt.where(Statement.predicate_id == predicate.id)
@@ -236,9 +232,7 @@ class RetrievalService:
             object_entity = aliased(Entity)
             stmt = stmt.outerjoin(
                 subject_entity, subject_entity.id == Statement.subject_entity_id
-            ).outerjoin(
-                object_entity, object_entity.id == Statement.object_entity_id
-            )
+            ).outerjoin(object_entity, object_entity.id == Statement.object_entity_id)
             stmt = stmt.where(
                 or_(
                     *(
@@ -264,11 +258,7 @@ class RetrievalService:
         )
         rows = list(self._session.scalars(stmt).all())
         now = request.as_of or datetime.now(UTC)
-        focus = (
-            request.subject_entity_id
-            or request.object_entity_id
-            or request.entity_id
-        )
+        focus = request.subject_entity_id or request.object_entity_id or request.entity_id
         evidence_stats = self._provenance_repo.evidence_stats_for_statements(
             [row.id for row in rows]
         )
@@ -336,9 +326,7 @@ class RetrievalService:
         )
 
     @staticmethod
-    def _apply_temporal_state_filter(
-        stmt: Select[Any], state: TemporalState
-    ) -> Select[Any]:
+    def _apply_temporal_state_filter(stmt: Select[Any], state: TemporalState) -> Select[Any]:
         if state == TemporalState.BOUNDED:
             return stmt.where(
                 Statement.valid_from.is_not(None),
@@ -674,9 +662,7 @@ class RetrievalService:
             with timer.measure("timeline"):
                 timeline = self._statement_service.get_timeline(request.entity_id)
             with timer.measure("neighborhood"):
-                neighborhood = self.get_entity_neighborhood(
-                    request.entity_id, as_of=request.as_of
-                )
+                neighborhood = self.get_entity_neighborhood(request.entity_id, as_of=request.as_of)
             with timer.measure("conflicts"):
                 conflicts = self._conflicts.find_conflicts(entity_id=request.entity_id).conflicts
             with timer.measure("statements"):
@@ -753,9 +739,7 @@ class RetrievalService:
         if not statement_ids:
             return []
         rows = list(
-            self._session.scalars(
-                select(Statement).where(Statement.id.in_(statement_ids))
-            ).all()
+            self._session.scalars(select(Statement).where(Statement.id.in_(statement_ids))).all()
         )
         if not rows:
             return []
@@ -816,9 +800,7 @@ class RetrievalService:
             entity_id = hit.entity.id
             if entity_id in seen:
                 continue
-            strong_reason = any(
-                reason in _STRONG_ANCHOR_REASONS for reason in hit.match_reasons
-            )
+            strong_reason = any(reason in _STRONG_ANCHOR_REASONS for reason in hit.match_reasons)
             if hit.signals.lexical_relevance >= _MIN_ANCHOR_LEXICAL or strong_reason:
                 anchors.append(entity_id)
                 seen.add(entity_id)
@@ -839,9 +821,7 @@ class RetrievalService:
         Reuses the normal statement scorer. Asserted-only by default; historical
         intent also admits superseded rows. Retracted rows are never expanded.
         """
-        anchors = self._select_strong_anchors(
-            entity_hits, focus_entity_id=focus_entity_id
-        )
+        anchors = self._select_strong_anchors(entity_hits, focus_entity_id=focus_entity_id)
         if not anchors:
             return [], 0
 
@@ -893,8 +873,7 @@ class RetrievalService:
             if statement.subject_entity_id in anchor_set:
                 focus = statement.subject_entity_id
             elif (
-                statement.object_entity_id is not None
-                and statement.object_entity_id in anchor_set
+                statement.object_entity_id is not None and statement.object_entity_id in anchor_set
             ):
                 focus = statement.object_entity_id
             count, reliability = evidence_stats.get(statement.id, (0, 0.0))
@@ -945,9 +924,7 @@ class RetrievalService:
                 bucket.append(normalized)
         return {key: tuple(values) for key, values in out.items()}
 
-    def _entity_name_map_for_statements(
-        self, statements: list[Statement]
-    ) -> dict[uuid.UUID, str]:
+    def _entity_name_map_for_statements(self, statements: list[Statement]) -> dict[uuid.UUID, str]:
         ids: set[uuid.UUID] = set()
         for statement in statements:
             ids.add(statement.subject_entity_id)
@@ -1100,11 +1077,7 @@ class RetrievalService:
 
         # Historical intent: denser free-text descriptions that answer
         # "what did we used to believe" should outrank sparse name-only joins.
-        if (
-            intent == TemporalIntent.HISTORICAL
-            and statement.object_string
-            and lexical >= 0.45
-        ):
+        if intent == TemporalIntent.HISTORICAL and statement.object_string and lexical >= 0.45:
             lexical = min(1.0, lexical + 0.14)
             reasons.append("historical_description_boost")
             notes.append(
@@ -1147,9 +1120,7 @@ class RetrievalService:
                 reasons.append("focus_entity_adjacent")
                 notes.append("Statement is adjacent to the focus entity.")
 
-        specificity = self._ontology_specificity(
-            statement.predicate_id, cache=specificity_cache
-        )
+        specificity = self._ontology_specificity(statement.predicate_id, cache=specificity_cache)
         notes.append("Ontology specificity rises with domain/range constraints.")
 
         signals = RankingSignals(

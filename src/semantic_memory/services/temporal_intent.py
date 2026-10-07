@@ -169,8 +169,7 @@ def score_temporal_validity(
         if unbounded:
             reasons.append("unbounded_historical_candidate")
             notes.append(
-                "Unbounded descriptive duplicates may carry prior beliefs "
-                "for historical queries."
+                "Unbounded descriptive duplicates may carry prior beliefs for historical queries."
             )
             return 0.88, reasons, notes
         if open_end or in_force:

@@ -96,7 +96,8 @@ def apply_return_mode_assert(
                 statement_action=response.statement_action,
                 created_statement_id=(
                     response.statement.id
-                    if response.statement is not None and response.outcome == AssertionOutcome.CREATE
+                    if response.statement is not None
+                    and response.outcome == AssertionOutcome.CREATE
                     else None
                 ),
                 reused_statement_id=(
@@ -263,8 +264,8 @@ class MutationProjectionMixin:
                     specificity_cache=specificity_cache,
                 )
                 subject_in = row.subject_entity_id in set(identity_ids)
-                object_in = (
-                    row.object_entity_id is not None and row.object_entity_id in set(identity_ids)
+                object_in = row.object_entity_id is not None and row.object_entity_id in set(
+                    identity_ids
                 )
                 if subject_in and not object_in:
                     direction = "outgoing"

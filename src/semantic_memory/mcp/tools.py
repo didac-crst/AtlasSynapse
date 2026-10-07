@@ -373,9 +373,7 @@ class StatementMCPTools:
         return _run_mutation(
             self._session,
             payload,
-            lambda p: self._statements.correct_statement(
-                CorrectStatementRequest.model_validate(p)
-            ),
+            lambda p: self._statements.correct_statement(CorrectStatementRequest.model_validate(p)),
         )
 
     def retract_statement(self, payload: dict[str, Any]) -> dict[str, Any]:

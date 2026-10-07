@@ -38,9 +38,7 @@ def test_role_query_boosts_holds_role_not_has_goal() -> None:
     role_boost, role_reasons, _ = score_predicate_intent(
         "Didac previous Airbus role", "holdsRole", lex
     )
-    goal_boost, _, _ = score_predicate_intent(
-        "Didac previous Airbus role", "hasGoal", lex
-    )
+    goal_boost, _, _ = score_predicate_intent("Didac previous Airbus role", "hasGoal", lex)
     assert role_boost > 0
     assert goal_boost == 0
     assert "predicate_intent_nl_cue" in role_reasons

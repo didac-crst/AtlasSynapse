@@ -37,9 +37,7 @@ class EntityRepository:
         """Follow merged_into links to the surviving active entity id."""
         return self.resolve_survivor_ids([entity_id])[entity_id]
 
-    def resolve_survivor_ids(
-        self, entity_ids: list[uuid.UUID]
-    ) -> dict[uuid.UUID, uuid.UUID]:
+    def resolve_survivor_ids(self, entity_ids: list[uuid.UUID]) -> dict[uuid.UUID, uuid.UUID]:
         """Bulk resolve merged_into chains for many entity ids (one/few SELECTs)."""
         if not entity_ids:
             return {}
@@ -51,9 +49,7 @@ class EntityRepository:
             pending = set()
             if not missing:
                 break
-            for entity in self._session.scalars(
-                select(Entity).where(Entity.id.in_(missing))
-            ).all():
+            for entity in self._session.scalars(select(Entity).where(Entity.id.in_(missing))).all():
                 by_id[entity.id] = entity
                 nxt = entity.merged_into_entity_id
                 if nxt is not None and nxt not in by_id:
