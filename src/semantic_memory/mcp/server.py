@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from semantic_memory.config import Settings, get_settings
 from semantic_memory.db import configure_engine, get_session_factory
+from semantic_memory.mcp.schema_utils import mcp_payload_schema
 from semantic_memory.mcp.stdio import StdioMCPServer, ToolSpec
 from semantic_memory.mcp.tools import (
     EntityMCPTools,
@@ -20,6 +21,19 @@ from semantic_memory.mcp.tools import (
     StatementMCPTools,
 )
 from semantic_memory.runtime_info import runtime_config
+from semantic_memory.schemas.proposals import (
+    ApplyProposalRequest,
+    ProposeAliasRequest,
+    ProposeClassParentRequest,
+    ProposeClassRequest,
+    ProposeConstraintRequest,
+    ProposePredicateRequest,
+)
+from semantic_memory.schemas.semantic_review import (
+    AnswerSemanticClarificationRequest,
+    ChallengeOntologyReviewRequest,
+)
+from semantic_memory.schemas.write_clarifications import AnswerIdentityClarificationRequest
 
 REGISTERED_TOOL_NAMES: tuple[str, ...] = (
     "get_runtime_config",
@@ -160,7 +174,13 @@ def _get_ontology_context(
     )
 
 
-def _payload_tool(name: str, description: str, call: Any) -> ToolSpec:
+def _payload_tool(
+    name: str,
+    description: str,
+    call: Any,
+    *,
+    request_model: type[Any] | None = None,
+) -> ToolSpec:
     def handler(*, payload: dict[str, Any]) -> dict[str, Any]:
         with _session() as session:
             result = call(session, payload)
@@ -172,7 +192,9 @@ def _payload_tool(name: str, description: str, call: Any) -> ToolSpec:
         name=name,
         description=description,
         handler=handler,
-        input_schema=_PAYLOAD_SCHEMA,
+        input_schema=(
+            mcp_payload_schema(request_model) if request_model is not None else _PAYLOAD_SCHEMA
+        ),
     )
 
 
@@ -436,29 +458,36 @@ def build_mcp_tools() -> list[ToolSpec]:
         _payload_tool(
             "propose_class",
             "Propose a new ontology class. On ambiguous overlap, response includes "
-            "open_clarification_request with AtlasSynapse-issued clarification_request_id.",
+            "open_clarification_request with AtlasSynapse-issued clarification_request_id. "
+            "Use namespace_key='smoke' for disposable tests (not production).",
             lambda session, payload: OntologyMCPTools(session).propose_class(payload),
+            request_model=ProposeClassRequest,
         ),
         _payload_tool(
             "propose_predicate",
-            "Propose a new ontology predicate. On ambiguous overlap, response includes "
-            "open_clarification_request with AtlasSynapse-issued clarification_request_id.",
+            "Propose a new ontology predicate. Write fields are domain_keys/range_keys "
+            "(get_predicate returns domain_class_keys/range_class_keys; those aliases "
+            "are also accepted). Use namespace_key='smoke' for disposable tests.",
             lambda session, payload: OntologyMCPTools(session).propose_predicate(payload),
+            request_model=ProposePredicateRequest,
         ),
         _payload_tool(
             "propose_constraint",
             "Propose an ontology constraint.",
             lambda session, payload: OntologyMCPTools(session).propose_constraint(payload),
+            request_model=ProposeConstraintRequest,
         ),
         _payload_tool(
             "propose_alias",
             "Propose an ontology alias.",
             lambda session, payload: OntologyMCPTools(session).propose_alias(payload),
+            request_model=ProposeAliasRequest,
         ),
         _payload_tool(
             "propose_class_parent",
             "Propose a class parent link.",
             lambda session, payload: OntologyMCPTools(session).propose_class_parent(payload),
+            request_model=ProposeClassParentRequest,
         ),
         _payload_tool(
             "apply_ontology_proposal",
@@ -467,19 +496,23 @@ def build_mcp_tools() -> list[ToolSpec]:
             "Requires ontology.apply. Pass proposal_id, request_id, idempotency_key "
             "(actor_key is injected by the MCP server).",
             lambda session, payload: OntologyMCPTools(session).apply_ontology_proposal(payload),
+            request_model=ApplyProposalRequest,
         ),
         _payload_tool(
             "challenge_ontology_review",
             "Challenge a reject/reuse semantic review with new rationale/evidence.",
             lambda session, payload: OntologyMCPTools(session).challenge_ontology_review(payload),
+            request_model=ChallengeOntologyReviewRequest,
         ),
         _payload_tool(
             "answer_semantic_clarification",
-            "Answer an AtlasSynapse clarification_request_id with the intended "
-            "semantic distinction and examples; triggers re-review.",
+            "Answer an AtlasSynapse clarification_request_id. Required field is "
+            "`response` (string) — not `answer`. Include semantic distinction and "
+            "examples; triggers re-review.",
             lambda session, payload: OntologyMCPTools(session).answer_semantic_clarification(
                 payload
             ),
+            request_model=AnswerSemanticClarificationRequest,
         ),
         _payload_tool(
             "answer_identity_clarification",
@@ -489,6 +522,7 @@ def build_mcp_tools() -> list[ToolSpec]:
             lambda session, payload: StatementMCPTools(session).answer_identity_clarification(
                 payload
             ),
+            request_model=AnswerIdentityClarificationRequest,
         ),
         _payload_tool(
             "report_feedback",
@@ -510,7 +544,9 @@ def build_mcp_server(settings: Settings | None = None) -> StdioMCPServer:
             f"('{cfg.mcp_actor_key}'); clients must not guess it. Mutations still need "
             "request_id and idempotency_key. Prefer dry_run=true to preview writes. "
             "Ontology propose ≠ apply: after READY_TO_APPLY, call apply_ontology_proposal "
-            "to commit (server revalidates; no force). No raw SQL or DDL."
+            "to commit (server revalidates; no force). Predicate writes use domain_keys/"
+            "range_keys; clarification answers use field `response`. Put disposable test "
+            "ontology in namespace_key=smoke. No raw SQL or DDL."
         ),
         tools=build_mcp_tools(),
     )

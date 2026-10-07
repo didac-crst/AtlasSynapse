@@ -60,6 +60,19 @@ answer_identity_clarification
 (the MCP server injects `actor_key`). The server revalidates gates and live
 ontology state before commit; there is no force/skip path.
 
+Ontology write tools advertise **typed** `payload` schemas (not free-form maps).
+Notable field names:
+
+| Tool | Required / easy-to-miss fields |
+| --- | --- |
+| `propose_predicate` | `value_kind`, `domain_keys`, `range_keys` (aliases `domain_class_keys` / `range_class_keys` accepted). `get_predicate` still returns `domain_class_keys` / `range_class_keys`. |
+| `answer_semantic_clarification` | `clarification_request_id`, **`response`** (not `answer`) |
+| `apply_ontology_proposal` | `proposal_id`, `request_id`, `idempotency_key` |
+
+Use `namespace_key: "smoke"` for disposable smoke-test ontology. Production
+biography/business concepts stay in `core`. The `smoke` namespace is seeded empty
+at bootstrap; lexical review for `core` proposals does not search `smoke`.
+
 When semantic review cannot decide whether a proposal is new vs overlapping an
 existing concept, AtlasSynapse returns `manual_review` and issues a deterministic
 `open_clarification_request`:
