@@ -206,3 +206,212 @@ def test_http_and_mcp_retrieval(client: TestClient, db_session: Session) -> None
     mcp_result = mcp.search_entities({"query": "HTTP Search"})
     assert "hits" in mcp_result
     assert "error_code" not in mcp_result
+
+
+def test_search_statements_subject_and_object_filters(db_session: Session) -> None:
+    subject_id, peer_id, statement_id = _seed_graph(db_session)
+    service = RetrievalService(db_session)
+
+    as_subject = service.search_statements(
+        SearchStatementsRequest(subject_entity_id=subject_id, predicate_key="relatedTo")
+    )
+    assert [hit.statement.id for hit in as_subject.hits] == [statement_id]
+    assert all(hit.statement.subject_entity_id == subject_id for hit in as_subject.hits)
+
+    as_object = service.search_statements(
+        SearchStatementsRequest(object_entity_id=peer_id, predicate_key="relatedTo")
+    )
+    assert [hit.statement.id for hit in as_object.hits] == [statement_id]
+    assert all(hit.statement.object_entity_id == peer_id for hit in as_object.hits)
+
+    # Subject filter must not return statements where the entity is only the object.
+    only_as_object = service.search_statements(
+        SearchStatementsRequest(subject_entity_id=peer_id)
+    )
+    assert all(hit.statement.subject_entity_id == peer_id for hit in only_as_object.hits)
+    assert statement_id not in {hit.statement.id for hit in only_as_object.hits}
+
+    only_as_subject_object = service.search_statements(
+        SearchStatementsRequest(object_entity_id=subject_id)
+    )
+    assert statement_id not in {hit.statement.id for hit in only_as_subject_object.hits}
+
+
+def test_search_statements_unknown_field_rejected(db_session: Session) -> None:
+    import pytest
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        SearchStatementsRequest.model_validate(
+            {"subject_entity_id": str(uuid.uuid4()), "not_a_real_filter": True}
+        )
+
+    mcp = RetrievalMCPTools(db_session)
+    result = mcp.search_statements(
+        {"subject_entity_id": str(uuid.uuid4()), "bogus_field": "x"}
+    )
+    assert result.get("error_code") == "VALIDATION_FAILED"
+
+
+def test_search_statements_pagination_is_stable(db_session: Session) -> None:
+    writer = _ensure_writer(db_session, key="page-writer")
+    entities = EntityService(db_session)
+    statements = StatementService(db_session)
+    subject = entities.create_entity(
+        CreateEntityRequest(
+            actor_key=writer,
+            request_id=uuid.uuid4(),
+            idempotency_key=f"page-s-{uuid.uuid4()}",
+            canonical_name="Page Subject",
+            class_key="Document",
+        )
+    )
+    assert subject.entity is not None
+    created_ids: list[uuid.UUID] = []
+    for i in range(5):
+        peer = entities.create_entity(
+            CreateEntityRequest(
+                actor_key=writer,
+                request_id=uuid.uuid4(),
+                idempotency_key=f"page-o-{i}-{uuid.uuid4()}",
+                canonical_name=f"Page Peer {i}",
+                class_key="Document",
+            )
+        )
+        assert peer.entity is not None
+        asserted = statements.assert_statement(
+            AssertStatementRequest(
+                actor_key=writer,
+                request_id=uuid.uuid4(),
+                idempotency_key=f"page-st-{i}-{uuid.uuid4()}",
+                subject_entity_id=subject.entity.id,
+                predicate_key="relatedTo",
+                object_entity_id=peer.entity.id,
+            )
+        )
+        assert asserted.statement is not None
+        created_ids.append(asserted.statement.id)
+
+    service = RetrievalService(db_session)
+    page0 = service.search_statements(
+        SearchStatementsRequest(subject_entity_id=subject.entity.id, limit=2, offset=0)
+    )
+    page1 = service.search_statements(
+        SearchStatementsRequest(subject_entity_id=subject.entity.id, limit=2, offset=2)
+    )
+    page0_again = service.search_statements(
+        SearchStatementsRequest(subject_entity_id=subject.entity.id, limit=2, offset=0)
+    )
+
+    assert page0.total == 5
+    assert page0.limit == 2
+    assert page0.offset == 0
+    assert len(page0.hits) == 2
+    assert len(page1.hits) == 2
+    ids0 = [hit.statement.id for hit in page0.hits]
+    ids1 = [hit.statement.id for hit in page1.hits]
+    assert set(ids0).isdisjoint(ids1)
+    assert ids0 == [hit.statement.id for hit in page0_again.hits]
+
+    all_pages: list[uuid.UUID] = []
+    offset = 0
+    while True:
+        page = service.search_statements(
+            SearchStatementsRequest(
+                subject_entity_id=subject.entity.id, limit=2, offset=offset
+            )
+        )
+        all_pages.extend(hit.statement.id for hit in page.hits)
+        if offset + page.limit >= page.total:
+            break
+        offset += page.limit
+    assert len(all_pages) == page0.total
+    assert len(set(all_pages)) == page0.total
+
+
+def test_search_statements_temporal_state_filter(db_session: Session) -> None:
+    from datetime import UTC, datetime
+
+    from semantic_memory.schemas.retrieval import TemporalState
+
+    writer = _ensure_writer(db_session, key="temporal-writer")
+    entities = EntityService(db_session)
+    statements = StatementService(db_session)
+    suffix = uuid.uuid4().hex[:8]
+    subject = entities.create_entity(
+        CreateEntityRequest(
+            actor_key=writer,
+            request_id=uuid.uuid4(),
+            idempotency_key=f"ts-s-{uuid.uuid4()}",
+            canonical_name=f"Temporal Subject {suffix}",
+            class_key="Document",
+        )
+    )
+    peer = entities.create_entity(
+        CreateEntityRequest(
+            actor_key=writer,
+            request_id=uuid.uuid4(),
+            idempotency_key=f"ts-o-{uuid.uuid4()}",
+            canonical_name=f"Temporal Peer A {suffix}",
+            class_key="Document",
+        )
+    )
+    assert subject.entity is not None and peer.entity is not None
+    bounded = statements.assert_statement(
+        AssertStatementRequest(
+            actor_key=writer,
+            request_id=uuid.uuid4(),
+            idempotency_key=f"ts-b-{uuid.uuid4()}",
+            subject_entity_id=subject.entity.id,
+            predicate_key="relatedTo",
+            object_entity_id=peer.entity.id,
+            valid_from=datetime(2010, 1, 1, tzinfo=UTC),
+            valid_to=datetime(2012, 1, 1, tzinfo=UTC),
+        )
+    )
+    assert bounded.statement is not None
+    # Second peer so we can assert another relatedTo without colliding on identity.
+    peer2 = entities.create_entity(
+        CreateEntityRequest(
+            actor_key=writer,
+            request_id=uuid.uuid4(),
+            idempotency_key=f"ts-o2-{uuid.uuid4()}",
+            canonical_name=f"Temporal Peer B {suffix}",
+            class_key="Document",
+        )
+    )
+    assert peer2.entity is not None
+    unbounded = statements.assert_statement(
+        AssertStatementRequest(
+            actor_key=writer,
+            request_id=uuid.uuid4(),
+            idempotency_key=f"ts-u-{uuid.uuid4()}",
+            subject_entity_id=subject.entity.id,
+            predicate_key="relatedTo",
+            object_entity_id=peer2.entity.id,
+        )
+    )
+    assert unbounded.statement is not None
+
+    service = RetrievalService(db_session)
+    bounded_hits = service.search_statements(
+        SearchStatementsRequest(
+            subject_entity_id=subject.entity.id, temporal_state=TemporalState.BOUNDED
+        )
+    )
+    assert {hit.statement.id for hit in bounded_hits.hits} == {bounded.statement.id}
+
+    unbounded_hits = service.search_statements(
+        SearchStatementsRequest(
+            subject_entity_id=subject.entity.id, temporal_state=TemporalState.UNBOUNDED
+        )
+    )
+    assert {hit.statement.id for hit in unbounded_hits.hits} == {unbounded.statement.id}
+
+
+def test_http_rejects_unknown_statement_search_query_param(client: TestClient) -> None:
+    response = client.get(
+        "/v1/statements/search",
+        params={"subject_entity_id": str(uuid.uuid4()), "not_supported": "1"},
+    )
+    assert response.status_code == 422

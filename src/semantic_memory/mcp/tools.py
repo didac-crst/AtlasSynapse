@@ -60,6 +60,7 @@ from semantic_memory.schemas.retrieval import (
 )
 from semantic_memory.schemas.statements import (
     AssertStatementRequest,
+    CorrectStatementRequest,
     RetractStatementRequest,
     StatementResponse,
     SupersedeStatementRequest,
@@ -365,6 +366,15 @@ class StatementMCPTools:
             payload,
             lambda p: self._statements.supersede_statement(
                 SupersedeStatementRequest.model_validate(p)
+            ),
+        )
+
+    def correct_statement(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return _run_mutation(
+            self._session,
+            payload,
+            lambda p: self._statements.correct_statement(
+                CorrectStatementRequest.model_validate(p)
             ),
         )
 

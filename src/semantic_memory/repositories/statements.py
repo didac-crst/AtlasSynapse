@@ -179,6 +179,7 @@ class StatementRepository:
         valid_from: datetime | None = None,
         valid_to: datetime | None = None,
         confidence: Decimal | None = None,
+        metadata: dict[str, Any] | None = None,
         statement_id: uuid.UUID | None = None,
     ) -> Statement:
         # Omit object_json when unset so the driver stores SQL NULL, not JSON null.
@@ -199,7 +200,7 @@ class StatementRepository:
             confidence=confidence,
             actor_id=actor_id,
             normalized_object=normalized_object,
-            metadata_json={},
+            metadata_json=dict(metadata or {}),
         )
         if object_json is not None:
             row.object_json = object_json

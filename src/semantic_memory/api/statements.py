@@ -14,6 +14,7 @@ from semantic_memory.schemas.provenance import ExplainStatementResponse
 from semantic_memory.schemas.statements import (
     AssertStatementRequest,
     AssertStatementResponse,
+    CorrectStatementRequest,
     RetractStatementRequest,
     RetractStatementResponse,
     StatementResponse,
@@ -70,6 +71,15 @@ def supersede_statement(
 ) -> SupersedeStatementResponse:
     return run_audited_mutation(
         session, lambda: StatementService(session).supersede_statement(request)
+    )
+
+
+@router.post("/statements/correct", response_model=SupersedeStatementResponse)
+def correct_statement(
+    request: CorrectStatementRequest, session: DbSession
+) -> SupersedeStatementResponse:
+    return run_audited_mutation(
+        session, lambda: StatementService(session).correct_statement(request)
     )
 
 

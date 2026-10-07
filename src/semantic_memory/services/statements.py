@@ -30,6 +30,7 @@ from semantic_memory.schemas.statements import (
     AssertionOutcome,
     AssertStatementRequest,
     AssertStatementResponse,
+    CorrectStatementRequest,
     RetractStatementRequest,
     RetractStatementResponse,
     StatementResponse,
@@ -167,6 +168,20 @@ class StatementService:
             execute=lambda: self._retract_body(request=request),
         )
 
+    def correct_statement(self, request: CorrectStatementRequest) -> SupersedeStatementResponse:
+        """Correct temporal bounds or object via supersession (immutable history)."""
+        actor = self._actors.require_active_actor(request.actor_key)
+        self._actors.require_capability(actor, Capability.KNOWLEDGE_WRITE)
+        supersede = self._correct_to_supersede(request)
+        return self._mutations.run(
+            actor=actor,
+            operation_name="correct_statement",
+            request=request,
+            response_model=SupersedeStatementResponse,
+            constraint_name="statement_correct",
+            execute=lambda: self._supersede_body(request=supersede, actor_id=actor.id),
+        )
+
     def get_timeline(self, entity_id: uuid.UUID) -> TimelineResponse:
         entity = self._entities.get(entity_id)
         if entity is None:
@@ -203,12 +218,14 @@ class StatementService:
                 request_id=str(request.request_id),
             )
 
+        assert_request = self._supersede_to_assert(request=request, previous=previous)
+
         # Clear the asserted slot before creating the replacement so cardinality-one
         # predicates can accept the new statement while history is preserved.
         previous.status = StatementStatus.SUPERSEDED.value
         self._session.flush()
 
-        created = self._assert_new(request=request, actor_id=actor_id)
+        created = self._assert_new(request=assert_request, actor_id=actor_id)
         if created.outcome == AssertionOutcome.CLARIFY:
             raise AmbiguousEntityError(
                 CLARIFY_MESSAGE,
@@ -218,18 +235,123 @@ class StatementService:
                 ),
                 request_id=str(request.request_id),
             )
-        if created.outcome != AssertionOutcome.CREATE or created.statement is None:
+        if created.statement is None or created.outcome not in {
+            AssertionOutcome.CREATE,
+            AssertionOutcome.REUSE,
+        }:
             raise InvalidStateTransitionError(
-                "Supersession requires creating a replacement statement",
-                details={"previous_statement_id": str(previous.id)},
+                "Supersession requires a replacement statement (create or reuse)",
+                details={
+                    "previous_statement_id": str(previous.id),
+                    "outcome": created.outcome.value if created.outcome else None,
+                },
                 request_id=str(request.request_id),
             )
+        # REUSE is allowed when an equivalent asserted statement already exists
+        # (e.g. correcting an undated duplicate onto a correctly bounded one).
         previous.superseded_by_statement_id = created.statement.id
         self._session.flush()
         return SupersedeStatementResponse(
             previous_statement=self._to_response(previous),
             statement=created.statement,
             request_id=request.request_id,
+        )
+
+    def _correct_to_supersede(self, request: CorrectStatementRequest) -> SupersedeStatementRequest:
+        fields_set = request.model_fields_set
+        payload: dict[str, object] = {
+            "actor_key": request.actor_key,
+            "request_id": request.request_id,
+            "idempotency_key": request.idempotency_key,
+            "trace_id": request.trace_id,
+            "dry_run": request.dry_run,
+            "previous_statement_id": request.statement_id,
+        }
+        for name in (
+            "object_entity_id",
+            "object",
+            "object_string",
+            "object_number",
+            "object_boolean",
+            "object_datetime",
+            "object_json",
+            "observed_at",
+            "valid_from",
+            "valid_to",
+            "confidence",
+            "metadata",
+        ):
+            if name in fields_set:
+                payload[name] = getattr(request, name)
+        return SupersedeStatementRequest.model_validate(payload)
+
+    def _supersede_to_assert(
+        self, *, request: SupersedeStatementRequest, previous: Statement
+    ) -> AssertStatementRequest:
+        prev = self._to_response(previous)
+        fields_set = request.model_fields_set
+
+        if request.subject is not None:
+            subject_entity_id = None
+            subject = request.subject
+        elif "subject_entity_id" in fields_set and request.subject_entity_id is not None:
+            subject_entity_id = request.subject_entity_id
+            subject = None
+        else:
+            subject_entity_id = previous.subject_entity_id
+            subject = None
+
+        predicate_key = (
+            request.predicate_key if request.predicate_key is not None else prev.predicate_key
+        )
+        namespace_key = (
+            request.namespace_key if request.namespace_key is not None else prev.namespace_key
+        )
+
+        object_keys = (
+            "object_entity_id",
+            "object",
+            "object_string",
+            "object_number",
+            "object_boolean",
+            "object_datetime",
+            "object_json",
+        )
+        if any(name in fields_set for name in object_keys):
+            object_fields = {name: getattr(request, name) for name in object_keys}
+        else:
+            object_fields = {
+                "object_entity_id": prev.object_entity_id,
+                "object": None,
+                "object_string": prev.object_string,
+                "object_number": prev.object_number,
+                "object_boolean": prev.object_boolean,
+                "object_datetime": prev.object_datetime,
+                "object_json": prev.object_json,
+            }
+
+        def _pick[T](name: str, default: T) -> T:
+            if name in fields_set:
+                return getattr(request, name)  # type: ignore[no-any-return]
+            return default
+
+        metadata = _pick("metadata", dict(prev.metadata or {}))
+        return AssertStatementRequest(
+            actor_key=request.actor_key,
+            request_id=request.request_id,
+            idempotency_key=request.idempotency_key,
+            trace_id=request.trace_id,
+            dry_run=request.dry_run,
+            subject_entity_id=subject_entity_id,
+            subject=subject,
+            predicate_key=predicate_key,
+            namespace_key=namespace_key,
+            observed_at=_pick("observed_at", prev.observed_at),
+            valid_from=_pick("valid_from", prev.valid_from),
+            valid_to=_pick("valid_to", prev.valid_to),
+            confidence=_pick("confidence", prev.confidence),
+            metadata=metadata if isinstance(metadata, dict) else {},
+            **object_fields,
         )
 
     def _retract_body(self, *, request: RetractStatementRequest) -> RetractStatementResponse:
@@ -244,6 +366,7 @@ class StatementService:
             return RetractStatementResponse(
                 statement=self._to_response(statement),
                 request_id=request.request_id,
+                reason=request.reason,
             )
         if statement.status != StatementStatus.ASSERTED.value:
             raise InvalidStateTransitionError(
@@ -254,10 +377,15 @@ class StatementService:
                 },
                 request_id=str(request.request_id),
             )
+        if request.reason:
+            meta = dict(statement.metadata_json or {})
+            meta["retract_reason"] = request.reason
+            statement.metadata_json = meta
         self._statements.mark_retracted(statement)
         return RetractStatementResponse(
             statement=self._to_response(statement),
             request_id=request.request_id,
+            reason=request.reason,
         )
 
     def _assert_new(
@@ -476,6 +604,7 @@ class StatementService:
             valid_from=request.valid_from,
             valid_to=request.valid_to,
             confidence=confidence,
+            metadata=request.metadata,
         )
         conflict_ids: list[uuid.UUID] = []
         if others:

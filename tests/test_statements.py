@@ -453,3 +453,97 @@ def test_parallel_cardinality_one_allows_coexistence(engine: Engine) -> None:
         assert conflicts == 28
     finally:
         verify.close()
+
+
+def test_disjoint_validity_periods_create_distinct_statements(db_session: Session) -> None:
+    _ensure_writer(db_session)
+    subject_id = _create_entity(db_session, name="Period Subject", class_key="Document")
+    object_id = _create_entity(db_session, name="Period Object", class_key="Document")
+    service = StatementService(db_session)
+
+    first = service.assert_statement(
+        _assert_request(
+            subject_entity_id=subject_id,
+            predicate_key="relatedTo",
+            object_entity_id=object_id,
+            valid_from=datetime(2010, 1, 1, tzinfo=UTC),
+            valid_to=datetime(2012, 12, 31, tzinfo=UTC),
+        )
+    )
+    second = service.assert_statement(
+        _assert_request(
+            subject_entity_id=subject_id,
+            predicate_key="relatedTo",
+            object_entity_id=object_id,
+            valid_from=datetime(2018, 1, 1, tzinfo=UTC),
+            valid_to=datetime(2020, 12, 31, tzinfo=UTC),
+        )
+    )
+    assert first.outcome == AssertionOutcome.CREATE
+    assert second.outcome == AssertionOutcome.CREATE
+    assert first.statement is not None and second.statement is not None
+    assert first.statement.id != second.statement.id
+    assert first.statement.status.value == "asserted"
+    assert second.statement.status.value == "asserted"
+
+
+def test_same_validity_period_reuses_statement(db_session: Session) -> None:
+    _ensure_writer(db_session)
+    subject_id = _create_entity(db_session, name="Reuse Subject", class_key="Document")
+    object_id = _create_entity(db_session, name="Reuse Object", class_key="Document")
+    service = StatementService(db_session)
+    bounds = dict(
+        valid_from=datetime(2015, 1, 1, tzinfo=UTC),
+        valid_to=datetime(2016, 1, 1, tzinfo=UTC),
+    )
+    first = service.assert_statement(
+        _assert_request(
+            subject_entity_id=subject_id,
+            predicate_key="relatedTo",
+            object_entity_id=object_id,
+            **bounds,
+        )
+    )
+    second = service.assert_statement(
+        _assert_request(
+            subject_entity_id=subject_id,
+            predicate_key="relatedTo",
+            object_entity_id=object_id,
+            **bounds,
+        )
+    )
+    assert first.outcome == AssertionOutcome.CREATE
+    assert second.outcome == AssertionOutcome.REUSE
+    assert first.statement is not None and second.statement is not None
+    assert first.statement.id == second.statement.id
+
+
+def test_overlapping_cardinality_one_records_conflict(db_session: Session) -> None:
+    """Cardinality-one overlapping periods surface conflict; both remain asserted."""
+    _ensure_writer(db_session)
+    doc_id = _create_entity(db_session, name="Overlap Doc", class_key="Document")
+    service = StatementService(db_session)
+    first = service.assert_statement(
+        _assert_request(
+            subject_entity_id=doc_id,
+            predicate_key="name",
+            object_string="Alpha",
+            valid_from=datetime(2010, 1, 1, tzinfo=UTC),
+            valid_to=datetime(2015, 1, 1, tzinfo=UTC),
+        )
+    )
+    second = service.assert_statement(
+        _assert_request(
+            subject_entity_id=doc_id,
+            predicate_key="name",
+            object_string="Beta",
+            valid_from=datetime(2012, 1, 1, tzinfo=UTC),
+            valid_to=datetime(2018, 1, 1, tzinfo=UTC),
+        )
+    )
+    assert first.outcome == AssertionOutcome.CREATE
+    assert second.outcome == AssertionOutcome.CREATE
+    assert second.conflict_ids
+    assert first.statement is not None and second.statement is not None
+    assert first.statement.status.value == "asserted"
+    assert second.statement.status.value == "asserted"

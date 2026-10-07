@@ -29,9 +29,15 @@ from semantic_memory.schemas.proposals import (
     ProposeConstraintRequest,
     ProposePredicateRequest,
 )
+from semantic_memory.schemas.retrieval import SearchStatementsRequest
 from semantic_memory.schemas.semantic_review import (
     AnswerSemanticClarificationRequest,
     ChallengeOntologyReviewRequest,
+)
+from semantic_memory.schemas.statements import (
+    CorrectStatementRequest,
+    RetractStatementRequest,
+    SupersedeStatementRequest,
 )
 from semantic_memory.schemas.write_clarifications import AnswerIdentityClarificationRequest
 
@@ -53,6 +59,7 @@ REGISTERED_TOOL_NAMES: tuple[str, ...] = (
     "search_source_content",
     "add_evidence",
     "supersede_statement",
+    "correct_statement",
     "retract_statement",
     "get_timeline",
     "find_conflicts",
@@ -280,8 +287,12 @@ def build_mcp_tools() -> list[ToolSpec]:
         ),
         _payload_tool(
             "search_statements",
-            "Search statements with ranking signals.",
+            "Search statements with typed filters and stable pagination "
+            "(created_at DESC, id DESC). Use subject_entity_id or object_entity_id "
+            "for one-end filters; entity_id matches either end. Unknown fields fail "
+            "validation. Optional temporal_state: bounded|open_end|open_start|unbounded.",
             lambda session, payload: RetrievalMCPTools(session).search_statements(payload),
+            request_model=SearchStatementsRequest,
         ),
         ToolSpec(
             name="explain_statement",
@@ -326,13 +337,26 @@ def build_mcp_tools() -> list[ToolSpec]:
         ),
         _payload_tool(
             "supersede_statement",
-            "Supersede a statement.",
+            "Atomically supersede an asserted statement with a replacement. "
+            "Omitted subject/predicate/object/temporal fields default to the previous "
+            "statement. Returns previous and new statement ids. Actor is injected.",
             lambda session, payload: StatementMCPTools(session).supersede_statement(payload),
+            request_model=SupersedeStatementRequest,
+        ),
+        _payload_tool(
+            "correct_statement",
+            "Correct temporal validity or object via supersession (immutable history). "
+            "Copies SPO from statement_id; set valid_from/valid_to/observed_at/object_* "
+            "overrides (null clears a bound). Prefer this over assert+manual cleanup.",
+            lambda session, payload: StatementMCPTools(session).correct_statement(payload),
+            request_model=CorrectStatementRequest,
         ),
         _payload_tool(
             "retract_statement",
-            "Retract a statement.",
+            "Retract an asserted statement (soft; does not delete). Idempotent. "
+            "Optional reason is stored in statement metadata.",
             lambda session, payload: StatementMCPTools(session).retract_statement(payload),
+            request_model=RetractStatementRequest,
         ),
         ToolSpec(
             name="get_timeline",
@@ -546,7 +570,10 @@ def build_mcp_server(settings: Settings | None = None) -> StdioMCPServer:
             "Ontology propose ≠ apply: after READY_TO_APPLY, call apply_ontology_proposal "
             "to commit (server revalidates; no force). Predicate writes use domain_keys/"
             "range_keys; clarification answers use field `response`. Put disposable test "
-            "ontology in namespace_key=smoke. No raw SQL or DDL."
+            "ontology in namespace_key=smoke. Statement correction: prefer "
+            "correct_statement (statement_id + temporal/object overrides) over "
+            "assert+manual cleanup; supersede_statement uses previous_statement_id. "
+            "Call get_runtime_config to see mcp_tools (includes correct_statement)."
         ),
         tools=build_mcp_tools(),
     )

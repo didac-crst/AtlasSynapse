@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from semantic_memory.db import get_db_session
@@ -21,11 +21,28 @@ from semantic_memory.schemas.retrieval import (
     SearchSemanticMemoryResponse,
     SearchStatementsRequest,
     SearchStatementsResponse,
+    TemporalState,
 )
 from semantic_memory.services.retrieval import RetrievalService
 
 router = APIRouter(prefix="/v1", tags=["retrieval"])
 DbSession = Annotated[Session, Depends(get_db_session)]
+
+_STATEMENT_SEARCH_QUERY_KEYS = frozenset(
+    {
+        "query",
+        "subject_entity_id",
+        "object_entity_id",
+        "entity_id",
+        "predicate_key",
+        "namespace_key",
+        "status",
+        "as_of",
+        "temporal_state",
+        "limit",
+        "offset",
+    }
+)
 
 
 @router.get("/entities/search", response_model=SearchEntitiesResponse)
@@ -51,27 +68,53 @@ def search_entities(
 
 
 @router.get("/statements/search", response_model=SearchStatementsResponse)
-def search_statements(
+def search_statements_get(
+    request: Request,
     session: DbSession,
     query: str | None = None,
+    subject_entity_id: uuid.UUID | None = None,
+    object_entity_id: uuid.UUID | None = None,
     entity_id: uuid.UUID | None = None,
     predicate_key: str | None = None,
-    namespace_key: str = "core",
+    namespace_key: str | None = None,
     status: StatementStatus | None = StatementStatus.ASSERTED,
     limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     as_of: datetime | None = None,
+    temporal_state: TemporalState | None = None,
 ) -> SearchStatementsResponse:
+    unknown = sorted(set(request.query_params.keys()) - _STATEMENT_SEARCH_QUERY_KEYS)
+    if unknown:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error_code": "VALIDATION_FAILED",
+                "message": "Unknown statement search query parameter(s)",
+                "details": {"unknown_fields": unknown},
+            },
+        )
     return RetrievalService(session).search_statements(
         SearchStatementsRequest(
             query=query,
+            subject_entity_id=subject_entity_id,
+            object_entity_id=object_entity_id,
             entity_id=entity_id,
             predicate_key=predicate_key,
             namespace_key=namespace_key,
             status=status,
             limit=limit,
+            offset=offset,
             as_of=as_of,
+            temporal_state=temporal_state,
         )
     )
+
+
+@router.post("/statements/search", response_model=SearchStatementsResponse)
+def search_statements_post(
+    body: SearchStatementsRequest, session: DbSession
+) -> SearchStatementsResponse:
+    return RetrievalService(session).search_statements(body)
 
 
 @router.get("/entities/{entity_id}/neighborhood", response_model=NeighborhoodResponse)

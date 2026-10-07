@@ -9,8 +9,9 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import Session
 
 from semantic_memory.exceptions import UnknownEntityError, ValidationFailedError
@@ -46,6 +47,7 @@ from semantic_memory.schemas.retrieval import (
     SearchStatementsRequest,
     SearchStatementsResponse,
     SemanticMemoryHit,
+    TemporalState,
 )
 from semantic_memory.services.conflicts import ConflictService
 from semantic_memory.services.entities import EntityService
@@ -123,9 +125,26 @@ class RetrievalService:
         )
 
     def search_statements(self, request: SearchStatementsRequest) -> SearchStatementsResponse:
+        empty = SearchStatementsResponse(
+            query=request.query,
+            total=0,
+            limit=request.limit,
+            offset=request.offset,
+            hits=[],
+            ranking_explanations=[
+                "Results are ordered by created_at DESC, id DESC for stable pagination.",
+                "ranking_score is for display only and does not affect page order.",
+            ],
+        )
         stmt = select(Statement)
         if request.status is not None:
             stmt = stmt.where(Statement.status == request.status.value)
+        if request.subject_entity_id is not None:
+            identity_ids = self._entities.identity_group_ids(request.subject_entity_id)
+            stmt = stmt.where(Statement.subject_entity_id.in_(identity_ids))
+        if request.object_entity_id is not None:
+            identity_ids = self._entities.identity_group_ids(request.object_entity_id)
+            stmt = stmt.where(Statement.object_entity_id.in_(identity_ids))
         if request.entity_id is not None:
             identity_ids = self._entities.identity_group_ids(request.entity_id)
             stmt = stmt.where(
@@ -136,15 +155,29 @@ class RetrievalService:
             )
         if request.predicate_key is not None:
             predicate = self._ontology.get_predicate_by_key(
-                namespace_key=request.namespace_key, predicate_key=request.predicate_key
+                namespace_key=request.namespace_key or "core",
+                predicate_key=request.predicate_key,
             )
             if predicate is None:
-                return SearchStatementsResponse(
-                    query=request.query,
-                    hits=[],
-                    ranking_explanations=["Unknown predicate_key; no statements matched."],
+                return empty.model_copy(
+                    update={
+                        "ranking_explanations": [
+                            "Unknown predicate_key; no statements matched."
+                        ]
+                    }
                 )
             stmt = stmt.where(Statement.predicate_id == predicate.id)
+        elif request.namespace_key is not None:
+            stmt = (
+                stmt.join(OntologyPredicate, OntologyPredicate.id == Statement.predicate_id)
+                .join(
+                    OntologyNamespace,
+                    OntologyNamespace.id == OntologyPredicate.namespace_id,
+                )
+                .where(OntologyNamespace.key == request.namespace_key)
+            )
+        if request.temporal_state is not None:
+            stmt = self._apply_temporal_state_filter(stmt, request.temporal_state)
         if request.query:
             pattern = _ilike_contains(request.query)
             stmt = stmt.where(
@@ -153,13 +186,26 @@ class RetrievalService:
                     Statement.normalized_object.ilike(pattern, escape="\\"),
                 )
             )
-        stmt = stmt.order_by(Statement.asserted_at.desc()).limit(request.limit * 3)
+
+        count_stmt = select(func.count()).select_from(stmt.order_by(None).subquery())
+        total = int(self._session.scalar(count_stmt) or 0)
+
+        stmt = (
+            stmt.order_by(Statement.created_at.desc(), Statement.id.desc())
+            .limit(request.limit)
+            .offset(request.offset)
+        )
         rows = list(self._session.scalars(stmt).all())
         now = request.as_of or datetime.now(UTC)
+        focus = (
+            request.subject_entity_id
+            or request.object_entity_id
+            or request.entity_id
+        )
         hits: list[RankedStatementHit] = []
         for statement in rows:
             signals, reasons = self._score_statement(
-                statement, query=request.query, focus_entity_id=request.entity_id, now=now
+                statement, query=request.query, focus_entity_id=focus, now=now
             )
             hits.append(
                 RankedStatementHit(
@@ -169,18 +215,48 @@ class RetrievalService:
                     match_reasons=reasons,
                 )
             )
-        hits.sort(key=lambda item: item.ranking_score, reverse=True)
-        hits = hits[: request.limit]
         return SearchStatementsResponse(
             query=request.query,
+            total=total,
+            limit=request.limit,
+            offset=request.offset,
             hits=hits,
             ranking_explanations=[
+                "Results are ordered by created_at DESC, id DESC for stable pagination.",
                 (
-                    "Ranking uses lexical match, temporal validity, "
-                    "recency, evidence, and reliability."
+                    "ranking_score reflects lexical match, temporal validity, "
+                    "recency, evidence, and reliability but does not reorder pages."
                 ),
-                "ranking_score is for ordering only and is not a truth score.",
+                "ranking_score is for display only and is not a truth score.",
+                (
+                    "null/null valid_from/valid_to means temporally unspecified "
+                    "(use temporal_state=unbounded); it is not 'valid forever'."
+                ),
             ],
+        )
+
+    @staticmethod
+    def _apply_temporal_state_filter(
+        stmt: Select[Any], state: TemporalState
+    ) -> Select[Any]:
+        if state == TemporalState.BOUNDED:
+            return stmt.where(
+                Statement.valid_from.is_not(None),
+                Statement.valid_to.is_not(None),
+            )
+        if state == TemporalState.OPEN_END:
+            return stmt.where(
+                Statement.valid_from.is_not(None),
+                Statement.valid_to.is_(None),
+            )
+        if state == TemporalState.OPEN_START:
+            return stmt.where(
+                Statement.valid_from.is_(None),
+                Statement.valid_to.is_not(None),
+            )
+        return stmt.where(
+            Statement.valid_from.is_(None),
+            Statement.valid_to.is_(None),
         )
 
     def get_entity_neighborhood(
@@ -265,7 +341,6 @@ class RetrievalService:
             SearchStatementsRequest(
                 query=request.query,
                 entity_id=request.entity_id,
-                namespace_key=request.namespace_key,
                 as_of=request.as_of,
                 limit=request.limit,
             )

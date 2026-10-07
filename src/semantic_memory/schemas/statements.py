@@ -8,13 +8,23 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from semantic_memory.models.enums import StatementStatus
 from semantic_memory.schemas.common import MutationEnvelope
 from semantic_memory.schemas.dry_run import OperationMode, StatementWriteAction
 from semantic_memory.schemas.entities import EntityInput
 from semantic_memory.schemas.identity import IdentityResolutionResult
+
+_OBJECT_FIELD_NAMES = (
+    "object_entity_id",
+    "object",
+    "object_string",
+    "object_number",
+    "object_boolean",
+    "object_datetime",
+    "object_json",
+)
 
 
 class AssertionOutcome(StrEnum):
@@ -39,6 +49,7 @@ class AssertStatementRequest(MutationEnvelope):
     valid_from: datetime | None = None
     valid_to: datetime | None = None
     confidence: Decimal | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("object_string")
     @classmethod
@@ -114,23 +125,119 @@ class AssertStatementResponse(BaseModel):
     clarification_request_id: uuid.UUID | None = None
 
 
-class SupersedeStatementRequest(AssertStatementRequest):
+class SupersedeStatementRequest(MutationEnvelope):
+    """Replace an asserted statement. Omitted subject/predicate/object/temporal
+    fields default to the previous statement's values (immutable history).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     previous_statement_id: uuid.UUID
+    subject_entity_id: uuid.UUID | None = None
+    subject: EntityInput | None = None
+    predicate_key: str | None = Field(default=None, min_length=1)
+    namespace_key: str | None = None
+    object_entity_id: uuid.UUID | None = None
+    object: EntityInput | None = None
+    object_string: str | None = None
+    object_number: Decimal | None = None
+    object_boolean: bool | None = None
+    object_datetime: datetime | None = None
+    object_json: dict[str, Any] | list[Any] | None = None
+    observed_at: datetime | None = None
+    valid_from: datetime | None = None
+    valid_to: datetime | None = None
+    confidence: Decimal | None = None
+    metadata: dict[str, Any] | None = None
+
+    @field_validator("object_string")
+    @classmethod
+    def _strip_object_string(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
+
+    @model_validator(mode="after")
+    def _subject_xor_and_object_when_set(self) -> SupersedeStatementRequest:
+        if self.subject_entity_id is not None and self.subject is not None:
+            raise ValueError("Provide only one of subject_entity_id or subject")
+        object_set = [name for name in _OBJECT_FIELD_NAMES if name in self.model_fields_set]
+        if object_set:
+            populated = [name for name in object_set if getattr(self, name) is not None]
+            if len(populated) != 1:
+                raise ValueError(
+                    "When overriding the object, provide exactly one typed object field"
+                )
+        return self
 
 
 class SupersedeStatementResponse(BaseModel):
     previous_statement: StatementResponse
     statement: StatementResponse
     request_id: uuid.UUID
+    dry_run: bool = False
+    operation_mode: OperationMode = OperationMode.EXECUTE
+    would_persist: bool | None = None
+
+
+class CorrectStatementRequest(MutationEnvelope):
+    """Ergonomic temporal/object correction via supersession (not in-place UPDATE).
+
+    Copies subject/predicate/object from ``statement_id`` unless an object_* or
+    temporal field is explicitly set (including null to clear a bound).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    statement_id: uuid.UUID
+    object_entity_id: uuid.UUID | None = None
+    object: EntityInput | None = None
+    object_string: str | None = None
+    object_number: Decimal | None = None
+    object_boolean: bool | None = None
+    object_datetime: datetime | None = None
+    object_json: dict[str, Any] | list[Any] | None = None
+    observed_at: datetime | None = None
+    valid_from: datetime | None = None
+    valid_to: datetime | None = None
+    confidence: Decimal | None = None
+    metadata: dict[str, Any] | None = None
+
+    @field_validator("object_string")
+    @classmethod
+    def _strip_object_string(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
+
+    @model_validator(mode="after")
+    def _object_when_set(self) -> CorrectStatementRequest:
+        object_set = [name for name in _OBJECT_FIELD_NAMES if name in self.model_fields_set]
+        if object_set:
+            populated = [name for name in object_set if getattr(self, name) is not None]
+            if len(populated) != 1:
+                raise ValueError(
+                    "When overriding the object, provide exactly one typed object field"
+                )
+        return self
 
 
 class RetractStatementRequest(MutationEnvelope):
+    model_config = ConfigDict(extra="forbid")
+
     statement_id: uuid.UUID
+    reason: str | None = None
 
 
 class RetractStatementResponse(BaseModel):
     statement: StatementResponse
     request_id: uuid.UUID
+    reason: str | None = None
+    dry_run: bool = False
+    operation_mode: OperationMode = OperationMode.EXECUTE
+    would_persist: bool | None = None
 
 
 class TimelineEntry(BaseModel):
@@ -141,3 +248,4 @@ class TimelineEntry(BaseModel):
 class TimelineResponse(BaseModel):
     entity_id: uuid.UUID
     entries: list[TimelineEntry] = Field(default_factory=list)
+

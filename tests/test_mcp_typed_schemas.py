@@ -55,6 +55,10 @@ def test_ontology_mcp_tools_use_typed_payload_schemas() -> None:
         "apply_ontology_proposal",
         "answer_semantic_clarification",
         "answer_identity_clarification",
+        "search_statements",
+        "supersede_statement",
+        "correct_statement",
+        "retract_statement",
     ):
         schema = tools[name].input_schema
         assert schema["required"] == ["payload"]
@@ -70,3 +74,19 @@ def test_ontology_mcp_tools_use_typed_payload_schemas() -> None:
         "properties"
     ]
     assert "response" in answer
+
+    search = tools["search_statements"].input_schema["properties"]["payload"]["properties"]
+    assert "subject_entity_id" in search
+    assert "object_entity_id" in search
+    assert "offset" in search
+    assert "temporal_state" in search
+
+    supersede = tools["supersede_statement"].input_schema["properties"]["payload"]["properties"]
+    assert "previous_statement_id" in supersede
+    assert "predicate_key" in supersede
+    assert "request_id" in supersede
+
+    retract = tools["retract_statement"].input_schema["properties"]["payload"]["properties"]
+    assert "statement_id" in retract
+    assert "reason" in retract
+    assert "actor_key" not in retract
