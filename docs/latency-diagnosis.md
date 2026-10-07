@@ -100,7 +100,8 @@ The ChatGPT ~2.5 s single-call feel remains dominated above the tunnel (Phase 5)
 | Process | Model |
 | --- | --- |
 | API | `uvicorn` factory, **1 worker**, no `--workers` |
-| MCP | `semantic-memory-mcp` stdio, **1 process; concurrent tools/call (`max_inflight`)** || Tunnel | long-lived `tunnel-client` → `docker compose run --rm -T mcp` |
+| MCP | `semantic-memory-mcp` stdio, **1 process; concurrent tools/call (`max_inflight`)** |
+| Tunnel | long-lived `tunnel-client` → `docker compose run --rm -T mcp` |
 
 ### Serialization / size
 

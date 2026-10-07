@@ -346,7 +346,11 @@ def main() -> None:
     r10 = sum(1 for r in results if r.recall_at_10)
     zeros = sum(1 for r in results if r.zero_hits)
     superseded = sum(1 for r in results if r.superseded_in_topk)
-    rr_values = [1.0 / r.first_relevant_rank for r in results if r.first_relevant_rank is not None]
+    # Misses contribute 0 so MRR denominator includes every evaluated case.
+    rr_values = [
+        (1.0 / r.first_relevant_rank) if r.first_relevant_rank is not None else 0.0
+        for r in results
+    ]
     mrr = statistics.mean(rr_values) if rr_values else 0.0
 
     diagnostic = [r for r in results if "diagnostic" in r.tags]
