@@ -37,6 +37,7 @@ create_entity
 add_entity_alias
 assert_statement
 assert_batch
+correct_statement
 supersede_statement
 retract_statement
 ensure_source
@@ -44,6 +45,10 @@ ingest_source_content
 add_evidence
 merge_entity
 ```
+
+The default **agent** surface (`AGENT_TOOL_NAMES`) includes `assert_statement`,
+`correct_statement`, and `retract_statement` among its twelve tools; other write
+tools above remain on advanced/all. See [mcp-agent-surface.md](mcp-agent-surface.md).
 
 ## Ontology proposal tools
 

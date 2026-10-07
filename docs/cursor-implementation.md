@@ -1,6 +1,15 @@
 # Cursor implementation guide
 
-This document is the low-level handoff for the developer implementing AtlasSynapse.
+> **Historical document.** This is the original implementation blueprint from the
+> early build sequence. It is not current development guidance.
+>
+> For what AtlasSynapse is now, see the [README](../README.md),
+> [architecture.md](architecture.md), [roadmap.md](roadmap.md), and
+> [mcp-contract.md](mcp-contract.md).
+
+---
+
+This document was the low-level handoff for the developer implementing AtlasSynapse.
 
 ## Coding rules
 

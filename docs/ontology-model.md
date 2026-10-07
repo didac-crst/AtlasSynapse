@@ -31,7 +31,16 @@ Statement lifecycle and temporal validity are orthogonal. There is no `expired` 
 
 Classes and predicates have immutable revisions and a current revision pointer. Parent links form a directed acyclic graph. Predicate revisions describe value kind, datatype, cardinality, symmetry, transitivity, inverse, and metadata. Domains and ranges refer to classes.
 
-Ontology mutation follows proposal, gate, optimistic concurrency, immutable revision, and change-record semantics.
+Ontology mutation follows proposal, gate, optimistic concurrency, immutable revision, and change-record semantics — with a stricter lifecycle than “propose then write”:
+
+1. **Propose** — agents create proposals (`ontology.propose`); this does not mutate ontology tables.
+2. **Deterministic gates** — structural validity, keys/aliases, cycles, domain/range, revision concurrency.
+3. **Semantic reuse / overlap review** — optional LLM judgment; may recommend reuse instead of creating a near-duplicate concept.
+4. **Clarification / challenge** — when meaning is ambiguous, AtlasSynapse issues a clarification ID; proposers may challenge negative semantic decisions with new reasoning.
+5. **`READY_TO_APPLY`** — eligible for an apply *attempt*, not a committed mutation.
+6. **Authorized apply** — requires `ontology.apply`; the server **revalidates** gates and live ontology state at commit time. There is no force/skip path.
+
+Proposal ≠ mutation. Agents may discover that the semantic model is insufficient; they cannot silently redefine it.
 
 ## Provenance
 
