@@ -83,12 +83,16 @@ def apply_return_mode_assert(
     mode: StatementReturnMode,
 ) -> AssertStatementResponse:
     if mode == StatementReturnMode.MINIMAL:
+        # Keep identity / clarification fields: CLARIFY issue_for_assert needs them.
         return AssertStatementResponse(
             outcome=response.outcome,
             statement=None,
             request_id=response.request_id,
             reused=response.reused,
             statement_action=response.statement_action,
+            subject_identity=response.subject_identity,
+            object_identity=response.object_identity,
+            clarification=response.clarification,
             clarification_request_id=response.clarification_request_id,
             dry_run=response.dry_run,
             operation_mode=response.operation_mode,

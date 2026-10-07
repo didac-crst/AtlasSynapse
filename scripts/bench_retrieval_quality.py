@@ -157,12 +157,8 @@ def _is_relevant(
     """Return 1-based ranks of relevant hits within top-k, and must-not statement ids found."""
     top = hits[:k]
     raw_top = raw_hits[:k]
-    expected_entities = {
-        _resolve(x, aliases) for x in (case.get("expected_entity_ids") or [])
-    }
-    expected_statements = {
-        _resolve(x, aliases) for x in (case.get("expected_statement_ids") or [])
-    }
+    expected_entities = {_resolve(x, aliases) for x in (case.get("expected_entity_ids") or [])}
+    expected_statements = {_resolve(x, aliases) for x in (case.get("expected_statement_ids") or [])}
     expected_predicates = set(case.get("expected_predicate_keys") or [])
     name_needles = [n.casefold() for n in (case.get("accept_entity_name_contains") or [])]
     must_not = {_resolve(x, aliases) for x in (case.get("must_not_statement_ids") or [])}
@@ -334,7 +330,7 @@ def main() -> None:
         q = case["query"]
         try:
             payload = search_memory(args.base, token, q, args.limit)
-        except urllib.error.HTTPError as exc:
+        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
             errors.append({"id": case["id"], "error": str(exc)})
             print(f"  ERR {case['id']}: {exc}")
             continue
@@ -342,9 +338,7 @@ def main() -> None:
         results.append(result)
         mark = "OK" if result.recall_at_3 else ("ZERO" if result.zero_hits else "MISS")
         rr = result.first_relevant_rank or "-"
-        print(
-            f"  {mark:4} R@{rr:<3} hits={result.hit_count:<3} {case['id']}: {q!r}"
-        )
+        print(f"  {mark:4} R@{rr:<3} hits={result.hit_count:<3} {case['id']}: {q!r}")
 
     n = len(results)
     r1 = sum(1 for r in results if r.recall_at_1)
@@ -352,11 +346,7 @@ def main() -> None:
     r10 = sum(1 for r in results if r.recall_at_10)
     zeros = sum(1 for r in results if r.zero_hits)
     superseded = sum(1 for r in results if r.superseded_in_topk)
-    rr_values = [
-        1.0 / r.first_relevant_rank
-        for r in results
-        if r.first_relevant_rank is not None
-    ]
+    rr_values = [1.0 / r.first_relevant_rank for r in results if r.first_relevant_rank is not None]
     mrr = statistics.mean(rr_values) if rr_values else 0.0
 
     diagnostic = [r for r in results if "diagnostic" in r.tags]

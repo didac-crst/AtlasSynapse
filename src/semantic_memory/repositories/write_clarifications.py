@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from semantic_memory.models.enums import WriteClarificationStatus
@@ -19,6 +19,17 @@ class WriteClarificationRepository:
 
     def get(self, clarification_request_id: uuid.UUID) -> WriteClarificationRequest | None:
         return self._session.get(WriteClarificationRequest, clarification_request_id)
+
+    def get_for_update(
+        self, clarification_request_id: uuid.UUID
+    ) -> WriteClarificationRequest | None:
+        """Load with FOR UPDATE + populate_existing for one-shot answer races."""
+        return self._session.get(
+            WriteClarificationRequest,
+            clarification_request_id,
+            with_for_update=True,
+            populate_existing=True,
+        )
 
     def create(
         self,
@@ -100,8 +111,16 @@ class WriteClarificationRepository:
                 )
             ).all()
         )
+        if not rows:
+            return 0
+        ids = [row.id for row in rows]
+        # Clear inbound self-FK refs (including rows outside this batch) before delete.
+        self._session.execute(
+            update(WriteClarificationRequest)
+            .where(WriteClarificationRequest.supersedes_clarification_request_id.in_(ids))
+            .values(supersedes_clarification_request_id=None)
+        )
         for row in rows:
             self._session.delete(row)
-        if rows:
-            self._session.flush()
+        self._session.flush()
         return len(rows)

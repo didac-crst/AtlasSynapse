@@ -128,7 +128,7 @@ class WriteClarificationService:
         # Import lazily to avoid circular imports with StatementService.
         from semantic_memory.services.statements import StatementService
 
-        row = self._clarifications.get(request.clarification_request_id)
+        row = self._clarifications.get_for_update(request.clarification_request_id)
         if row is None:
             raise ClarificationRequestNotFoundError(
                 "Write clarification request was not found",
@@ -197,6 +197,9 @@ class WriteClarificationService:
                 row=row,
                 chosen_entity_id=request.chosen_entity_id,
                 request_id=request.request_id,
+                actor_id=actor_id,
+                actor_key=request.actor_key,
+                trace_id=request.trace_id,
             )
             if stale is not None:
                 return stale
@@ -236,7 +239,7 @@ class WriteClarificationService:
                 actor_id=actor_id,
                 supersedes=row.id,
             )
-            result = result.model_copy(update={"clarification_request_id": new_row.id})
+            result = self._with_clarification_handle(result, new_row.id)
             return AnswerIdentityClarificationResponse(
                 clarification_request_id=row.id,
                 status=WriteClarificationStatus.SUPERSEDED,
@@ -271,6 +274,9 @@ class WriteClarificationService:
         row: WriteClarificationRequest,
         chosen_entity_id: uuid.UUID,
         request_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        actor_key: str,
+        trace_id: uuid.UUID | None,
     ) -> AnswerIdentityClarificationResponse | None:
         from semantic_memory.services.statements import StatementService
 
@@ -293,20 +299,25 @@ class WriteClarificationService:
             update={
                 "request_id": uuid.uuid4(),
                 "idempotency_key": f"{request_id}:stale-recheck",
+                "actor_key": actor_key,
+                "trace_id": trace_id,
                 "dry_run": row.operation_mode == OperationMode.DRY_RUN.value,
             }
         )
-        actor = self._actors.require_active_actor(frozen.actor_key)
-        result = StatementService(self._session).assert_statement(frozen)
+        # Resumed path: do not open a nested clarification handle here.
+        result = StatementService(self._session).assert_statement_resumed(
+            request=frozen,
+            actor_id=actor_id,
+        )
         if result.outcome == AssertionOutcome.CLARIFY:
             self._clarifications.supersede(row)
             new_row = self.issue_for_assert(
                 request=frozen,
                 result=result,
-                actor_id=actor.id,
+                actor_id=actor_id,
                 supersedes=row.id,
             )
-            result = result.model_copy(update={"clarification_request_id": new_row.id})
+            result = self._with_clarification_handle(result, new_row.id)
             return AnswerIdentityClarificationResponse(
                 clarification_request_id=row.id,
                 status=WriteClarificationStatus.SUPERSEDED,
@@ -322,7 +333,7 @@ class WriteClarificationService:
         self._clarifications.mark_resolved(
             row,
             resolution=WriteClarificationResolution.CHOSEN_ENTITY.value,
-            answered_by_actor_id=actor.id,
+            answered_by_actor_id=actor_id,
             chosen_entity_id=chosen_entity_id,
             resulting_request_id=request_id,
         )
@@ -333,6 +344,26 @@ class WriteClarificationService:
             assert_result=result,
             request_id=request_id,
             message="Chosen entity inactive; re-ran frozen operation against current prod",
+        )
+
+    @staticmethod
+    def _with_clarification_handle(
+        result: AssertStatementResponse,
+        clarification_request_id: uuid.UUID,
+    ) -> AssertStatementResponse:
+        """Keep nested clarification action IDs aligned with the issued handle."""
+        from semantic_memory.services.mutation_projections import build_clarification_action
+
+        clarification = build_clarification_action(
+            subject_identity=result.subject_identity,
+            object_identity=result.object_identity,
+            clarification_request_id=clarification_request_id,
+        )
+        return result.model_copy(
+            update={
+                "clarification_request_id": clarification_request_id,
+                "clarification": clarification,
+            }
         )
 
     def _apply_chosen_entity(

@@ -90,7 +90,7 @@ def detect_temporal_intent(query: str | None) -> TemporalIntent:
 
     if historical and current:
         # "before this current role" → historical; bare "current" wins otherwise.
-        if any(cue in q for cue in _STRONG_HISTORICAL):
+        if any(_has_phrase(q, spaced, cue) for cue in _STRONG_HISTORICAL):
             return TemporalIntent.HISTORICAL
         return TemporalIntent.CURRENT
     if historical or soft_past:

@@ -94,7 +94,7 @@ embedded proposal snapshot is a projection, not committed state.
 "Store this new fact"                    → assert_statement
 "This Didac might already exist"         → assert → answer_identity_clarification
 "Propose a new ontology concept"         → propose_class / propose_predicate
-"Apply the approved proposal"            → get_proposal → apply_ontology_proposal
+"Apply the approved proposal"            → get_ontology_proposal → apply_ontology_proposal
 ```
 
 ## Deploy note

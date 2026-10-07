@@ -497,6 +497,10 @@ class RetrievalService:
         # entity-valued facts aren't lost to created_at pagination. Not a filter.
         predicate_lexicon = build_predicate_lexicon(self._session)
         intent_keys = top_intent_predicates(request.query, predicate_lexicon)
+        # Once per query for superseded-anchor floor gating (not per candidate).
+        intent_predicate_keys = frozenset(
+            top_intent_predicates(request.query, predicate_lexicon, limit=2)
+        )
         seen_statement_ids = {hit.statement.id for hit in statement_hits}
         for pred_key in intent_keys:
             extra = self.search_statements(
@@ -519,6 +523,7 @@ class RetrievalService:
                 as_of=request.as_of,
                 temporal_intent=temporal_intent,
                 predicate_lexicon=predicate_lexicon,
+                intent_predicate_keys=intent_predicate_keys,
             )
             for hit in rescored:
                 if hit.statement.id in seen_statement_ids:
@@ -538,6 +543,7 @@ class RetrievalService:
                 as_of=request.as_of,
                 temporal_intent=temporal_intent,
                 predicate_lexicon=predicate_lexicon,
+                intent_predicate_keys=intent_predicate_keys,
             )
             for hit in anchor_hits:
                 if hit.statement.id in seen_statement_ids:
@@ -734,6 +740,7 @@ class RetrievalService:
         as_of: datetime | None,
         temporal_intent: TemporalIntent,
         predicate_lexicon: PredicateLexicon | None,
+        intent_predicate_keys: frozenset[str] | None = None,
     ) -> list[RankedStatementHit]:
         """Score already-fetched statement ids with the user query (dedupe-safe)."""
         if not statement_ids:
@@ -770,6 +777,7 @@ class RetrievalService:
                 ),
                 temporal_intent=temporal_intent,
                 predicate_lexicon=predicate_lexicon,
+                intent_predicate_keys=intent_predicate_keys,
             )
             reasons = list(dict.fromkeys([*reasons, "predicate_intent_candidate"]))
             hits.append(
@@ -815,6 +823,7 @@ class RetrievalService:
         as_of: datetime | None,
         temporal_intent: TemporalIntent,
         predicate_lexicon: PredicateLexicon | None = None,
+        intent_predicate_keys: frozenset[str] | None = None,
     ) -> tuple[list[RankedStatementHit], int]:
         """Expand 1-hop statements around strong entity anchors.
 
@@ -894,6 +903,7 @@ class RetrievalService:
                 temporal_intent=temporal_intent,
                 from_anchor=True,
                 predicate_lexicon=predicate_lexicon,
+                intent_predicate_keys=intent_predicate_keys,
             )
             hits.append(
                 RankedStatementHit(
@@ -990,6 +1000,7 @@ class RetrievalService:
         temporal_intent: TemporalIntent | None = None,
         from_anchor: bool = False,
         predicate_lexicon: PredicateLexicon | None = None,
+        intent_predicate_keys: frozenset[str] | None = None,
     ) -> tuple[RankingSignals, list[str]]:
         notes: list[str] = []
         reasons: list[str] = []
@@ -1041,9 +1052,11 @@ class RetrievalService:
                 # every superseded neighbor.
                 apply_high_floor = True
                 if query and predicate_lexicon is not None:
-                    intent_keys = top_intent_predicates(query, predicate_lexicon, limit=2)
+                    keys = intent_predicate_keys
+                    if keys is None:
+                        keys = frozenset(top_intent_predicates(query, predicate_lexicon, limit=2))
                     my_key = predicate_lexicon.key_for(statement.predicate_id)
-                    if intent_keys and my_key not in intent_keys:
+                    if keys and my_key not in keys:
                         apply_high_floor = False
                 if apply_high_floor:
                     floor = max(floor, 0.92)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import time
 from collections.abc import Awaitable, Callable
+from typing import Any
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -28,17 +29,17 @@ class ReadTimingMiddleware(BaseHTTPMiddleware):
             "yes",
         }
         token = debug_timings_enabled.set(want_detail)
-        timings_token = last_read_timings.set(None)
+        # Mutable holder survives ContextVar copies into sync-route threadpools.
+        timings_holder: dict[str, Any] = {}
+        timings_token = last_read_timings.set(timings_holder)
         started = time.perf_counter()
-        detail = None
         try:
             response = await call_next(request)
-            detail = last_read_timings.get()
         finally:
             debug_timings_enabled.reset(token)
             last_read_timings.reset(timings_token)
         total_ms = round((time.perf_counter() - started) * 1000, 3)
         response.headers["X-Atlas-Server-Ms"] = str(total_ms)
-        if want_detail and detail is not None:
-            response.headers["X-Atlas-Timings"] = json.dumps(detail, separators=(",", ":"))
+        if want_detail and timings_holder:
+            response.headers["X-Atlas-Timings"] = json.dumps(timings_holder, separators=(",", ":"))
         return response

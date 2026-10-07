@@ -10,8 +10,12 @@ last_read_timings: ContextVar[dict[str, Any] | None] = ContextVar("last_read_tim
 
 
 def set_last_timings(payload: dict[str, Any]) -> None:
-    # Always store; middleware decides whether to expose via header.
-    # Note: sync FastAPI routes may run in a threadpool where ContextVar
-    # propagation from async middleware is not guaranteed — prefer response
-    # body metadata / structured logs for authoritative stage timings.
-    last_read_timings.set(payload)
+    # Middleware seeds a mutable holder before call_next. Sync FastAPI routes run
+    # in a threadpool that copies ContextVars, so rebinding via .set() would not
+    # be visible to the middleware — mutate the shared holder instead.
+    holder = last_read_timings.get()
+    if holder is not None:
+        holder.clear()
+        holder.update(payload)
+        return
+    last_read_timings.set(dict(payload))

@@ -69,7 +69,12 @@ def annotate_dry_run_result[T: BaseModel](result: T) -> T:
     if "would_persist" in fields:
         updates["would_persist"] = infer_would_persist(result)
     if "statement_action" in fields:
-        updates["statement_action"] = infer_statement_action(result)
+        inferred_action = infer_statement_action(result)
+        updates["statement_action"] = inferred_action
+        changes = getattr(result, "changes", None)
+        if changes is not None and hasattr(changes, "model_copy"):
+            # Keep nested changes.statement_action aligned with WOULD_* top-level.
+            updates["changes"] = changes.model_copy(update={"statement_action": inferred_action})
     if "entity_action" in fields:
         updates["entity_action"] = infer_entity_action(result)
     if "projected" in fields:

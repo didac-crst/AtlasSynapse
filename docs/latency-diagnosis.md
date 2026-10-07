@@ -60,29 +60,20 @@ single-threaded, but heavy reads share CPU/DB.
 correlate multiple in-flight calls if the server dispatches concurrently and
 synchronizes stdout writes.
 
-**The current AtlasSynapse `StdioMCPServer.run()` implementation is serial**:
+**Historical finding (before `perf/mcp-concurrent-dispatch`):** at diagnosis time,
+`StdioMCPServer.run()` was single-flight:
 
 ```text
 read JSON-RPC → dispatch tools/call → write response → next message
 ```
 
-There is **no concurrent `tools/call` handling in this process today**. A ChatGPT
-batch of 5 “concurrent” MCP reads **must queue** in this implementation
-(tunnel→stdio pipe into a single-flight loop).
+A ChatGPT batch of 5 “concurrent” MCP reads queued in that loop. Observed ~67 s
+wall with all finishing together was consistent with serial dispatch plus
+~2–4 s external overhead per call — not PostgreSQL locking.
 
-Expected lower bound for that batch under the current server ≈ sum of per-call
-(handler + ChatGPT/tunnel overhead), not ≈ max(handler).
-
-Observed ~67 s wall with all finishing together is consistent with:
-
-1. serial dispatch in *our* MCP server loop, plus
-2. ~2–4 s external overhead **per** call, plus
-3. possible ChatGPT-side scheduling / retries / catalog chatter
-
-not with PostgreSQL locking five reads for a minute.
-
-This is potentially fixable (concurrent dispatch + serialized writes) after
-checking whether an upstream MCP server library already provides it.
+**Current status:** `tools/call` is concurrent (thread pool, `max_inflight`,
+default 8) with serialized stdout writes. See `docs/mcp-concurrent-dispatch.md`.
+The ChatGPT ~2.5 s single-call feel remains dominated above the tunnel (Phase 5).
 
 ## Phase 4 — inspected bottlenecks
 
@@ -96,7 +87,7 @@ checking whether an upstream MCP server library already provides it.
 ### Async/sync
 
 - FastAPI routes are sync `def` → run in Starlette threadpool
-- MCP handlers are sync and today run one-at-a-time on the stdio read loop
+- MCP handlers are sync; `tools/call` may run concurrently up to `max_inflight`
 - Auth middleware is cheap `hmac.compare_digest` (no remote calls, no disk reload)
 
 ### Locks
@@ -109,8 +100,7 @@ checking whether an upstream MCP server library already provides it.
 | Process | Model |
 | --- | --- |
 | API | `uvicorn` factory, **1 worker**, no `--workers` |
-| MCP | `semantic-memory-mcp` stdio, **1 process; current loop is single-flight** |
-| Tunnel | long-lived `tunnel-client` → `docker compose run --rm -T mcp` |
+| MCP | `semantic-memory-mcp` stdio, **1 process; concurrent tools/call (`max_inflight`)** || Tunnel | long-lived `tunnel-client` → `docker compose run --rm -T mcp` |
 
 ### Serialization / size
 
