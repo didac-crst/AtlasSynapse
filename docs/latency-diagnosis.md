@@ -176,7 +176,7 @@ this service. Detail: `docs/mcp-path-benchmark.md`.
 1. ~~Concurrent MCP dispatch~~ — `perf/mcp-concurrent-dispatch`
 2. ~~Neighborhood N+1 batching~~ — `perf/neighborhood-batching` (LAN p50 179 / 338 ms)
 3. ~~Mutation result envelopes~~ — `feat/mutation-result-context` (`return_mode`, effective_state)
-4. Next arch question: **MCP tool-surface simplification** (ChatGPT default vs admin tools)
+4. ~~MCP tool-surface simplification~~ — `feat/mcp-agent-surface` (`MCP_TOOL_SURFACE=agent`)
 
 ## Smallest proposed fixes (status)
 

@@ -130,6 +130,15 @@ class Settings(BaseSettings):
             "Set to 1 to force single-flight dispatch (legacy behavior)."
         ),
     )
+    mcp_tool_surface: Literal["agent", "advanced", "admin", "all"] = Field(
+        default="agent",
+        alias="MCP_TOOL_SURFACE",
+        description=(
+            "Which MCP tools/list catalog to advertise. agent=intent-shaped default for "
+            "ChatGPT; advanced=agent+investigation primitives; admin/all=full registry. "
+            "Visibility is UX only — capability gates still enforce authorization."
+        ),
+    )
     mcp_actor_key: str = Field(
         default="chatgpt",
         alias="MCP_ACTOR_KEY",

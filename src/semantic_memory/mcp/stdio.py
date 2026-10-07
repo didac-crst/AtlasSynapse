@@ -21,6 +21,8 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any, BinaryIO
 
+from semantic_memory.mcp.surfaces import McpToolSurface
+
 ToolHandler = Callable[..., dict[str, Any]]
 logger = logging.getLogger(__name__)
 
@@ -37,6 +39,7 @@ class ToolSpec:
             "additionalProperties": True,
         }
     )
+    surface: McpToolSurface = McpToolSurface.ADVANCED
 
 
 class StdioMCPServer:

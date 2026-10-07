@@ -4,6 +4,10 @@ The MCP adapter exposes semantic operations only. It must not expose raw SQL, DD
 
 The production transport is stdio via `semantic-memory-mcp` (MCP 2024-11-05 newline-delimited JSON-RPC). Tool handlers stay thin translations over services; HTTP MCP transport is not implemented yet.
 
+**Tool surfaces:** `MCP_TOOL_SURFACE=agent` (default) advertises ~13 intent-shaped
+tools to ChatGPT. `advanced` / `admin` / `all` expand the catalog. Visibility is
+UX only — capabilities still authorize writes. See `docs/mcp-agent-surface.md`.
+
 ## Read tools
 
 ```text

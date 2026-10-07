@@ -48,7 +48,12 @@ def test_answer_semantic_clarification_schema_documents_response() -> None:
 
 
 def test_ontology_mcp_tools_use_typed_payload_schemas() -> None:
-    tools = {tool.name: tool for tool in build_mcp_tools()}
+    from semantic_memory.config import Settings
+
+    tools = {
+        tool.name: tool
+        for tool in build_mcp_tools(settings=Settings(mcp_tool_surface="all"))
+    }
     for name in (
         "propose_predicate",
         "propose_class",

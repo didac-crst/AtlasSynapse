@@ -22,9 +22,23 @@ def test_settings_load_from_env(monkeypatch) -> None:  # type: ignore[no-untyped
     get_settings.cache_clear()
 
 
-def test_mcp_server_info() -> None:
-    info = MCPPlaceholder.from_settings(Settings())
+def test_mcp_server_info_agent_surface_default() -> None:
+    info = MCPPlaceholder.from_settings(Settings(mcp_tool_surface="agent"))
     assert info.ready is True
+    assert info.tool_surface == "agent"
+    assert "assert_statement" in info.tools
+    assert "search_memory" in info.tools
+    assert "get_relevant_context" in info.tools
+    assert "correct_statement" in info.tools
+    assert "create_entity" not in info.tools
+    assert "supersede_statement" not in info.tools
+    assert "get_entity_neighborhood" not in info.tools
+    assert "apply_proposal" not in info.tools
+    assert info.transport in {"stdio", "http"}
+
+
+def test_mcp_server_info_all_surface() -> None:
+    info = MCPPlaceholder.from_settings(Settings(mcp_tool_surface="all"))
     assert "create_entity" in info.tools
     assert "assert_statement" in info.tools
     assert "explain_statement" in info.tools
@@ -51,6 +65,7 @@ def test_mcp_server_info() -> None:
     assert "search_entities" in info.tools
     assert "search_statements" in info.tools
     assert "search_semantic_memory" in info.tools
+    assert "search_memory" in info.tools
     assert "get_relevant_context" in info.tools
     assert "get_entity_neighborhood" in info.tools
     assert "report_feedback" in info.tools

@@ -18,19 +18,21 @@ def _line(message: dict[str, object]) -> bytes:
 
 
 def test_build_mcp_server_registers_contract_tools() -> None:
-    tools = {tool.name for tool in build_mcp_tools()}
-    info = MCPServerInfo.from_settings(Settings(mcp_transport="stdio"))
+    settings = Settings(mcp_transport="stdio", mcp_tool_surface="all")
+    tools = {tool.name for tool in build_mcp_tools(settings=settings)}
+    info = MCPServerInfo.from_settings(settings)
     assert set(info.tools) == tools
     assert "create_entity" in tools
     assert "apply_ontology_proposal" in tools
+    assert "search_memory" in tools
     assert "apply_proposal" not in tools
     assert info.transport == "stdio"
-    server = build_mcp_server(Settings(mcp_transport="stdio"))
+    server = build_mcp_server(settings)
     assert isinstance(server, StdioMCPServer)
 
 
 def test_stdio_initialize_and_tools_list() -> None:
-    tools = build_mcp_tools()
+    tools = build_mcp_tools(settings=Settings(mcp_tool_surface="all"))
     stdin = io.BytesIO(
         _line({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
         + _line({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
