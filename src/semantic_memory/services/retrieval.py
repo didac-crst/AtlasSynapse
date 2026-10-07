@@ -53,10 +53,16 @@ from semantic_memory.services.conflicts import ConflictService
 from semantic_memory.services.entities import EntityService
 from semantic_memory.services.lexical import (
     lexical_match_patterns,
+    lexical_tokens,
     score_lexical_relevance,
 )
 from semantic_memory.services.provenance import ProvenanceService
 from semantic_memory.services.statements import StatementService
+from semantic_memory.services.temporal_intent import (
+    TemporalIntent,
+    detect_temporal_intent,
+    score_temporal_validity,
+)
 
 
 def _clamp(value: float) -> float:
@@ -153,6 +159,7 @@ class RetrievalService:
                 "ranking_score is for display only and does not affect page order.",
             ],
         )
+        temporal_intent = detect_temporal_intent(request.query)
         stmt = select(Statement)
         if request.status is not None:
             stmt = stmt.where(Statement.status == request.status.value)
@@ -256,6 +263,7 @@ class RetrievalService:
                     if statement.object_entity_id is not None
                     else None
                 ),
+                temporal_intent=temporal_intent,
             )
             hits.append(
                 RankedStatementHit(
@@ -276,6 +284,11 @@ class RetrievalService:
                 (
                     "Query matching is tokenized and punctuation-insensitive across "
                     "object text and subject/object entity names."
+                ),
+                (
+                    f"Temporal intent for ranking: {temporal_intent.value} "
+                    "(current prefers effective open-ended facts; "
+                    "historical promotes ended/superseded/legacy descriptive rows)."
                 ),
                 (
                     "ranking_score reflects lexical match, temporal validity, "
@@ -413,6 +426,7 @@ class RetrievalService:
     def search_semantic_memory(
         self, request: SearchSemanticMemoryRequest
     ) -> SearchSemanticMemoryResponse:
+        temporal_intent = detect_temporal_intent(request.query)
         entity_hits = self.search_entities(
             SearchEntitiesRequest(
                 query=request.query,
@@ -422,14 +436,40 @@ class RetrievalService:
                 limit=request.limit,
             )
         )
-        statement_hits = self.search_statements(
-            SearchStatementsRequest(
-                query=request.query,
-                entity_id=request.entity_id,
-                as_of=request.as_of,
-                limit=request.limit,
-            )
+        # Always gather asserted lexical candidates. Historical intent widens the
+        # asserted window and adds a superseded pass so prior beliefs are not
+        # crowded out of search_statements' created_at pagination.
+        statement_limit = (
+            min(100, request.limit * 2)
+            if temporal_intent == TemporalIntent.HISTORICAL
+            else request.limit
         )
+        statement_hits = list(
+            self.search_statements(
+                SearchStatementsRequest(
+                    query=request.query,
+                    entity_id=request.entity_id,
+                    as_of=request.as_of,
+                    limit=statement_limit,
+                    status=StatementStatus.ASSERTED,
+                )
+            ).hits
+        )
+        if temporal_intent == TemporalIntent.HISTORICAL:
+            superseded_hits = self.search_statements(
+                SearchStatementsRequest(
+                    query=request.query,
+                    entity_id=request.entity_id,
+                    as_of=request.as_of,
+                    limit=statement_limit,
+                    status=StatementStatus.SUPERSEDED,
+                )
+            ).hits
+            seen = {hit.statement.id for hit in statement_hits}
+            for hit in superseded_hits:
+                if hit.statement.id not in seen:
+                    statement_hits.append(hit)
+                    seen.add(hit.statement.id)
         hits: list[SemanticMemoryHit] = []
         for entity_hit in entity_hits.hits:
             hits.append(
@@ -441,7 +481,7 @@ class RetrievalService:
                     match_reasons=entity_hit.match_reasons,
                 )
             )
-        for statement_hit in statement_hits.hits:
+        for statement_hit in statement_hits:
             hits.append(
                 SemanticMemoryHit(
                     hit_type=MemoryHitType.STATEMENT,
@@ -475,6 +515,11 @@ class RetrievalService:
             ranking_explanations=[
                 "Semantic memory search merges entity, statement, and optional conflict hits.",
                 "Lexical matching is tokenized and punctuation-insensitive (no embeddings).",
+                (
+                    f"Temporal intent: {temporal_intent.value}. "
+                    "Current/default search stays asserted-only and prefers effective facts; "
+                    "historical intent includes superseded rows and boosts prior beliefs."
+                ),
                 "Vector search was not required and was not used.",
                 "ranking_score is for ordering only and is not a truth score.",
             ],
@@ -662,9 +707,13 @@ class RetrievalService:
         specificity_cache: dict[uuid.UUID, float] | None = None,
         subject_name: str | None = None,
         object_name: str | None = None,
+        temporal_intent: TemporalIntent | None = None,
     ) -> tuple[RankingSignals, list[str]]:
         notes: list[str] = []
         reasons: list[str] = []
+        intent = temporal_intent or (
+            detect_temporal_intent(query) if query else TemporalIntent.NEUTRAL
+        )
 
         lexical = 0.0
         if query:
@@ -686,8 +735,38 @@ class RetrievalService:
             lexical = 0.4
             reasons.append("entity_linked_statement")
 
-        temporal = self._temporal_validity(statement, now)
-        notes.append("Temporal validity is 1 when as_of is inside valid_from/valid_to.")
+        temporal, temporal_reasons, temporal_notes = score_temporal_validity(
+            valid_from=statement.valid_from,
+            valid_to=statement.valid_to,
+            status=statement.status,
+            now=now,
+            intent=intent,
+        )
+        reasons.extend(temporal_reasons)
+        notes.extend(temporal_notes)
+
+        # Historical intent: denser free-text descriptions that answer
+        # "what did we used to believe" should outrank sparse name-only joins.
+        if (
+            intent == TemporalIntent.HISTORICAL
+            and statement.object_string
+            and lexical >= 0.45
+        ):
+            lexical = min(1.0, lexical + 0.14)
+            reasons.append("historical_description_boost")
+            notes.append(
+                "Historical intent boosts substantive object-text matches "
+                "(legacy descriptive duplicates)."
+            )
+            query_tokens = lexical_tokens(query) if query else []
+            blob = statement.object_string.casefold()
+            if "start" in query_tokens and "started" in blob:
+                lexical = min(1.0, lexical + 0.12)
+                reasons.append("historical_start_belief_boost")
+                notes.append(
+                    "Historical start-date questions boost descriptions that "
+                    "explicitly say when something started."
+                )
 
         age_seconds = max(0.0, (now - statement.asserted_at).total_seconds())
         recency = _clamp(1.0 - (age_seconds / (86400.0 * 365.0)))
@@ -755,11 +834,18 @@ class RetrievalService:
             cache[predicate_id] = specificity
         return specificity
 
-    def _temporal_validity(self, statement: Statement, now: datetime) -> float:
-        if statement.valid_from is None and statement.valid_to is None:
-            return 0.7
-        if statement.valid_from is not None and now < statement.valid_from:
-            return 0.2
-        if statement.valid_to is not None and now > statement.valid_to:
-            return 0.2
-        return 1.0
+    def _temporal_validity(
+        self,
+        statement: Statement,
+        now: datetime,
+        *,
+        intent: TemporalIntent = TemporalIntent.NEUTRAL,
+    ) -> float:
+        score, _, _ = score_temporal_validity(
+            valid_from=statement.valid_from,
+            valid_to=statement.valid_to,
+            status=statement.status,
+            now=now,
+            intent=intent,
+        )
+        return score

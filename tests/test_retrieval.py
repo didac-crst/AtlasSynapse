@@ -128,6 +128,71 @@ def test_search_entities_and_statements_with_signals(db_session: Session) -> Non
     assert statements.hits[0].signals.entity_proximity == 1.0
 
 
+def test_current_intent_prefers_effective_over_unbounded_description(
+    db_session: Session,
+) -> None:
+    writer = _ensure_writer(db_session, key="temporal-writer")
+    entities = EntityService(db_session)
+    statements = StatementService(db_session)
+    from datetime import UTC, datetime
+
+    person = entities.create_entity(
+        CreateEntityRequest(
+            actor_key=writer,
+            request_id=uuid.uuid4(),
+            idempotency_key=f"t-person-{uuid.uuid4()}",
+            canonical_name="Temporal Person",
+            class_key="Document",
+        )
+    )
+    role = entities.create_entity(
+        CreateEntityRequest(
+            actor_key=writer,
+            request_id=uuid.uuid4(),
+            idempotency_key=f"t-role-{uuid.uuid4()}",
+            canonical_name="Temporal Role Title",
+            class_key="Document",
+        )
+    )
+    assert person.entity is not None and role.entity is not None
+    effective = statements.assert_statement(
+        AssertStatementRequest(
+            actor_key=writer,
+            request_id=uuid.uuid4(),
+            idempotency_key=f"t-eff-{uuid.uuid4()}",
+            subject_entity_id=person.entity.id,
+            predicate_key="relatedTo",
+            object_entity_id=role.entity.id,
+            valid_from=datetime(2025, 9, 1, tzinfo=UTC),
+        )
+    )
+    legacy = statements.assert_statement(
+        AssertStatementRequest(
+            actor_key=writer,
+            request_id=uuid.uuid4(),
+            idempotency_key=f"t-leg-{uuid.uuid4()}",
+            subject_entity_id=role.entity.id,
+            predicate_key="relatedTo",
+            object_string=(
+                "Temporal Role Title at Org somewhere, started 1 January 2026"
+            ),
+        )
+    )
+    assert effective.statement is not None and legacy.statement is not None
+
+    service = RetrievalService(db_session)
+    memory = service.search_semantic_memory(
+        SearchSemanticMemoryRequest(query="Temporal Person current role", limit=25)
+    )
+    statement_ids = [
+        hit.statement.id for hit in memory.hits if hit.statement is not None
+    ]
+    assert effective.statement.id in statement_ids
+    assert statement_ids.index(effective.statement.id) < statement_ids.index(
+        legacy.statement.id
+    )
+
+
 def test_tokenized_multi_term_and_punctuation_insensitive_search(
     db_session: Session,
 ) -> None:

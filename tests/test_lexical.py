@@ -47,6 +47,28 @@ def test_partial_or_token_does_not_dominate() -> None:
     assert "partial_token_match" in reasons
 
 
+def test_sparse_exact_name_does_not_dominate_long_queries() -> None:
+    sparse, reasons, _ = score_lexical_relevance(
+        "AtlasSynapse previously Airbus role start date",
+        ["Airbus"],
+    )
+    dense, _, _ = score_lexical_relevance(
+        "AtlasSynapse previously Airbus role start date",
+        [
+            "Quality Engineering End-to-End Analytics Manager at Airbus in "
+            "Toulouse, started 1 January 2026"
+        ],
+    )
+    assert "exact_token_name_sparse" in reasons
+    assert dense > sparse
+
+
+def test_previously_is_not_a_content_token() -> None:
+    assert "previously" not in lexical_tokens(
+        "What did AtlasSynapse previously think the Airbus role start date was?"
+    )
+
+
 def test_all_tokens_in_text_scores_above_partial() -> None:
     all_score, all_reasons, _ = score_lexical_relevance(
         "Airbus role",

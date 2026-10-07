@@ -86,7 +86,9 @@ _LEXICAL_STOPWORDS = frozenset(
         "today",
         "latest",
         "former",
+        "formerly",
         "previous",
+        "previously",
         "before",
         "after",
         "ago",
@@ -167,9 +169,26 @@ def score_lexical_relevance(
     # Strong exact-name boost: a content token equals an entire haystack field.
     exact_token_fields = [h for h in cleaned if h in tokens]
     if exact_token_fields:
-        reasons.append("exact_token_name")
-        # Single-token exact name stays at 1.0; multi-term keeps a near-exact boost.
-        score = 1.0 if len(tokens) == 1 else 0.95
+        matched = [t for t in tokens if t in blob]
+        # Preserve strong boosts for short name queries ("Didac", "Didac Airbus").
+        # On longer multi-concept queries, a lone exact name must not dominate
+        # denser object-text matches (e.g. legacy start-date descriptions).
+        if len(tokens) == 1:
+            score = 1.0
+            reasons.append("exact_token_name")
+        elif len(tokens) == 2 or len(matched) >= max(2, (len(tokens) + 1) // 2):
+            score = 0.95
+            reasons.append("exact_token_name")
+        else:
+            coverage = len(matched) / len(tokens)
+            score = 0.40 + 0.25 * coverage
+            reasons.append("exact_token_name_sparse")
+            notes.append(
+                f"Exact name for {exact_token_fields[0]!r} but only "
+                f"{len(matched)}/{len(tokens)} content tokens overlap "
+                "(sparse multi-term match)."
+            )
+            return score, reasons, notes
         notes.append(
             f"Exact name match for token {exact_token_fields[0]!r} "
             "(preserves strong single-name boosts in multi-term queries)."
