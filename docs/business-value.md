@@ -65,13 +65,18 @@ RAG can reduce search time. AtlasSynapse targets a different cost: repeatedly
 reconstructing identity, temporal state, relationships, provenance, and prior
 conclusions from retrieved text.
 
-```text
-RAG value:
-find relevant information faster
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"ui-sans-serif, system-ui, sans-serif","fontSize":"14px","lineColor":"#64748B"}}}%%
+flowchart LR
+  rag[RAG] --> ragOut[Find relevant information faster]
+  atlas[AtlasSynapse] --> atlasOut[Retain prior structured conclusions]
 
-AtlasSynapse value:
-retain what previous reasoning established so the next investigation does not
-start from raw information again
+  classDef rag fill:#F8FAFC,stroke:#94A3B8,color:#334155,stroke-width:1.5px
+  classDef atlas fill:#E8F7F5,stroke:#2A8F85,color:#0F3F3B,stroke-width:2px
+  classDef out fill:#EEF2F6,stroke:#5B6B7C,color:#1F2933,stroke-width:1.5px
+  class rag rag
+  class atlas atlas
+  class ragOut,atlasOut out
 ```
 
 If the pain is “find the right paragraph,” search or RAG is usually enough.
@@ -97,8 +102,19 @@ governance.
 
 The intended order is:
 
-```text
-deterministic checks → semantic reuse / overlap review → clarification when ambiguous → authorized apply
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"ui-sans-serif, system-ui, sans-serif","fontSize":"14px","lineColor":"#5B6B7C"}}}%%
+flowchart LR
+  d[Deterministic checks] --> s[Semantic reuse / overlap review]
+  s --> c[Clarify if ambiguous]
+  c --> a[Authorized apply]
+
+  classDef process fill:#EEF2F6,stroke:#5B6B7C,color:#1F2933,stroke-width:1.5px
+  classDef clarifyNode fill:#EAF2FB,stroke:#3B6EA5,color:#163A5F,stroke-width:1.5px
+  classDef ok fill:#E8F7EF,stroke:#2F8F5B,color:#145C32,stroke-width:1.5px
+  class d,s process
+  class c clarifyNode
+  class a ok
 ```
 
 The LLM is not the authority. It is a bounded semantic reviewer inside a

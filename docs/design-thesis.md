@@ -160,8 +160,19 @@ governance.
 
 The intended order is:
 
-```text
-deterministic checks → semantic reuse / overlap review → clarification when ambiguous → authorized apply
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"ui-sans-serif, system-ui, sans-serif","fontSize":"14px","lineColor":"#5B6B7C"}}}%%
+flowchart LR
+  d[Deterministic checks] --> s[Semantic reuse / overlap review]
+  s --> c[Clarify if ambiguous]
+  c --> a[Authorized apply]
+
+  classDef process fill:#EEF2F6,stroke:#5B6B7C,color:#1F2933,stroke-width:1.5px
+  classDef clarifyNode fill:#EAF2FB,stroke:#3B6EA5,color:#163A5F,stroke-width:1.5px
+  classDef ok fill:#E8F7EF,stroke:#2F8F5B,color:#145C32,stroke-width:1.5px
+  class d,s process
+  class c clarifyNode
+  class a ok
 ```
 
 The LLM is not the authority. It is a bounded semantic reviewer inside a
