@@ -7,13 +7,16 @@ UNKNOWN_CLASS
 UNKNOWN_PREDICATE
 UNKNOWN_ENTITY
 UNKNOWN_STATEMENT
+UNKNOWN_SOURCE
 DOMAIN_VIOLATION
 RANGE_VIOLATION
 CARDINALITY_VIOLATION
 INVALID_LITERAL_TYPE
+VALIDATION_FAILED
 ONTOLOGY_CYCLE
 DUPLICATE_ENTITY
 AMBIGUOUS_ENTITY
+AMBIGUOUS_SOURCE
 DUPLICATE_STATEMENT
 CONFLICT_DETECTED
 UNKNOWN_CONFLICT
@@ -21,6 +24,13 @@ UNKNOWN_PROPOSAL
 REVISION_CONFLICT
 ONTOLOGY_PROPOSAL_REJECTED
 ONTOLOGY_REUSE_RECOMMENDED
+CLARIFICATION_REQUEST_NOT_FOUND
+CLARIFICATION_REQUEST_ALREADY_RESOLVED
+CLARIFICATION_REQUEST_SUPERSEDED
+UNKNOWN_FEEDBACK
+UNKNOWN_OPERATION
+UNKNOWN_LLM_CALL
+UNKNOWN_BATCH
 IDEMPOTENCY_KEY_REUSED
 UNAUTHORIZED_OPERATION
 INVALID_STATE_TRANSITION
@@ -30,6 +40,8 @@ INTERNAL_ERROR
 ```
 
 `AMBIGUOUS_ENTITY` covers identity clarification on statement writes (`assert_statement` / `assert_batch` / `supersede_statement`) as well as ambiguous `create_entity`. On soft clarify (single assert), the response uses `outcome=CLARIFY` with identity payloads rather than an HTTP/MCP error envelope; batch ambiguous items and supersede failures use `error_code=AMBIGUOUS_ENTITY` with the same identity details.
+
+`CLARIFICATION_REQUEST_*` covers write-identity and ontology semantic clarification handles that are missing, already resolved/expired, or superseded.
 
 Errors must be raised as typed domain exceptions and translated at API/MCP boundaries. Raw SQLAlchemy or PostgreSQL exceptions must not be exposed.
 

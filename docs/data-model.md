@@ -14,13 +14,13 @@ Classes and predicates use namespace/key uniqueness. Revisions are immutable. Pa
 
 Entities are preserved through merge and deprecation states. Statements have a subject, predicate, exactly one typed object, temporal fields, lifecycle status, and actor. Entity merge keeps the source row for audit, copies aliases onto the survivor, and reassigns statement subject/object FKs to the survivor (exact duplicate asserted edges are retracted). Read paths also follow `merged_into_entity_id` for identity-group views.
 
-Statement writes accept unresolved `EntityInput` references; identity MATCH/NO_MATCH/AMBIGUOUS is decided server-side before insert. Callers should pass names with class context and must not pre-resolve or invent entity UUIDs.
+Statement writes accept unresolved `EntityInput` references; identity MATCH / CREATE / CLARIFY is decided server-side before insert (service logic over these tables, not a separate identity table). Callers should pass names with class context and must not pre-resolve or invent entity UUIDs.
 
 ## Provenance
 
-`source`, `statement_evidence`, and `external_reference`.
+`source`, `source_content_revision`, `statement_evidence`, and `external_reference`.
 
-Sources can be reused across statements. Evidence can contain excerpts and locators. External references are unique by source system and external ID.
+Sources can be reused across statements. Content ingest stores immutable `source_content_revision` rows (canonical hash, revision number) for dedupe and audit. Evidence can contain excerpts and locators. External references are unique by source system and external ID.
 
 ## Governance
 
@@ -30,9 +30,13 @@ Proposal status and gate decisions are auditable. Accepted changes record the af
 
 ## Operations
 
-`ingestion_batch`, `operation_log`, and `idempotency_record`.
+`ingestion_batch`, `operation_log`, `idempotency_record`, and `write_clarification_request`.
 
 Mutation operation logs distinguish started, success, rejected, and failed. Idempotency records are unique by actor and key and retain a request hash.
+
+### Write clarification (control plane)
+
+`write_clarification_request` is **operational/control-plane state**, not knowledge and not provenance. Rows hold a frozen mutation payload, ambiguous path (`subject`/`object`), candidate entity IDs, identity snapshot, `operation_mode` (`execute`|`dry_run`), status (`open`|`resolved`|`expired`|`superseded`), `expires_at`, optional `supersedes_clarification_request_id`, and answer audit fields. Handles are one-shot; terminal rows are GC'd after retention. Dry-run-created handles cannot resume into execute writes.
 
 ## LLM observability
 

@@ -43,9 +43,21 @@ The semantic reviewer is a replaceable protocol. Disabled or unavailable review 
 
 Every semantic-review invocation is recorded in `llm_call_log` (not `operation_log`) with request/trace/operation correlation when available. Logging uses a begin/complete lifecycle on a single row per call (start insert, completion update)—not a separate immutable start-event row. Statuses include `started`, `succeeded`, `failed`, `unavailable`, and `manual_review`. Cost is estimated as `input_tokens * input_rate + output_tokens * output_rate` with a persisted pricing snapshot/version, or stored as provider-reported. Unknown cost remains NULL/`unknown` rather than a fabricated zero. Raw prompts and completions are not persisted by default; metadata follows the payload-retention policy.
 
+## Dry-run mutations
+
+`dry_run=true` on knowledge and ontology apply mutations runs the **same** identity, validation, and semantic-review path inside a rolled-back savepoint. Knowledge, provenance, and idempotency records are not persisted; operation logs may record the dry-run. Response fields such as `operation_mode`, `would_persist`, and `WOULD_*` statement actions distinguish previews from commits. See invariants 20–22.
+
+## Write clarification lifecycle
+
+Identity ambiguity on statement writes issues a `write_clarification_request` handle (control-plane state). Callers resume with `answer_identity_clarification` (`chosen_entity` / `create_new` / `reject`). Handles are **one-shot**, expire (~30 minutes), and may be superseded when a fresh clarification is required. Before resume, AtlasSynapse rechecks current production state. Terminal rows are GC'd after retention (~7 days). A handle created under dry-run remains dry-run on answer.
+
+## MCP actor injection
+
+The MCP transport injects a server-configured `actor_key` (`MCP_ACTOR_KEY`, default `chatgpt`) into every mutation envelope and ensures that actor exists. MCP clients must not supply `actor_key`. HTTP callers still pass `actor_key` explicitly. Tool surfaces (`MCP_TOOL_SURFACE`) filter catalog visibility only; capabilities still authorize writes. See [mcp-contract.md](mcp-contract.md) and [mcp-agent-surface.md](mcp-agent-surface.md).
+
 ## Retrieval behavior
 
-Retrieval (`search_entities`, `search_statements`, `search_semantic_memory`, `get_relevant_context`, neighborhood/timeline/explain/conflicts) is database-backed and must succeed without an LLM or embedding provider. Ranking exposes transparent signals (lexical, temporal, recency, evidence, reliability, proximity, ontology specificity) and must not collapse into an unexplained truth score. Vector search remains optional.
+Retrieval (`search_entities`, `search_statements`, `search_semantic_memory` / `search_memory`, `get_relevant_context`, neighborhood/timeline/explain/conflicts) is database-backed and must succeed without an LLM or embedding provider. Hybrid retrieval v1 combines tokenized lexical matching, temporal/effective-state ranking, soft predicate intent, and bounded historical anchors; ranking exposes transparent signals and must not collapse into an unexplained truth score. Vector search remains optional. See [retrieval-hybrid-v1.md](retrieval-hybrid-v1.md).
 
 ## Agent feedback
 

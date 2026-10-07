@@ -124,20 +124,45 @@ Status: Done.
 
 Expose read-only `/v1/admin/*` HTTP inspection over `operation_log`, `llm_call_log`, `agent_feedback`, `ontology_proposal`, `conflict`, and `ingestion_batch`, plus cross-domain SQL aggregates. Metadata-first list projections, deterministic pagination, `X-Admin-Token` auth. No UI, no MCP admin tools, no mutations, no ingestion policy.
 
-## Phase 15+ — Ingestion policy, administration UI, and advanced semantic capabilities
+## Post-15b capability milestones (delivered)
+
+The original numbered phases stop at 15b. Subsequent work is tracked as
+**capability milestones** with PR references for implementation history:
+
+| Capability | PR / notes |
+| --- | --- |
+| Identity-resolution layer + semantic review (shadow adjudication) | #11 |
+| Source-content revisions and content hashing | #11 |
+| Server-owned assert-by-name / identity on statement writes | #12, landed via #15 |
+| Full-path dry-run mutation previews (savepoint rollback) | #13, landed via #15 |
+| Resumable write/identity clarification handles | #14, landed via #15 |
+| Mutation result envelopes (`return_mode`, effective_state, correct_statement) | #15 |
+| MCP agent surfaces, concurrent dispatch, latency diagnosis | #15 |
+| Hybrid retrieval v1 + frozen gold-set regression benchmark | #15 |
+
+Phases 0–15b above remain the historical archive of the original roadmap.
+
+## Next (capability focus)
 
 Status: Next.
 
-After dogfooding with feedback + admin inspection, decide what becomes durable memory (ingestion policy), add inspection UI if justified, and consider exports, inference, and ontology health tooling. Prefer evidence from observed failure modes over speculative automation.
+Prefer evidence from observed failure modes over speculative automation:
+
+- ingestion policy (what becomes durable memory);
+- inspection UI only if dogfooding justifies it;
+- advanced retrieval / embeddings only where the frozen gold set and live gaps show need;
+- ontology health / export tooling when operators need them.
 
 ## Milestones
 
 - Milestone A: phases 0–5, usable deterministic memory. — Done.
 - Milestone B: phases 6–9, semantic graph memory. — Done.
-- Milestone C: phases 10–12, governed self-evolving ontology. — Done.
+- Milestone C: phases 10–12, governed ontology evolution. — Done.
 - Milestone D: phase 13 retrieval/LLM observability. — Done.
 - Milestone E: phase 14 production readiness. — Done.
-- Milestone F: phases 15a–15b feedback + admin inspection done; remaining 15+ ingestion policy / UI / advanced capabilities. — Next.
+- Milestone F: phases 15a–15b feedback + admin inspection. — Done.
+- Milestone G: post-15b identity, dry-run, clarification, MCP surfaces, hybrid retrieval (#11–#15). — Done.
+- Milestone H: ingestion policy / measured retrieval gaps / optional UI. — Next.
 
 ## Stop conditions
 
