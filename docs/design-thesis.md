@@ -140,6 +140,37 @@ Agents may propose how the semantic model should evolve. AtlasSynapse still owns
 `READY_TO_APPLY` means eligible for an apply attempt, not a committed mutation.
 There is no force/skip path around gates.
 
+### Prototyping governed semantic evolution
+
+Many enterprise systems either rely on relatively fixed schemas, or they allow the
+model to evolve through explicit human-controlled design and review. That
+governance is valuable, but it can become a bottleneck when AI agents encounter
+new concepts continuously.
+
+AtlasSynapse **prototypes** governed semantic evolution in which deterministic
+validation handles what can be proven mechanically, an LLM reviews meaning where
+rules are insufficient, and unresolved ambiguity is escalated for clarification
+rather than guessed.
+
+Traditional systems usually treat schema evolution as a design-time activity: a
+human decides that a new object, relationship, or field is needed, reviews the
+change, and applies it. AtlasSynapse explores whether part of that
+semantic-evolution workflow can move closer to runtime without giving up
+governance.
+
+The intended order is:
+
+```text
+deterministic checks → semantic reuse / overlap review → clarification when ambiguous → authorized apply
+```
+
+The LLM is not the authority. It is a bounded semantic reviewer inside a
+deterministic control system.
+
+The goal is not to remove the quality gate. It is to move the easy and repeatable
+parts of the gate into software, and reserve human attention for genuine semantic
+ambiguity. See also [business-value.md](business-value.md).
+
 ## Two feedback loops
 
 ### Knowledge accumulation
