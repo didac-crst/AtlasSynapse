@@ -128,6 +128,38 @@ def test_search_entities_and_statements_with_signals(db_session: Session) -> Non
     assert statements.hits[0].signals.entity_proximity == 1.0
 
 
+def test_tokenized_multi_term_and_punctuation_insensitive_search(
+    db_session: Session,
+) -> None:
+    subject_id, peer_id, statement_id = _seed_graph(db_session)
+    service = RetrievalService(db_session)
+
+    # Punctuation / question phrasing must not zero out a name token.
+    who = service.search_entities(SearchEntitiesRequest(query="Who is Ada?"))
+    assert who.hits
+    assert who.hits[0].entity.id == subject_id
+    assert who.hits[0].signals.lexical_relevance >= 0.7
+
+    exact = service.search_entities(SearchEntitiesRequest(query="Ada Retrieval"))
+    assert exact.hits
+    assert exact.hits[0].entity.id == subject_id
+    assert exact.hits[0].signals.lexical_relevance == 1.0
+
+    # Multi-term query should surface both named entities without full-string containment.
+    multi = service.search_semantic_memory(
+        SearchSemanticMemoryRequest(query="Ada Atlas", limit=25)
+    )
+    entity_ids = {hit.entity.id for hit in multi.hits if hit.entity is not None}
+    assert subject_id in entity_ids
+    assert peer_id in entity_ids
+
+    # Entity-valued statements are searchable via subject/object names, not only object_string.
+    by_object_name = service.search_statements(
+        SearchStatementsRequest(query="Atlas Org", limit=25)
+    )
+    assert statement_id in {hit.statement.id for hit in by_object_name.hits}
+
+
 def test_neighborhood_timeline_explain_conflicts_compose(db_session: Session) -> None:
     subject_id, peer_id, _statement_id = _seed_graph(db_session)
     service = RetrievalService(db_session)

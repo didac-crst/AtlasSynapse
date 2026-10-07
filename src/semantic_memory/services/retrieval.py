@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import Select, func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from semantic_memory.exceptions import UnknownEntityError, ValidationFailedError
 from semantic_memory.models import (
@@ -51,13 +51,12 @@ from semantic_memory.schemas.retrieval import (
 )
 from semantic_memory.services.conflicts import ConflictService
 from semantic_memory.services.entities import EntityService
+from semantic_memory.services.lexical import (
+    lexical_match_patterns,
+    score_lexical_relevance,
+)
 from semantic_memory.services.provenance import ProvenanceService
 from semantic_memory.services.statements import StatementService
-
-
-def _ilike_contains(query: str) -> str:
-    escaped = query.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-    return f"%{escaped}%"
 
 
 def _clamp(value: float) -> float:
@@ -78,20 +77,25 @@ class RetrievalService:
 
     def search_entities(self, request: SearchEntitiesRequest) -> SearchEntitiesResponse:
         timer = RequestTimer(operation="search_entities")
-        pattern = _ilike_contains(request.query)
+        patterns = lexical_match_patterns(request.query)
+        token_match = or_(
+            *(
+                column.ilike(pattern, escape="\\")
+                for pattern in patterns
+                for column in (
+                    Entity.canonical_name,
+                    EntityAlias.alias,
+                    EntityAlias.normalized_alias,
+                )
+            )
+        )
         stmt = (
             select(Entity)
             .outerjoin(EntityAlias, EntityAlias.entity_id == Entity.id)
             .outerjoin(EntityType, EntityType.entity_id == Entity.id)
             .outerjoin(OntologyClass, OntologyClass.id == EntityType.class_id)
             .outerjoin(OntologyNamespace, OntologyNamespace.id == OntologyClass.namespace_id)
-            .where(
-                or_(
-                    Entity.canonical_name.ilike(pattern, escape="\\"),
-                    EntityAlias.alias.ilike(pattern, escape="\\"),
-                    EntityAlias.normalized_alias.ilike(pattern, escape="\\"),
-                )
-            )
+            .where(token_match)
             .distinct()
             .limit(request.limit * 3)
         )
@@ -104,11 +108,17 @@ class RetrievalService:
             )
         with timer.measure("db"):
             rows = list(self._session.scalars(stmt).all())
+            alias_map = self._alias_map_for_entities([entity.id for entity in rows])
         now = request.as_of or datetime.now(UTC)
         hits: list[RankedEntityHit] = []
         with timer.measure("ranking"):
             for entity in rows:
-                signals, reasons = self._score_entity(entity, query=request.query, now=now)
+                signals, reasons = self._score_entity(
+                    entity,
+                    query=request.query,
+                    now=now,
+                    aliases=alias_map.get(entity.id, ()),
+                )
                 hits.append(
                     RankedEntityHit(
                         entity=self._entity_service.get(entity.id),
@@ -123,7 +133,8 @@ class RetrievalService:
             query=request.query,
             hits=hits,
             ranking_explanations=[
-                "Ranking combines lexical relevance, recency, and ontology specificity.",
+                "Ranking combines tokenized lexical relevance, recency, and ontology specificity.",
+                "Multi-term queries match any content token; exact names keep the strongest boost.",
                 "ranking_score is for ordering only and is not a truth score.",
             ],
         )
@@ -185,11 +196,26 @@ class RetrievalService:
         if request.temporal_state is not None:
             stmt = self._apply_temporal_state_filter(stmt, request.temporal_state)
         if request.query:
-            pattern = _ilike_contains(request.query)
+            patterns = lexical_match_patterns(request.query)
+            subject_entity = aliased(Entity)
+            object_entity = aliased(Entity)
+            stmt = stmt.outerjoin(
+                subject_entity, subject_entity.id == Statement.subject_entity_id
+            ).outerjoin(
+                object_entity, object_entity.id == Statement.object_entity_id
+            )
             stmt = stmt.where(
                 or_(
-                    Statement.object_string.ilike(pattern, escape="\\"),
-                    Statement.normalized_object.ilike(pattern, escape="\\"),
+                    *(
+                        column.ilike(pattern, escape="\\")
+                        for pattern in patterns
+                        for column in (
+                            Statement.object_string,
+                            Statement.normalized_object,
+                            subject_entity.canonical_name,
+                            object_entity.canonical_name,
+                        )
+                    )
                 )
             )
 
@@ -211,6 +237,7 @@ class RetrievalService:
         evidence_stats = self._provenance_repo.evidence_stats_for_statements(
             [row.id for row in rows]
         )
+        name_map = self._entity_name_map_for_statements(rows)
         specificity_cache: dict[uuid.UUID, float] = {}
         hits: list[RankedStatementHit] = []
         for statement in rows:
@@ -223,6 +250,12 @@ class RetrievalService:
                 evidence_count=count,
                 source_reliability=reliability,
                 specificity_cache=specificity_cache,
+                subject_name=name_map.get(statement.subject_entity_id),
+                object_name=(
+                    name_map.get(statement.object_entity_id)
+                    if statement.object_entity_id is not None
+                    else None
+                ),
             )
             hits.append(
                 RankedStatementHit(
@@ -240,6 +273,10 @@ class RetrievalService:
             hits=hits,
             ranking_explanations=[
                 "Results are ordered by created_at DESC, id DESC for stable pagination.",
+                (
+                    "Query matching is tokenized and punctuation-insensitive across "
+                    "object text and subject/object entity names."
+                ),
                 (
                     "ranking_score reflects lexical match, temporal validity, "
                     "recency, evidence, and reliability but does not reorder pages."
@@ -437,6 +474,7 @@ class RetrievalService:
             hits=hits[: request.limit],
             ranking_explanations=[
                 "Semantic memory search merges entity, statement, and optional conflict hits.",
+                "Lexical matching is tokenized and punctuation-insensitive (no embeddings).",
                 "Vector search was not required and was not used.",
                 "ranking_score is for ordering only and is not a truth score.",
             ],
@@ -540,23 +578,53 @@ class RetrievalService:
             },
         )
 
+    def _alias_map_for_entities(
+        self, entity_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, tuple[str, ...]]:
+        if not entity_ids:
+            return {}
+        rows = self._session.execute(
+            select(EntityAlias.entity_id, EntityAlias.alias, EntityAlias.normalized_alias).where(
+                EntityAlias.entity_id.in_(entity_ids)
+            )
+        ).all()
+        out: dict[uuid.UUID, list[str]] = {entity_id: [] for entity_id in entity_ids}
+        for entity_id, alias, normalized in rows:
+            bucket = out.setdefault(entity_id, [])
+            if alias:
+                bucket.append(alias)
+            if normalized:
+                bucket.append(normalized)
+        return {key: tuple(values) for key, values in out.items()}
+
+    def _entity_name_map_for_statements(
+        self, statements: list[Statement]
+    ) -> dict[uuid.UUID, str]:
+        ids: set[uuid.UUID] = set()
+        for statement in statements:
+            ids.add(statement.subject_entity_id)
+            if statement.object_entity_id is not None:
+                ids.add(statement.object_entity_id)
+        if not ids:
+            return {}
+        rows = self._session.execute(
+            select(Entity.id, Entity.canonical_name).where(Entity.id.in_(ids))
+        ).all()
+        return {entity_id: name for entity_id, name in rows}
+
     def _score_entity(
-        self, entity: Entity, *, query: str, now: datetime
+        self,
+        entity: Entity,
+        *,
+        query: str,
+        now: datetime,
+        aliases: tuple[str, ...] = (),
     ) -> tuple[RankingSignals, list[str]]:
-        notes: list[str] = []
-        reasons: list[str] = []
-        q = query.casefold().strip()
-        name = entity.canonical_name.casefold()
-        if name == q:
-            lexical = 1.0
-            reasons.append("exact_canonical_name")
-            notes.append("Exact canonical name match.")
-        elif q in name:
-            lexical = 0.8
-            reasons.append("canonical_name_contains")
-            notes.append("Canonical name contains query.")
-        else:
-            lexical = 0.45
+        lexical, reasons, notes = score_lexical_relevance(
+            query,
+            [entity.canonical_name, *aliases],
+        )
+        if not reasons:
             reasons.append("alias_or_partial_match")
             notes.append("Matched via alias or partial lexical overlap.")
 
@@ -592,24 +660,26 @@ class RetrievalService:
         evidence_count: int | None = None,
         source_reliability: float | None = None,
         specificity_cache: dict[uuid.UUID, float] | None = None,
+        subject_name: str | None = None,
+        object_name: str | None = None,
     ) -> tuple[RankingSignals, list[str]]:
         notes: list[str] = []
         reasons: list[str] = []
 
         lexical = 0.0
         if query:
-            q = query.casefold()
-            haystacks = [
-                (statement.object_string or "").casefold(),
-                (statement.normalized_object or "").casefold(),
-            ]
-            if any(h == q for h in haystacks if h):
-                lexical = 1.0
-                reasons.append("exact_object_text")
-            elif any(q in h for h in haystacks if h):
-                lexical = 0.75
-                reasons.append("object_text_contains")
-            else:
+            lexical, lex_reasons, lex_notes = score_lexical_relevance(
+                query,
+                [
+                    statement.object_string,
+                    statement.normalized_object,
+                    subject_name,
+                    object_name,
+                ],
+            )
+            reasons.extend(lex_reasons)
+            notes.extend(lex_notes)
+            if not lex_reasons:
                 lexical = 0.2
                 reasons.append("structural_match")
         else:

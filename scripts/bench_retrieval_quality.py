@@ -26,6 +26,22 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CASES = ROOT / "benchmarks" / "retrieval" / "v1" / "cases.json"
 DEFAULT_OUT = ROOT / "benchmarks" / "retrieval" / "v1" / "baseline_report.json"
 
+# Primary tag classes used for checkpoint deltas.
+_QUERY_CLASSES = (
+    "diagnostic",
+    "multi_token",
+    "multi_concept",
+    "lexical_ok",
+    "temporal",
+    "predicate_intent",
+    "graph",
+    "family",
+    "historical",
+    "quality",
+    "entity",
+    "goal",
+)
+
 
 @dataclass
 class HitView:
@@ -347,6 +363,24 @@ def main() -> None:
     multi = [r for r in results if "multi_token" in r.tags or "multi_concept" in r.tags]
     lexical_ok = [r for r in results if "lexical_ok" in r.tags]
 
+    by_class: dict[str, dict[str, Any]] = {}
+    for tag in _QUERY_CLASSES:
+        subset = [r for r in results if tag in r.tags]
+        if not subset:
+            continue
+        sn = len(subset)
+        by_class[tag] = {
+            "n": sn,
+            "recall_at_1": sum(1 for r in subset if r.recall_at_1),
+            "recall_at_1_pct": _pct(sum(1 for r in subset if r.recall_at_1), sn),
+            "recall_at_3": sum(1 for r in subset if r.recall_at_3),
+            "recall_at_3_pct": _pct(sum(1 for r in subset if r.recall_at_3), sn),
+            "recall_at_10": sum(1 for r in subset if r.recall_at_10),
+            "recall_at_10_pct": _pct(sum(1 for r in subset if r.recall_at_10), sn),
+            "zero_hit_cases": sum(1 for r in subset if r.zero_hits),
+            "zero_hit_rate_pct": _pct(sum(1 for r in subset if r.zero_hits), sn),
+        }
+
     summary = {
         "n_cases": n,
         "n_errors": len(errors),
@@ -369,6 +403,7 @@ def main() -> None:
         "multi_token_n": len(multi),
         "lexical_ok_recall_at_3": sum(1 for r in lexical_ok if r.recall_at_3),
         "lexical_ok_n": len(lexical_ok),
+        "by_class": by_class,
     }
 
     print("\n=== Baseline summary ===")
@@ -385,6 +420,16 @@ def main() -> None:
         "lexical_ok_recall_at_3",
     ):
         print(f"  {key}: {summary[key]}")
+
+    print("\n=== By query class ===")
+    for tag, stats in by_class.items():
+        print(
+            f"  {tag}: n={stats['n']} "
+            f"R@1={stats['recall_at_1_pct']}% "
+            f"R@3={stats['recall_at_3_pct']}% "
+            f"R@10={stats['recall_at_10_pct']}% "
+            f"zero={stats['zero_hit_rate_pct']}%"
+        )
 
     report = {
         "summary": summary,

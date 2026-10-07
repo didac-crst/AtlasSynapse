@@ -1,0 +1,2956 @@
+{
+  "summary": {
+    "n_cases": 40,
+    "n_errors": 0,
+    "limit": 25,
+    "base": "http://10.10.0.12:5060",
+    "recall_at_1": 37,
+    "recall_at_1_pct": 92.5,
+    "recall_at_3": 39,
+    "recall_at_3_pct": 97.5,
+    "recall_at_10": 39,
+    "recall_at_10_pct": 97.5,
+    "mrr": 0.9439,
+    "zero_hit_cases": 0,
+    "zero_hit_rate_pct": 0.0,
+    "superseded_in_topk_cases": 0,
+    "superseded_hit_rate_pct": 0.0,
+    "diagnostic_zero": 0,
+    "diagnostic_n": 2,
+    "multi_token_zero": 0,
+    "multi_token_n": 13,
+    "lexical_ok_recall_at_3": 11,
+    "lexical_ok_n": 11,
+    "by_class": {
+      "diagnostic": {
+        "n": 2,
+        "recall_at_1": 2,
+        "recall_at_1_pct": 100.0,
+        "recall_at_3": 2,
+        "recall_at_3_pct": 100.0,
+        "recall_at_10": 2,
+        "recall_at_10_pct": 100.0,
+        "zero_hit_cases": 0,
+        "zero_hit_rate_pct": 0.0
+      },
+      "multi_token": {
+        "n": 10,
+        "recall_at_1": 10,
+        "recall_at_1_pct": 100.0,
+        "recall_at_3": 10,
+        "recall_at_3_pct": 100.0,
+        "recall_at_10": 10,
+        "recall_at_10_pct": 100.0,
+        "zero_hit_cases": 0,
+        "zero_hit_rate_pct": 0.0
+      },
+      "multi_concept": {
+        "n": 3,
+        "recall_at_1": 3,
+        "recall_at_1_pct": 100.0,
+        "recall_at_3": 3,
+        "recall_at_3_pct": 100.0,
+        "recall_at_10": 3,
+        "recall_at_10_pct": 100.0,
+        "zero_hit_cases": 0,
+        "zero_hit_rate_pct": 0.0
+      },
+      "lexical_ok": {
+        "n": 11,
+        "recall_at_1": 10,
+        "recall_at_1_pct": 90.9,
+        "recall_at_3": 11,
+        "recall_at_3_pct": 100.0,
+        "recall_at_10": 11,
+        "recall_at_10_pct": 100.0,
+        "zero_hit_cases": 0,
+        "zero_hit_rate_pct": 0.0
+      },
+      "temporal": {
+        "n": 8,
+        "recall_at_1": 8,
+        "recall_at_1_pct": 100.0,
+        "recall_at_3": 8,
+        "recall_at_3_pct": 100.0,
+        "recall_at_10": 8,
+        "recall_at_10_pct": 100.0,
+        "zero_hit_cases": 0,
+        "zero_hit_rate_pct": 0.0
+      },
+      "predicate_intent": {
+        "n": 11,
+        "recall_at_1": 11,
+        "recall_at_1_pct": 100.0,
+        "recall_at_3": 11,
+        "recall_at_3_pct": 100.0,
+        "recall_at_10": 11,
+        "recall_at_10_pct": 100.0,
+        "zero_hit_cases": 0,
+        "zero_hit_rate_pct": 0.0
+      },
+      "graph": {
+        "n": 8,
+        "recall_at_1": 8,
+        "recall_at_1_pct": 100.0,
+        "recall_at_3": 8,
+        "recall_at_3_pct": 100.0,
+        "recall_at_10": 8,
+        "recall_at_10_pct": 100.0,
+        "zero_hit_cases": 0,
+        "zero_hit_rate_pct": 0.0
+      },
+      "family": {
+        "n": 4,
+        "recall_at_1": 4,
+        "recall_at_1_pct": 100.0,
+        "recall_at_3": 4,
+        "recall_at_3_pct": 100.0,
+        "recall_at_10": 4,
+        "recall_at_10_pct": 100.0,
+        "zero_hit_cases": 0,
+        "zero_hit_rate_pct": 0.0
+      },
+      "historical": {
+        "n": 4,
+        "recall_at_1": 3,
+        "recall_at_1_pct": 75.0,
+        "recall_at_3": 3,
+        "recall_at_3_pct": 75.0,
+        "recall_at_10": 3,
+        "recall_at_10_pct": 75.0,
+        "zero_hit_cases": 0,
+        "zero_hit_rate_pct": 0.0
+      },
+      "quality": {
+        "n": 3,
+        "recall_at_1": 2,
+        "recall_at_1_pct": 66.7,
+        "recall_at_3": 3,
+        "recall_at_3_pct": 100.0,
+        "recall_at_10": 3,
+        "recall_at_10_pct": 100.0,
+        "zero_hit_cases": 0,
+        "zero_hit_rate_pct": 0.0
+      },
+      "entity": {
+        "n": 8,
+        "recall_at_1": 8,
+        "recall_at_1_pct": 100.0,
+        "recall_at_3": 8,
+        "recall_at_3_pct": 100.0,
+        "recall_at_10": 8,
+        "recall_at_10_pct": 100.0,
+        "zero_hit_cases": 0,
+        "zero_hit_rate_pct": 0.0
+      },
+      "goal": {
+        "n": 2,
+        "recall_at_1": 2,
+        "recall_at_1_pct": 100.0,
+        "recall_at_3": 2,
+        "recall_at_3_pct": 100.0,
+        "recall_at_10": 2,
+        "recall_at_10_pct": 100.0,
+        "zero_hit_cases": 0,
+        "zero_hit_rate_pct": 0.0
+      }
+    }
+  },
+  "errors": [],
+  "results": [
+    {
+      "case_id": "didac-current-airbus-role",
+      "query": "Didac current Airbus role",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "d315de3e-9cfb-48ea-a0e0-f35e894e293f",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.645
+        },
+        {
+          "type": "statement",
+          "id": "49e59ade-cc6e-49b8-b429-de28c4515a81",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.6447
+        },
+        {
+          "type": "statement",
+          "id": "b5d94b64-3856-4d51-a204-0bcdecb39346",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "93802036-4cf0-4f07-a9d7-eeb70d9773b9",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "639ecd44-2bd2-4d87-bbdc-4de20f2da166",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        }
+      ],
+      "tags": [
+        "multi_concept",
+        "temporal",
+        "graph",
+        "diagnostic"
+      ]
+    },
+    {
+      "case_id": "didac-airbus",
+      "query": "Didac Airbus",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "d315de3e-9cfb-48ea-a0e0-f35e894e293f",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.645
+        },
+        {
+          "type": "statement",
+          "id": "49e59ade-cc6e-49b8-b429-de28c4515a81",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.6447
+        },
+        {
+          "type": "statement",
+          "id": "b5d94b64-3856-4d51-a204-0bcdecb39346",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "93802036-4cf0-4f07-a9d7-eeb70d9773b9",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "639ecd44-2bd2-4d87-bbdc-4de20f2da166",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        }
+      ],
+      "tags": [
+        "multi_token",
+        "graph",
+        "diagnostic"
+      ]
+    },
+    {
+      "case_id": "current-airbus-role",
+      "query": "current Airbus role",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        24
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "entity",
+          "id": "e20c5090-74a6-454c-b56f-13319d2ca0cf",
+          "name": "Airbus",
+          "score": 0.6338
+        },
+        {
+          "type": "statement",
+          "id": "e068012e-5993-43d1-974e-578b21c96178",
+          "predicate": "roleAt",
+          "status": "asserted",
+          "score": 0.5997
+        },
+        {
+          "type": "statement",
+          "id": "2721d3be-2ece-4e0f-bd7f-92f8fc407aa6",
+          "predicate": "relatedTo",
+          "status": "asserted",
+          "score": 0.5997
+        },
+        {
+          "type": "statement",
+          "id": "d5d70a6e-4a3e-4f3f-a484-b8e649b51a46",
+          "predicate": "roleAt",
+          "status": "asserted",
+          "score": 0.5988
+        },
+        {
+          "type": "statement",
+          "id": "a0616be3-7bff-4513-a347-1486d33abe1a",
+          "predicate": "roleAt",
+          "status": "asserted",
+          "score": 0.5988
+        }
+      ],
+      "tags": [
+        "temporal",
+        "multi_token"
+      ]
+    },
+    {
+      "case_id": "didac-current-role",
+      "query": "Didac current role",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "d315de3e-9cfb-48ea-a0e0-f35e894e293f",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.645
+        },
+        {
+          "type": "statement",
+          "id": "49e59ade-cc6e-49b8-b429-de28c4515a81",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.6447
+        },
+        {
+          "type": "statement",
+          "id": "b5d94b64-3856-4d51-a204-0bcdecb39346",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "93802036-4cf0-4f07-a9d7-eeb70d9773b9",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "639ecd44-2bd2-4d87-bbdc-4de20f2da166",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        }
+      ],
+      "tags": [
+        "temporal",
+        "predicate_intent"
+      ]
+    },
+    {
+      "case_id": "where-does-didac-work",
+      "query": "Where does Didac work?",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "d315de3e-9cfb-48ea-a0e0-f35e894e293f",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.645
+        },
+        {
+          "type": "statement",
+          "id": "49e59ade-cc6e-49b8-b429-de28c4515a81",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.6447
+        },
+        {
+          "type": "statement",
+          "id": "b5d94b64-3856-4d51-a204-0bcdecb39346",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "93802036-4cf0-4f07-a9d7-eeb70d9773b9",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "639ecd44-2bd2-4d87-bbdc-4de20f2da166",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        }
+      ],
+      "tags": [
+        "predicate_intent",
+        "graph"
+      ]
+    },
+    {
+      "case_id": "what-role-does-didac-currently-hold",
+      "query": "What role does Didac currently hold?",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "d315de3e-9cfb-48ea-a0e0-f35e894e293f",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.645
+        },
+        {
+          "type": "statement",
+          "id": "49e59ade-cc6e-49b8-b429-de28c4515a81",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.6447
+        },
+        {
+          "type": "statement",
+          "id": "b5d94b64-3856-4d51-a204-0bcdecb39346",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "93802036-4cf0-4f07-a9d7-eeb70d9773b9",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "639ecd44-2bd2-4d87-bbdc-4de20f2da166",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        }
+      ],
+      "tags": [
+        "temporal",
+        "predicate_intent"
+      ]
+    },
+    {
+      "case_id": "when-did-didac-start-current-role",
+      "query": "When did Didac start his current role?",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "d315de3e-9cfb-48ea-a0e0-f35e894e293f",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.645
+        },
+        {
+          "type": "statement",
+          "id": "49e59ade-cc6e-49b8-b429-de28c4515a81",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.6447
+        },
+        {
+          "type": "statement",
+          "id": "b5d94b64-3856-4d51-a204-0bcdecb39346",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "93802036-4cf0-4f07-a9d7-eeb70d9773b9",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "639ecd44-2bd2-4d87-bbdc-4de20f2da166",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        }
+      ],
+      "tags": [
+        "temporal",
+        "quality"
+      ]
+    },
+    {
+      "case_id": "airbus-role",
+      "query": "Airbus role",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        22,
+        23,
+        24,
+        25
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "entity",
+          "id": "e20c5090-74a6-454c-b56f-13319d2ca0cf",
+          "name": "Airbus",
+          "score": 0.6338
+        },
+        {
+          "type": "statement",
+          "id": "e068012e-5993-43d1-974e-578b21c96178",
+          "predicate": "roleAt",
+          "status": "asserted",
+          "score": 0.5997
+        },
+        {
+          "type": "statement",
+          "id": "2721d3be-2ece-4e0f-bd7f-92f8fc407aa6",
+          "predicate": "relatedTo",
+          "status": "asserted",
+          "score": 0.5997
+        },
+        {
+          "type": "statement",
+          "id": "d5d70a6e-4a3e-4f3f-a484-b8e649b51a46",
+          "predicate": "roleAt",
+          "status": "asserted",
+          "score": 0.5988
+        },
+        {
+          "type": "statement",
+          "id": "a0616be3-7bff-4513-a347-1486d33abe1a",
+          "predicate": "roleAt",
+          "status": "asserted",
+          "score": 0.5988
+        }
+      ],
+      "tags": [
+        "lexical_ok"
+      ]
+    },
+    {
+      "case_id": "quality-engineering-role-title",
+      "query": "Quality Engineering End-to-End Analytics Manager",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        5
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "d315de3e-9cfb-48ea-a0e0-f35e894e293f",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.66
+        },
+        {
+          "type": "entity",
+          "id": "0e96df15-9a13-4e2f-a505-61c559b111ac",
+          "name": "Quality Engineering End-to-End Analytics Manager",
+          "score": 0.6488
+        },
+        {
+          "type": "entity",
+          "id": "baa441e6-5cbb-416a-a169-71597ff54b65",
+          "name": "Start Quality Engineering End-to-End Analytics Manager role",
+          "score": 0.5888
+        },
+        {
+          "type": "entity",
+          "id": "19776f86-604e-4555-958e-95040db88ec0",
+          "name": "Data analytics and engineering",
+          "score": 0.5138
+        },
+        {
+          "type": "statement",
+          "id": "063f962b-849f-4c43-aae8-ca8a231033dd",
+          "predicate": "description",
+          "status": "asserted",
+          "score": 0.5137
+        }
+      ],
+      "tags": [
+        "lexical_ok",
+        "exact"
+      ]
+    },
+    {
+      "case_id": "didac-simple",
+      "query": "Didac",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        22,
+        23,
+        24,
+        25
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "d315de3e-9cfb-48ea-a0e0-f35e894e293f",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.66
+        },
+        {
+          "type": "statement",
+          "id": "49e59ade-cc6e-49b8-b429-de28c4515a81",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.6597
+        },
+        {
+          "type": "statement",
+          "id": "b5d94b64-3856-4d51-a204-0bcdecb39346",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6547
+        },
+        {
+          "type": "statement",
+          "id": "93802036-4cf0-4f07-a9d7-eeb70d9773b9",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6547
+        },
+        {
+          "type": "statement",
+          "id": "639ecd44-2bd2-4d87-bbdc-4de20f2da166",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6547
+        }
+      ],
+      "tags": [
+        "lexical_ok",
+        "entity"
+      ]
+    },
+    {
+      "case_id": "airbus-simple",
+      "query": "Airbus",
+      "hit_count": 21,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "entity",
+          "id": "e20c5090-74a6-454c-b56f-13319d2ca0cf",
+          "name": "Airbus",
+          "score": 0.6488
+        },
+        {
+          "type": "statement",
+          "id": "e068012e-5993-43d1-974e-578b21c96178",
+          "predicate": "roleAt",
+          "status": "asserted",
+          "score": 0.6147
+        },
+        {
+          "type": "statement",
+          "id": "2721d3be-2ece-4e0f-bd7f-92f8fc407aa6",
+          "predicate": "relatedTo",
+          "status": "asserted",
+          "score": 0.6147
+        },
+        {
+          "type": "statement",
+          "id": "d5d70a6e-4a3e-4f3f-a484-b8e649b51a46",
+          "predicate": "roleAt",
+          "status": "asserted",
+          "score": 0.6138
+        },
+        {
+          "type": "statement",
+          "id": "a0616be3-7bff-4513-a347-1486d33abe1a",
+          "predicate": "roleAt",
+          "status": "asserted",
+          "score": 0.6138
+        }
+      ],
+      "tags": [
+        "lexical_ok",
+        "entity"
+      ]
+    },
+    {
+      "case_id": "where-did-didac-study",
+      "query": "Where did Didac study?",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "d315de3e-9cfb-48ea-a0e0-f35e894e293f",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.645
+        },
+        {
+          "type": "statement",
+          "id": "49e59ade-cc6e-49b8-b429-de28c4515a81",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.6447
+        },
+        {
+          "type": "statement",
+          "id": "b5d94b64-3856-4d51-a204-0bcdecb39346",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "93802036-4cf0-4f07-a9d7-eeb70d9773b9",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "639ecd44-2bd2-4d87-bbdc-4de20f2da166",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        }
+      ],
+      "tags": [
+        "predicate_intent",
+        "graph"
+      ]
+    },
+    {
+      "case_id": "when-was-didac-at-inpg",
+      "query": "When was Didac at INPG?",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "d315de3e-9cfb-48ea-a0e0-f35e894e293f",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.645
+        },
+        {
+          "type": "statement",
+          "id": "49e59ade-cc6e-49b8-b429-de28c4515a81",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.6447
+        },
+        {
+          "type": "statement",
+          "id": "b5d94b64-3856-4d51-a204-0bcdecb39346",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "93802036-4cf0-4f07-a9d7-eeb70d9773b9",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "639ecd44-2bd2-4d87-bbdc-4de20f2da166",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        }
+      ],
+      "tags": [
+        "temporal",
+        "graph"
+      ]
+    },
+    {
+      "case_id": "inpg-simple",
+      "query": "INPG",
+      "hit_count": 14,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        14
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "entity",
+          "id": "2c127b32-a1f3-4b3f-b224-b76b4d8f0884",
+          "name": "INPG",
+          "score": 0.6488
+        },
+        {
+          "type": "statement",
+          "id": "12cfe5ad-b13b-4437-b3cd-65f66ce0f98c",
+          "predicate": "relatedTo",
+          "status": "asserted",
+          "score": 0.6147
+        },
+        {
+          "type": "statement",
+          "id": "6478584e-bb79-44c0-9c5c-f3dffcb36a63",
+          "predicate": "relatedTo",
+          "status": "asserted",
+          "score": 0.6138
+        },
+        {
+          "type": "statement",
+          "id": "8222f60e-78e8-4b34-a909-e9333d0eaa06",
+          "predicate": "endedAt",
+          "status": "asserted",
+          "score": 0.6097
+        },
+        {
+          "type": "statement",
+          "id": "d0b13abe-91bb-4afe-9974-b5350c8cf903",
+          "predicate": "startedAt",
+          "status": "asserted",
+          "score": 0.6097
+        }
+      ],
+      "tags": [
+        "lexical_ok",
+        "entity"
+      ]
+    },
+    {
+      "case_id": "didac-goals",
+      "query": "What are Didac's current goals?",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "d315de3e-9cfb-48ea-a0e0-f35e894e293f",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.645
+        },
+        {
+          "type": "statement",
+          "id": "49e59ade-cc6e-49b8-b429-de28c4515a81",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.6447
+        },
+        {
+          "type": "statement",
+          "id": "b5d94b64-3856-4d51-a204-0bcdecb39346",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "93802036-4cf0-4f07-a9d7-eeb70d9773b9",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "639ecd44-2bd2-4d87-bbdc-4de20f2da166",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        }
+      ],
+      "tags": [
+        "predicate_intent",
+        "temporal"
+      ]
+    },
+    {
+      "case_id": "didac-goals-short",
+      "query": "Didac goals",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "d315de3e-9cfb-48ea-a0e0-f35e894e293f",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.645
+        },
+        {
+          "type": "statement",
+          "id": "49e59ade-cc6e-49b8-b429-de28c4515a81",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.6447
+        },
+        {
+          "type": "statement",
+          "id": "b5d94b64-3856-4d51-a204-0bcdecb39346",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "93802036-4cf0-4f07-a9d7-eeb70d9773b9",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "639ecd44-2bd2-4d87-bbdc-4de20f2da166",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        }
+      ],
+      "tags": [
+        "multi_token",
+        "predicate_intent"
+      ]
+    },
+    {
+      "case_id": "who-is-floriane",
+      "query": "Who is Floriane?",
+      "hit_count": 5,
+      "relevant_ranks": [
+        1,
+        2,
+        3
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "entity",
+          "id": "f74f7e7d-48e3-48e5-9ef7-b7daadb2aad6",
+          "name": "Floriane",
+          "score": 0.6489
+        },
+        {
+          "type": "statement",
+          "id": "0af484b4-ab79-4831-897b-bdbf7da0581d",
+          "predicate": "relatedTo",
+          "status": "asserted",
+          "score": 0.6139
+        },
+        {
+          "type": "statement",
+          "id": "2c803536-926b-47c2-958b-0fc4e16c83bb",
+          "predicate": "description",
+          "status": "asserted",
+          "score": 0.5989
+        },
+        {
+          "type": "statement",
+          "id": "f0dac3be-fe24-4182-882e-3d1a89d412a2",
+          "predicate": "description",
+          "status": "asserted",
+          "score": 0.5239
+        },
+        {
+          "type": "statement",
+          "id": "57e45cad-f001-4f1f-a800-dae41998d958",
+          "predicate": "description",
+          "status": "asserted",
+          "score": 0.5239
+        }
+      ],
+      "tags": [
+        "entity",
+        "family"
+      ]
+    },
+    {
+      "case_id": "floriane-simple",
+      "query": "Floriane",
+      "hit_count": 5,
+      "relevant_ranks": [
+        1,
+        2,
+        3
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "entity",
+          "id": "f74f7e7d-48e3-48e5-9ef7-b7daadb2aad6",
+          "name": "Floriane",
+          "score": 0.6489
+        },
+        {
+          "type": "statement",
+          "id": "0af484b4-ab79-4831-897b-bdbf7da0581d",
+          "predicate": "relatedTo",
+          "status": "asserted",
+          "score": 0.6139
+        },
+        {
+          "type": "statement",
+          "id": "2c803536-926b-47c2-958b-0fc4e16c83bb",
+          "predicate": "description",
+          "status": "asserted",
+          "score": 0.5989
+        },
+        {
+          "type": "statement",
+          "id": "f0dac3be-fe24-4182-882e-3d1a89d412a2",
+          "predicate": "description",
+          "status": "asserted",
+          "score": 0.5539
+        },
+        {
+          "type": "statement",
+          "id": "57e45cad-f001-4f1f-a800-dae41998d958",
+          "predicate": "description",
+          "status": "asserted",
+          "score": 0.5539
+        }
+      ],
+      "tags": [
+        "lexical_ok",
+        "entity"
+      ]
+    },
+    {
+      "case_id": "didac-children",
+      "query": "What children does Didac have?",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "d315de3e-9cfb-48ea-a0e0-f35e894e293f",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.645
+        },
+        {
+          "type": "statement",
+          "id": "49e59ade-cc6e-49b8-b429-de28c4515a81",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.6447
+        },
+        {
+          "type": "statement",
+          "id": "b5d94b64-3856-4d51-a204-0bcdecb39346",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "93802036-4cf0-4f07-a9d7-eeb70d9773b9",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "639ecd44-2bd2-4d87-bbdc-4de20f2da166",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        }
+      ],
+      "tags": [
+        "family",
+        "graph"
+      ]
+    },
+    {
+      "case_id": "didac-daughters",
+      "query": "Didac daughters",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "d315de3e-9cfb-48ea-a0e0-f35e894e293f",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.645
+        },
+        {
+          "type": "statement",
+          "id": "49e59ade-cc6e-49b8-b429-de28c4515a81",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.6447
+        },
+        {
+          "type": "statement",
+          "id": "b5d94b64-3856-4d51-a204-0bcdecb39346",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "93802036-4cf0-4f07-a9d7-eeb70d9773b9",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "639ecd44-2bd2-4d87-bbdc-4de20f2da166",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        }
+      ],
+      "tags": [
+        "family",
+        "multi_token"
+      ]
+    },
+    {
+      "case_id": "siena-simple",
+      "query": "Siena",
+      "hit_count": 4,
+      "relevant_ranks": [
+        1,
+        2,
+        3
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "entity",
+          "id": "04e6c1e9-ceae-4945-951e-94bc23e6b3d3",
+          "name": "Siena",
+          "score": 0.6489
+        },
+        {
+          "type": "statement",
+          "id": "481948c8-e281-45e8-b182-583c57fcdf1c",
+          "predicate": "relatedTo",
+          "status": "asserted",
+          "score": 0.6139
+        },
+        {
+          "type": "statement",
+          "id": "57e45cad-f001-4f1f-a800-dae41998d958",
+          "predicate": "description",
+          "status": "asserted",
+          "score": 0.5989
+        },
+        {
+          "type": "statement",
+          "id": "2c803536-926b-47c2-958b-0fc4e16c83bb",
+          "predicate": "description",
+          "status": "asserted",
+          "score": 0.5539
+        }
+      ],
+      "tags": [
+        "lexical_ok",
+        "entity"
+      ]
+    },
+    {
+      "case_id": "elma-simple",
+      "query": "Elma",
+      "hit_count": 4,
+      "relevant_ranks": [
+        1,
+        2,
+        3
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "entity",
+          "id": "501a7ca0-23e1-4fb6-a9dd-d3edc521994e",
+          "name": "Elma",
+          "score": 0.6489
+        },
+        {
+          "type": "statement",
+          "id": "1375c5cf-6118-4dae-9006-5e6c45b9f94d",
+          "predicate": "relatedTo",
+          "status": "asserted",
+          "score": 0.6139
+        },
+        {
+          "type": "statement",
+          "id": "f0dac3be-fe24-4182-882e-3d1a89d412a2",
+          "predicate": "description",
+          "status": "asserted",
+          "score": 0.5989
+        },
+        {
+          "type": "statement",
+          "id": "2c803536-926b-47c2-958b-0fc4e16c83bb",
+          "predicate": "description",
+          "status": "asserted",
+          "score": 0.5539
+        }
+      ],
+      "tags": [
+        "lexical_ok",
+        "entity"
+      ]
+    },
+    {
+      "case_id": "didac-spouse",
+      "query": "Didac spouse",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "d315de3e-9cfb-48ea-a0e0-f35e894e293f",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.645
+        },
+        {
+          "type": "statement",
+          "id": "49e59ade-cc6e-49b8-b429-de28c4515a81",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.6447
+        },
+        {
+          "type": "statement",
+          "id": "b5d94b64-3856-4d51-a204-0bcdecb39346",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "93802036-4cf0-4f07-a9d7-eeb70d9773b9",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "639ecd44-2bd2-4d87-bbdc-4de20f2da166",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        }
+      ],
+      "tags": [
+        "family",
+        "multi_token"
+      ]
+    },
+    {
+      "case_id": "previous-role-start-date-belief",
+      "query": "What did AtlasSynapse previously think the Airbus role start date was?",
+      "hit_count": 25,
+      "relevant_ranks": [
+        11
+      ],
+      "first_relevant_rank": 11,
+      "recall_at_1": false,
+      "recall_at_3": false,
+      "recall_at_10": false,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "entity",
+          "id": "e20c5090-74a6-454c-b56f-13319d2ca0cf",
+          "name": "Airbus",
+          "score": 0.6338
+        },
+        {
+          "type": "entity",
+          "id": "650fa886-8b93-4a2f-aba9-4233b79d9853",
+          "name": "AtlasSynapse",
+          "score": 0.6338
+        },
+        {
+          "type": "statement",
+          "id": "e068012e-5993-43d1-974e-578b21c96178",
+          "predicate": "roleAt",
+          "status": "asserted",
+          "score": 0.5997
+        },
+        {
+          "type": "statement",
+          "id": "2721d3be-2ece-4e0f-bd7f-92f8fc407aa6",
+          "predicate": "relatedTo",
+          "status": "asserted",
+          "score": 0.5997
+        },
+        {
+          "type": "statement",
+          "id": "5717fd42-6197-4eae-aad9-56bb3e5d2d59",
+          "predicate": "endedAt",
+          "status": "asserted",
+          "score": 0.5111
+        }
+      ],
+      "tags": [
+        "historical",
+        "superseded"
+      ]
+    },
+    {
+      "case_id": "didac-former-roles",
+      "query": "What was Didac doing before this role?",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "d315de3e-9cfb-48ea-a0e0-f35e894e293f",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.645
+        },
+        {
+          "type": "statement",
+          "id": "49e59ade-cc6e-49b8-b429-de28c4515a81",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.6447
+        },
+        {
+          "type": "statement",
+          "id": "b5d94b64-3856-4d51-a204-0bcdecb39346",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "93802036-4cf0-4f07-a9d7-eeb70d9773b9",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "639ecd44-2bd2-4d87-bbdc-4de20f2da166",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        }
+      ],
+      "tags": [
+        "historical",
+        "predicate_intent"
+      ]
+    },
+    {
+      "case_id": "toulouse",
+      "query": "Toulouse",
+      "hit_count": 15,
+      "relevant_ranks": [
+        3,
+        5,
+        6,
+        11,
+        12,
+        14,
+        15
+      ],
+      "first_relevant_rank": 3,
+      "recall_at_1": false,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "9c9e7317-f0ed-4fb8-89ec-c12e83610d17",
+          "predicate": "locatedAt",
+          "status": "asserted",
+          "score": 0.6538
+        },
+        {
+          "type": "statement",
+          "id": "16780b68-1798-42c4-a8ef-89678957f79e",
+          "predicate": "locatedAt",
+          "status": "asserted",
+          "score": 0.6538
+        },
+        {
+          "type": "entity",
+          "id": "9eb5d50e-cff9-40de-87ee-73f95883ca87",
+          "name": "Toulouse",
+          "score": 0.6488
+        },
+        {
+          "type": "statement",
+          "id": "8c081e17-e37b-4ac7-bc97-28c32c92dfa4",
+          "predicate": "relatedTo",
+          "status": "asserted",
+          "score": 0.6138
+        },
+        {
+          "type": "entity",
+          "id": "6c368f18-ed14-4948-97a9-1432cc617ddd",
+          "name": "Toulouse, France",
+          "score": 0.6039
+        }
+      ],
+      "tags": [
+        "lexical_ok",
+        "place"
+      ]
+    },
+    {
+      "case_id": "hamburg-airbus",
+      "query": "Didac Hamburg Airbus",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "d315de3e-9cfb-48ea-a0e0-f35e894e293f",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.645
+        },
+        {
+          "type": "statement",
+          "id": "49e59ade-cc6e-49b8-b429-de28c4515a81",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.6447
+        },
+        {
+          "type": "statement",
+          "id": "b5d94b64-3856-4d51-a204-0bcdecb39346",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "93802036-4cf0-4f07-a9d7-eeb70d9773b9",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "639ecd44-2bd2-4d87-bbdc-4de20f2da166",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        }
+      ],
+      "tags": [
+        "multi_token",
+        "historical"
+      ]
+    },
+    {
+      "case_id": "semantic-consulting-goal",
+      "query": "Semantic and knowledge architecture consulting",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        24
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "7c8b105d-d3a9-4cf4-8497-b7e7dcf321cd",
+          "predicate": "hasGoal",
+          "status": "asserted",
+          "score": 0.6588
+        },
+        {
+          "type": "entity",
+          "id": "b504526d-9223-4900-b103-8f13c6a013dc",
+          "name": "Semantic and knowledge architecture consulting",
+          "score": 0.6488
+        },
+        {
+          "type": "statement",
+          "id": "063f962b-849f-4c43-aae8-ca8a231033dd",
+          "predicate": "description",
+          "status": "asserted",
+          "score": 0.5722
+        },
+        {
+          "type": "statement",
+          "id": "6606248a-9380-45c5-a564-89077e45b4e1",
+          "predicate": "description",
+          "status": "asserted",
+          "score": 0.5238
+        },
+        {
+          "type": "entity",
+          "id": "938e840e-14a8-47dd-a7c9-f1d255ca800a",
+          "name": "Semantic architecture",
+          "score": 0.5214
+        }
+      ],
+      "tags": [
+        "lexical_ok",
+        "goal"
+      ]
+    },
+    {
+      "case_id": "enterprise-ai-goal",
+      "query": "Enterprise AI ontology prototypes",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "entity",
+          "id": "83f5031c-59f0-4993-8df2-69a74438eb12",
+          "name": "Enterprise AI, ontology, prototypes, integration and decision systems",
+          "score": 0.5738
+        },
+        {
+          "type": "statement",
+          "id": "18ef1b14-6f3e-4dba-82df-55fa6cac992a",
+          "predicate": "authoredBy",
+          "status": "asserted",
+          "score": 0.5287
+        },
+        {
+          "type": "statement",
+          "id": "4399239c-5c1d-41e3-916d-8169b4e48a06",
+          "predicate": "description",
+          "status": "asserted",
+          "score": 0.5137
+        },
+        {
+          "type": "statement",
+          "id": "c3a47164-705e-46e0-9a3a-4677d5f7d622",
+          "predicate": "description",
+          "status": "asserted",
+          "score": 0.4901
+        },
+        {
+          "type": "statement",
+          "id": "afe6df0d-94be-4134-a648-41c2c89493c2",
+          "predicate": "locatedAt",
+          "status": "asserted",
+          "score": 0.4687
+        }
+      ],
+      "tags": [
+        "multi_token",
+        "goal"
+      ]
+    },
+    {
+      "case_id": "didac-works-at-airbus",
+      "query": "Does Didac work at Airbus?",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "d315de3e-9cfb-48ea-a0e0-f35e894e293f",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.645
+        },
+        {
+          "type": "statement",
+          "id": "49e59ade-cc6e-49b8-b429-de28c4515a81",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.6447
+        },
+        {
+          "type": "statement",
+          "id": "b5d94b64-3856-4d51-a204-0bcdecb39346",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "93802036-4cf0-4f07-a9d7-eeb70d9773b9",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "639ecd44-2bd2-4d87-bbdc-4de20f2da166",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        }
+      ],
+      "tags": [
+        "graph",
+        "multi_concept"
+      ]
+    },
+    {
+      "case_id": "current-employer",
+      "query": "Didac current employer",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "d315de3e-9cfb-48ea-a0e0-f35e894e293f",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.645
+        },
+        {
+          "type": "statement",
+          "id": "49e59ade-cc6e-49b8-b429-de28c4515a81",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.6447
+        },
+        {
+          "type": "statement",
+          "id": "b5d94b64-3856-4d51-a204-0bcdecb39346",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "93802036-4cf0-4f07-a9d7-eeb70d9773b9",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "639ecd44-2bd2-4d87-bbdc-4de20f2da166",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        }
+      ],
+      "tags": [
+        "temporal",
+        "predicate_intent"
+      ]
+    },
+    {
+      "case_id": "job-title-airbus",
+      "query": "Didac job title at Airbus",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "d315de3e-9cfb-48ea-a0e0-f35e894e293f",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.645
+        },
+        {
+          "type": "statement",
+          "id": "49e59ade-cc6e-49b8-b429-de28c4515a81",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.6447
+        },
+        {
+          "type": "statement",
+          "id": "b5d94b64-3856-4d51-a204-0bcdecb39346",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "93802036-4cf0-4f07-a9d7-eeb70d9773b9",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "639ecd44-2bd2-4d87-bbdc-4de20f2da166",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        }
+      ],
+      "tags": [
+        "multi_concept",
+        "predicate_intent"
+      ]
+    },
+    {
+      "case_id": "studied-in-grenoble",
+      "query": "Didac studied in Grenoble",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "d315de3e-9cfb-48ea-a0e0-f35e894e293f",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.645
+        },
+        {
+          "type": "statement",
+          "id": "49e59ade-cc6e-49b8-b429-de28c4515a81",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.6447
+        },
+        {
+          "type": "statement",
+          "id": "b5d94b64-3856-4d51-a204-0bcdecb39346",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "93802036-4cf0-4f07-a9d7-eeb70d9773b9",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "639ecd44-2bd2-4d87-bbdc-4de20f2da166",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        }
+      ],
+      "tags": [
+        "multi_token",
+        "historical"
+      ]
+    },
+    {
+      "case_id": "languages",
+      "query": "What languages does Didac speak?",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "d315de3e-9cfb-48ea-a0e0-f35e894e293f",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.645
+        },
+        {
+          "type": "statement",
+          "id": "49e59ade-cc6e-49b8-b429-de28c4515a81",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.6447
+        },
+        {
+          "type": "statement",
+          "id": "b5d94b64-3856-4d51-a204-0bcdecb39346",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "93802036-4cf0-4f07-a9d7-eeb70d9773b9",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "639ecd44-2bd2-4d87-bbdc-4de20f2da166",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        }
+      ],
+      "tags": [
+        "graph"
+      ]
+    },
+    {
+      "case_id": "effective-role-not-superseded",
+      "query": "Didac Quality Engineering End-to-End Analytics Manager",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "d315de3e-9cfb-48ea-a0e0-f35e894e293f",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.645
+        },
+        {
+          "type": "statement",
+          "id": "49e59ade-cc6e-49b8-b429-de28c4515a81",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.6447
+        },
+        {
+          "type": "statement",
+          "id": "b5d94b64-3856-4d51-a204-0bcdecb39346",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "93802036-4cf0-4f07-a9d7-eeb70d9773b9",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "639ecd44-2bd2-4d87-bbdc-4de20f2da166",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        }
+      ],
+      "tags": [
+        "quality",
+        "effective"
+      ]
+    },
+    {
+      "case_id": "legacy-description-vs-structured",
+      "query": "Airbus Toulouse started 1 January 2026",
+      "hit_count": 25,
+      "relevant_ranks": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        11,
+        12,
+        16
+      ],
+      "first_relevant_rank": 3,
+      "recall_at_1": false,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "9c9e7317-f0ed-4fb8-89ec-c12e83610d17",
+          "predicate": "locatedAt",
+          "status": "asserted",
+          "score": 0.6388
+        },
+        {
+          "type": "entity",
+          "id": "9eb5d50e-cff9-40de-87ee-73f95883ca87",
+          "name": "Toulouse",
+          "score": 0.6338
+        },
+        {
+          "type": "entity",
+          "id": "e20c5090-74a6-454c-b56f-13319d2ca0cf",
+          "name": "Airbus",
+          "score": 0.6338
+        },
+        {
+          "type": "statement",
+          "id": "e068012e-5993-43d1-974e-578b21c96178",
+          "predicate": "roleAt",
+          "status": "asserted",
+          "score": 0.5997
+        },
+        {
+          "type": "statement",
+          "id": "2721d3be-2ece-4e0f-bd7f-92f8fc407aa6",
+          "predicate": "relatedTo",
+          "status": "asserted",
+          "score": 0.5997
+        }
+      ],
+      "tags": [
+        "quality",
+        "legacy_text"
+      ]
+    },
+    {
+      "case_id": "role-at-airbus-only",
+      "query": "role at Airbus",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        22,
+        23,
+        24,
+        25
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "entity",
+          "id": "e20c5090-74a6-454c-b56f-13319d2ca0cf",
+          "name": "Airbus",
+          "score": 0.6338
+        },
+        {
+          "type": "statement",
+          "id": "e068012e-5993-43d1-974e-578b21c96178",
+          "predicate": "roleAt",
+          "status": "asserted",
+          "score": 0.5997
+        },
+        {
+          "type": "statement",
+          "id": "2721d3be-2ece-4e0f-bd7f-92f8fc407aa6",
+          "predicate": "relatedTo",
+          "status": "asserted",
+          "score": 0.5997
+        },
+        {
+          "type": "statement",
+          "id": "d5d70a6e-4a3e-4f3f-a484-b8e649b51a46",
+          "predicate": "roleAt",
+          "status": "asserted",
+          "score": 0.5988
+        },
+        {
+          "type": "statement",
+          "id": "a0616be3-7bff-4513-a347-1486d33abe1a",
+          "predicate": "roleAt",
+          "status": "asserted",
+          "score": 0.5988
+        }
+      ],
+      "tags": [
+        "lexical_ok"
+      ]
+    },
+    {
+      "case_id": "who-is-didac",
+      "query": "Who is Didac?",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "d315de3e-9cfb-48ea-a0e0-f35e894e293f",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.66
+        },
+        {
+          "type": "statement",
+          "id": "49e59ade-cc6e-49b8-b429-de28c4515a81",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.6597
+        },
+        {
+          "type": "statement",
+          "id": "b5d94b64-3856-4d51-a204-0bcdecb39346",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6547
+        },
+        {
+          "type": "statement",
+          "id": "93802036-4cf0-4f07-a9d7-eeb70d9773b9",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6547
+        },
+        {
+          "type": "statement",
+          "id": "639ecd44-2bd2-4d87-bbdc-4de20f2da166",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6547
+        }
+      ],
+      "tags": [
+        "entity"
+      ]
+    },
+    {
+      "case_id": "didac-position",
+      "query": "Didac position",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "d315de3e-9cfb-48ea-a0e0-f35e894e293f",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.645
+        },
+        {
+          "type": "statement",
+          "id": "49e59ade-cc6e-49b8-b429-de28c4515a81",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.6447
+        },
+        {
+          "type": "statement",
+          "id": "b5d94b64-3856-4d51-a204-0bcdecb39346",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "93802036-4cf0-4f07-a9d7-eeb70d9773b9",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "639ecd44-2bd2-4d87-bbdc-4de20f2da166",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        }
+      ],
+      "tags": [
+        "predicate_intent",
+        "multi_token"
+      ]
+    },
+    {
+      "case_id": "didac-job",
+      "query": "Didac job",
+      "hit_count": 25,
+      "relevant_ranks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22
+      ],
+      "first_relevant_rank": 1,
+      "recall_at_1": true,
+      "recall_at_3": true,
+      "recall_at_10": true,
+      "zero_hits": false,
+      "superseded_in_topk": false,
+      "must_not_hits": [],
+      "top_hits": [
+        {
+          "type": "statement",
+          "id": "d315de3e-9cfb-48ea-a0e0-f35e894e293f",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.645
+        },
+        {
+          "type": "statement",
+          "id": "49e59ade-cc6e-49b8-b429-de28c4515a81",
+          "predicate": "holdsRole",
+          "status": "asserted",
+          "score": 0.6447
+        },
+        {
+          "type": "statement",
+          "id": "b5d94b64-3856-4d51-a204-0bcdecb39346",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "93802036-4cf0-4f07-a9d7-eeb70d9773b9",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        },
+        {
+          "type": "statement",
+          "id": "639ecd44-2bd2-4d87-bbdc-4de20f2da166",
+          "predicate": "hasParticipant",
+          "status": "asserted",
+          "score": 0.6397
+        }
+      ],
+      "tags": [
+        "predicate_intent",
+        "multi_token"
+      ]
+    }
+  ]
+}
