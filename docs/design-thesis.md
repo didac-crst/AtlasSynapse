@@ -197,6 +197,7 @@ category. Semantic-model gaps are governed decisions.
 
 ## Related documents
 
+- [Business value](business-value.md)
 - [Architecture](architecture.md)
 - [Ontology model](ontology-model.md)
 - [MCP contract](mcp-contract.md)

@@ -144,7 +144,8 @@ handovers, operational incident memory, and personal administration. The shared
 requirement is **long-lived, connected knowledge whose concepts cannot all be
 known upfront**.
 
-For the full argument, see [Design thesis](docs/design-thesis.md).
+For the architectural argument, see [Design thesis](docs/design-thesis.md).
+For outcomes and when *not* to use it, see [Business value](docs/business-value.md).
 
 ## Knowledge writes own identity resolution
 
@@ -394,6 +395,7 @@ Authoritative catalogs: [MCP contract](docs/mcp-contract.md) and
 ## Documentation
 
 - [Design thesis](docs/design-thesis.md)
+- [Business value](docs/business-value.md)
 - [Architecture](docs/architecture.md)
 - [Ontology model](docs/ontology-model.md)
 - [Data model](docs/data-model.md)
