@@ -156,18 +156,15 @@ not a missing primary-key lookup.
    engine-per-request, global read mutex, response JSON for small searches,
    “stdio inherently serial.”
 
-## Still missing: locate the ~2.5 s floor
-
-Decompose with three MCP clients (same tool, e.g. `search_entities`):
+## ~2.5 s floor — located (see `docs/mcp-path-benchmark.md`)
 
 ```text
-HTTP service (LAN)                 ~38 ms   (done)
-local MCP client → local stdio     ?? ms
-remote client → Secure MCP Tunnel  ?? ms
-ChatGPT → Secure MCP Tunnel      ~2580 ms  (observed)
+HTTP LAN                         ~54 ms
+local MCP stdio                  ~40 ms
+Secure Tunnel enqueue→response  ~255 ms   (tunnel-client metrics)
+ChatGPT → tunnel               ~2580 ms
+ChatGPT − tunnel E2E           ~2325 ms   ← external; stop chasing in AtlasSynapse
 ```
-
-That separates ChatGPT/OpenAI orchestration from tunnel-client overhead.
 
 ## Smallest proposed fixes (ordered by expected gain)
 
