@@ -1,5 +1,10 @@
 # Business value
 
+AtlasSynapse is an open-source **reference implementation and working demonstrator**,
+not a finished enterprise product. The use cases and KPIs below describe
+**hypotheses to evaluate in pilots**. They are not claims of validated enterprise
+ROI.
+
 AtlasSynapse is worthwhile when an organization repeatedly pays the cost of
 **reconstructing context** that should have remained structured, connected, and
 attributable.
@@ -11,9 +16,6 @@ answers a different question:
 
 > Why should a company care — and where does this save money, reduce risk, or
 > improve decisions?
-
-This is a business-case note, not a claim of measured enterprise savings. Candidate
-KPIs are listed so value can be tested; they are not reported results.
 
 ## The economic problem
 
@@ -238,10 +240,10 @@ in linked operational context.
 **Candidate measures.** Time to assemble account technical context; % of
 escalations with linked prior history; context-gathering effort before renewals.
 
-## Candidate KPIs (evaluation, not claims)
+## Candidate KPIs (pilot hypotheses, not proven ROI)
 
-Use these to test fit in a pilot. Do not treat them as validated AtlasSynapse
-results:
+Use these to test fit in a demonstrator or pilot. Do not treat them as validated
+AtlasSynapse results:
 
 - investigation cycle time;
 - MTTR;

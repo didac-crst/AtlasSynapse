@@ -14,7 +14,7 @@ AtlasSynapse gives it a world model.
 </h2>
 
 <p align="center">
-<strong>A governed semantic-memory layer for AI agents.</strong>
+<strong>An open-source reference implementation and working demonstrator of governed semantic memory for AI agents.</strong>
 </p>
 
 <p align="center">
@@ -27,6 +27,26 @@ AtlasSynapse gives it a world model.
 </p>
 
 <br>
+
+> **Project status:** AtlasSynapse is an actively developed reference implementation
+> and working demonstrator, not a production-certified enterprise platform. It is
+> currently dogfooded through ChatGPT over MCP and a self-hosted PostgreSQL
+> backend. ChatGPT is one agent client; AtlasSynapse itself is independent and
+> exposes MCP/API interfaces.
+
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"ui-sans-serif, system-ui, sans-serif","fontSize":"14px","lineColor":"#64748B"}}}%%
+flowchart TB
+  agent[ChatGPT / other agent] -->|MCP| atlas((AtlasSynapse))
+  atlas --> pg[(PostgreSQL semantic memory)]
+
+  classDef client fill:#EAF2FB,stroke:#3B6EA5,color:#163A5F,stroke-width:1.5px
+  classDef hub fill:#E8F7F5,stroke:#2A8F85,color:#0F3F3B,stroke-width:2px
+  classDef store fill:#F8FAFC,stroke:#94A3B8,color:#334155,stroke-width:1.5px
+  class agent client
+  class atlas hub
+  class pg store
+```
 
 ---
 
@@ -73,12 +93,12 @@ things relate, when facts were true, and where those facts came from.
 
 ## What AtlasSynapse is
 
-AtlasSynapse is a **self-hosted governed semantic-memory layer** for AI agents.
+AtlasSynapse is an **open-source reference implementation and working demonstrator**
+for governed semantic memory in AI-agent systems.
 
-Agents accumulate open-ended structured knowledge. When the existing model is
-insufficient, they can safely participate in evolving the model itself —
-proposals, gates, clarification, and authorized apply — without silently
-redefining meaning.
+It explores how agents can accumulate structured knowledge, resolve identity,
+preserve provenance and history, and participate in semantic-model evolution under
+deterministic and LLM-assisted governance — without silently redefining meaning.
 
 Plain text remains excellent for nuance and conversational context. AtlasSynapse
 does not replace that memory. It makes selected structure explicit so an agent
@@ -456,6 +476,6 @@ See the [development roadmap](docs/roadmap.md) for history and next focus.
 
 ---
 
-**AtlasSynapse gives AI agents a structured place to put the details that are too granular, connected, temporal, or evidence-dependent to live comfortably inside ordinary conversational memory — and a governed way to evolve the semantic model used to represent them.**
+**AtlasSynapse is a reference implementation exploring how AI agents can keep structured, temporal, evidence-backed knowledge — and evolve the semantic model used to represent it — under governance rather than guesswork.**
 
 Licensed under the [Apache License 2.0](LICENSE).

@@ -1,6 +1,10 @@
 # Design thesis
 
-AtlasSynapse is a governed semantic-memory layer for AI agents.
+AtlasSynapse is an open-source **reference implementation and working demonstrator**
+of governed semantic memory for AI agents — not a production-certified enterprise
+platform. It is dogfooded today through an MCP-connected agent client (currently
+ChatGPT) against a self-hosted PostgreSQL backend. ChatGPT is one consumer;
+AtlasSynapse remains independent behind MCP/API boundaries.
 
 The short form of the thesis:
 
@@ -13,6 +17,10 @@ The differentiator underneath it:
 
 > The agent can discover that its current semantic model is insufficient, but it
 > cannot silently redefine that model.
+
+This repository explores that hypothesis in working software. See
+[business-value.md](business-value.md) for the economic framing and pilot
+hypotheses.
 
 ## Why fixed schemas are insufficient
 
