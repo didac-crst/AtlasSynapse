@@ -14,7 +14,7 @@ AtlasSynapse gives it a world model.
 </h2>
 
 <p align="center">
-<strong>An open-source reference implementation and working demonstrator of governed semantic memory for AI agents.</strong>
+<strong>A working reference implementation of governed semantic memory for AI agents.</strong>
 </p>
 
 <p align="center">
@@ -456,11 +456,11 @@ Non-health HTTP routes accept `Authorization: Bearer <HTTP_API_TOKEN>` or
 
 ## Project status
 
-AtlasSynapse is actively developed and already supports the complete core
-knowledge lifecycle: identity-aware writes, temporal statements, provenance,
-conflicts, governed ontology evolution, semantic clarification, retrieval,
-dry-run mutation previews, MCP access, operational inspection, and deployment
-packaging.
+AtlasSynapse is actively developed and already implements the core lifecycle
+exercised by the current demonstrator: identity-aware writes, temporal
+statements, provenance, conflicts, governed ontology evolution, semantic
+clarification, retrieval, dry-run mutation previews, MCP access, operational
+inspection, and deployment packaging.
 
 Recent capability milestones (after the original phase roadmap):
 
