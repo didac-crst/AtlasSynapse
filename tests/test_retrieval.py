@@ -8,7 +8,7 @@ from decimal import Decimal
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from semantic_memory.config import get_settings
+from semantic_memory.config import Settings, get_settings
 from semantic_memory.mcp.server import MCPPlaceholder
 from semantic_memory.mcp.tools import RetrievalMCPTools
 from semantic_memory.models import ActorType
@@ -337,14 +337,15 @@ def test_current_intent_prefers_effective_over_unbounded_description(
             valid_from=datetime(2025, 9, 1, tzinfo=UTC),
         )
     )
+    # relatedTo is entity-valued; unbounded descriptive noise uses description.
     legacy = statements.assert_statement(
         AssertStatementRequest(
             actor_key=writer,
             request_id=uuid.uuid4(),
             idempotency_key=f"t-leg-{uuid.uuid4()}",
-            subject_entity_id=role.entity.id,
-            predicate_key="relatedTo",
-            object_string=("Temporal Role Title at Org somewhere, started 1 January 2026"),
+            subject_entity_id=person.entity.id,
+            predicate_key="description",
+            object_string="Temporal Role Title at Org somewhere, started 1 January 2026",
         )
     )
     assert effective.statement is not None and legacy.statement is not None
@@ -455,10 +456,12 @@ def test_http_and_mcp_retrieval(client: TestClient, db_session: Session) -> None
     assert memory.status_code == 200
     assert memory.json()["vector_search_used"] is False
 
-    tools = MCPPlaceholder.from_settings().tools
-    assert "search_entities" in tools
-    assert "search_semantic_memory" in tools
-    assert "get_relevant_context" in tools
+    agent_tools = MCPPlaceholder.from_settings().tools
+    assert "search_memory" in agent_tools
+    assert "get_relevant_context" in agent_tools
+    all_tools = MCPPlaceholder.from_settings(Settings(mcp_tool_surface="all")).tools
+    assert "search_entities" in all_tools
+    assert "search_semantic_memory" in all_tools
 
     mcp = RetrievalMCPTools(db_session)
     mcp_result = mcp.search_entities({"query": "HTTP Search"})

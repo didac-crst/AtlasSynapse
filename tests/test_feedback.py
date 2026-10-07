@@ -280,4 +280,5 @@ def test_mcp_report_feedback_and_tool_registration(db_session: Session) -> None:
     )
     assert "error_code" not in result
     assert result["outcome"] == "CREATE"
-    assert "report_feedback" in MCPPlaceholder.from_settings().tools
+    # Default surface is agent; feedback tools live on advanced/all.
+    assert "report_feedback" in MCPPlaceholder.from_settings(Settings(mcp_tool_surface="all")).tools

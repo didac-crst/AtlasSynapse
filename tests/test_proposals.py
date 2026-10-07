@@ -274,15 +274,25 @@ def test_stale_revision_returns_revision_conflict(db_session: Session) -> None:
 
 
 def test_unauthorized_actor_cannot_apply(db_session: Session) -> None:
-    proposer = _ensure_proposer(db_session)
+    # ensure() always stamps configured agent defaults (incl. ontology.apply);
+    # seed a propose-only actor directly to exercise the capability gate.
+    ActorRepository(db_session).create(
+        key="propose-only",
+        actor_type=ActorType.AGENT,
+        status=ActorStatus.ACTIVE,
+        capabilities=[
+            Capability.ONTOLOGY_READ.value,
+            Capability.ONTOLOGY_PROPOSE.value,
+        ],
+    )
     service = ProposalService(db_session)
     proposed = service.propose_class(
-        ProposeClassRequest(**_envelope(proposer), key="Faculty", parent_keys=["Person"])
+        ProposeClassRequest(**_envelope("propose-only"), key="Faculty", parent_keys=["Person"])
     )
     assert proposed.outcome == ProposalOutcome.MANUAL_REVIEW
     with pytest.raises(UnauthorizedOperationError) as exc:
         service.apply_proposal(
-            ApplyProposalRequest(**_envelope(proposer), proposal_id=proposed.proposal.id)
+            ApplyProposalRequest(**_envelope("propose-only"), proposal_id=proposed.proposal.id)
         )
     assert exc.value.error_code == "UNAUTHORIZED_OPERATION"
     with pytest.raises(UnknownClassError):
@@ -408,7 +418,7 @@ def test_http_propose_and_apply_endpoints(client: TestClient) -> None:
     denied = client.post(
         "/v1/ontology/proposals/apply",
         json={
-            "actor_key": "http-proposer",
+            "actor_key": "missing-applier",
             "request_id": str(uuid.uuid4()),
             "idempotency_key": f"http-apply-{uuid.uuid4()}",
             "proposal_id": proposal_id,
@@ -416,10 +426,11 @@ def test_http_propose_and_apply_endpoints(client: TestClient) -> None:
     )
     assert denied.status_code == 403
 
+    # Default agent capabilities include ontology.apply.
     applied = client.post(
         "/v1/ontology/proposals/apply",
         json={
-            "actor_key": "system",
+            "actor_key": "http-proposer",
             "request_id": str(uuid.uuid4()),
             "idempotency_key": f"http-apply-ok-{uuid.uuid4()}",
             "proposal_id": proposal_id,
