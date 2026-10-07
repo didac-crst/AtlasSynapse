@@ -120,6 +120,16 @@ class Settings(BaseSettings):
         alias="EMBEDDING_MODE",
     )
     mcp_transport: Literal["stdio", "http"] = Field(default="stdio", alias="MCP_TRANSPORT")
+    mcp_max_inflight: int = Field(
+        default=8,
+        alias="MCP_MAX_INFLIGHT",
+        ge=1,
+        le=64,
+        description=(
+            "Max concurrent MCP tools/call handlers. Stdout writes remain serialized. "
+            "Set to 1 to force single-flight dispatch (legacy behavior)."
+        ),
+    )
     mcp_actor_key: str = Field(
         default="chatgpt",
         alias="MCP_ACTOR_KEY",

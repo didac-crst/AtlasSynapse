@@ -156,28 +156,37 @@ not a missing primary-key lookup.
    engine-per-request, global read mutex, response JSON for small searches,
    “stdio inherently serial.”
 
-## ~2.5 s floor — located (see `docs/mcp-path-benchmark.md`)
+## Verdict: local hosting is not too slow
+
+**Closed.** Evidence is decisive for single-call reads:
 
 ```text
 HTTP LAN                         ~54 ms
 local MCP stdio                  ~40 ms
 Secure Tunnel enqueue→response  ~255 ms   (tunnel-client metrics)
-ChatGPT → tunnel               ~2580 ms
-ChatGPT − tunnel E2E           ~2325 ms   ← external; stop chasing in AtlasSynapse
+ChatGPT observed               ~2580 ms
 ```
 
-## Smallest proposed fixes (ordered by expected gain)
+Roughly **90% of end-to-end latency is above the tunnel**, not in AtlasSynapse,
+the Pi, Postgres, or MCP stdio. Stop chasing the ChatGPT ~2.5 s feel inside
+this service. Detail: `docs/mcp-path-benchmark.md`.
 
-Do **not** implement broad opts yet; instrumentation + diagnosis on this branch.
+Remaining work under our control is architectural / efficiency, not “hosting is slow”:
 
-1. **Benchmark local MCP vs tunnel MCP vs ChatGPT MCP** — pin where the ~2.5 s lives.
-2. **Investigate concurrent MCP dispatch** in our server (JSON-RPC ids + synced
-   writes); check for an upstream concurrent MCP server before rewriting.
+1. **Concurrent MCP dispatch** — `perf/mcp-concurrent-dispatch` / `docs/mcp-concurrent-dispatch.md`
+   (batch wall 2/5/10 + JSON-RPC id correctness; removes artificial single-flight queueing).
+2. **Neighborhood N+1** — server efficiency (~200–300 ms neighborhood → better
+   `get_relevant_context`); does not explain ChatGPT sluggishness.
+3. **Prefer aggregate tools** to amortize connector latency when the agent can.
+
+## Smallest proposed fixes (status)
+
+1. ~~Benchmark local MCP vs tunnel MCP vs ChatGPT MCP~~ — done (`mcp-path-benchmark`).
+2. **Concurrent MCP dispatch** — this branch (`mcp-concurrent-dispatch`).
 3. **Remove neighborhood N+1** (`_score_statement` / `resolve_survivor_id` /
-   `statement_service.get`) aiming ~200–300 ms neighborhood → ~400–600 ms
-   `get_relevant_context` server-side.
-4. **Prefer aggregate tools** (`get_relevant_context`) to amortize connector latency.
-5. **Uvicorn workers / DB tuning** — not justified until (1)–(3) land.
+   `statement_service.get`) — next retrieval win; efficiency only.
+4. Prefer aggregate tools (`get_relevant_context`) to amortize connector latency.
+5. Uvicorn workers / DB tuning — not justified until (2)–(3) land.
 
 ## Instrumentation added on this branch
 

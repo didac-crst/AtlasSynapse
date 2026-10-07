@@ -32,6 +32,7 @@ def runtime_config(settings: Settings | None = None) -> dict[str, Any]:
         "semantic_review_reject_threshold": cfg.semantic_review_reject_threshold,
         "embedding_mode": cfg.embedding_mode,
         "mcp_transport": cfg.mcp_transport,
+        "mcp_max_inflight": cfg.mcp_max_inflight,
         "mcp_tool_count": len(REGISTERED_TOOL_NAMES),
         "mcp_tools": list(REGISTERED_TOOL_NAMES),
     }

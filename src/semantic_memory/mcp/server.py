@@ -576,6 +576,7 @@ def build_mcp_server(settings: Settings | None = None) -> StdioMCPServer:
             "Call get_runtime_config to see mcp_tools (includes correct_statement)."
         ),
         tools=build_mcp_tools(),
+        max_inflight=cfg.mcp_max_inflight,
     )
 
 
