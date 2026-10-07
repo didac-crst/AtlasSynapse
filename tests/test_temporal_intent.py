@@ -27,6 +27,7 @@ def test_detect_current_and_historical_cues() -> None:
     )
     assert detect_temporal_intent("When was Didac at INPG?") == TemporalIntent.HISTORICAL
     assert detect_temporal_intent("Didac Airbus") == TemporalIntent.NEUTRAL
+    assert detect_temporal_intent("Didac studied") == TemporalIntent.HISTORICAL
 
 
 def test_current_beats_soft_past_when_current_present() -> None:

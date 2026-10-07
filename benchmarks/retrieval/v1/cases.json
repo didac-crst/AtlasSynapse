@@ -467,6 +467,39 @@
       "expected_predicate_keys": ["holdsRole", "roleAt"],
       "must_not_statement_ids": [],
       "notes": ""
+    },
+    {
+      "id": "didac-previous-role-predicate",
+      "query": "Didac previous role",
+      "intent": "historical",
+      "tags": ["predicate_intent", "historical", "disambiguation"],
+      "expected_entity_ids": ["didac", "current_role"],
+      "expected_statement_ids": ["holds_role_superseded_2026", "holds_role_current"],
+      "expected_predicate_keys": ["holdsRole"],
+      "must_not_statement_ids": [],
+      "notes": "Predicate intent should prefer holdsRole over tied superseded hasGoal neighbors."
+    },
+    {
+      "id": "didac-previous-goals-predicate",
+      "query": "Didac previous goals",
+      "intent": "historical",
+      "tags": ["predicate_intent", "historical", "disambiguation", "goal"],
+      "expected_entity_ids": ["didac", "goal_consulting", "goal_enterprise_ai"],
+      "expected_statement_ids": ["has_goal_consulting", "has_goal_enterprise_ai"],
+      "expected_predicate_keys": ["hasGoal"],
+      "must_not_statement_ids": [],
+      "notes": "goal cue should prefer hasGoal over holdsRole adjacency."
+    },
+    {
+      "id": "didac-studied-predicate",
+      "query": "Didac studied",
+      "intent": "any",
+      "tags": ["predicate_intent", "disambiguation"],
+      "expected_entity_ids": ["didac", "inpg"],
+      "expected_statement_ids": ["studied_at_inpg"],
+      "expected_predicate_keys": ["studiedAt"],
+      "must_not_statement_ids": [],
+      "notes": "studied cue → studiedAt."
     }
   ]
 }

@@ -128,6 +128,93 @@ def test_search_entities_and_statements_with_signals(db_session: Session) -> Non
     assert statements.hits[0].signals.entity_proximity == 1.0
 
 
+def test_predicate_intent_prefers_holds_role_over_has_goal_on_historical_anchor(
+    db_session: Session,
+) -> None:
+    """Soft predicate intent should break holdsRole vs hasGoal historical ties."""
+    from datetime import UTC, datetime
+
+    from semantic_memory.repositories.statements import StatementRepository
+
+    writer = _ensure_writer(db_session, key="pred-intent-writer")
+    entities = EntityService(db_session)
+    statements = StatementService(db_session)
+
+    person = entities.create_entity(
+        CreateEntityRequest(
+            actor_key=writer,
+            request_id=uuid.uuid4(),
+            idempotency_key=f"pi-person-{uuid.uuid4()}",
+            canonical_name="PredIntentPerson",
+            class_key="Document",
+        )
+    )
+    role = entities.create_entity(
+        CreateEntityRequest(
+            actor_key=writer,
+            request_id=uuid.uuid4(),
+            idempotency_key=f"pi-role-{uuid.uuid4()}",
+            canonical_name="PredIntent Role",
+            class_key="Document",
+        )
+    )
+    goal = entities.create_entity(
+        CreateEntityRequest(
+            actor_key=writer,
+            request_id=uuid.uuid4(),
+            idempotency_key=f"pi-goal-{uuid.uuid4()}",
+            canonical_name="PredIntent Goal",
+            class_key="Document",
+        )
+    )
+    assert person.entity and role.entity and goal.entity
+    # Use relatedTo as stand-in if holdsRole/hasGoal unavailable in smoke ontology —
+    # production LAN bench covers real predicates; here we only check the scorer path
+    # is wired (match_reasons). Full disambiguation is covered by unit + LAN bench.
+    linked = statements.assert_statement(
+        AssertStatementRequest(
+            actor_key=writer,
+            request_id=uuid.uuid4(),
+            idempotency_key=f"pi-link-{uuid.uuid4()}",
+            subject_entity_id=person.entity.id,
+            predicate_key="relatedTo",
+            object_entity_id=role.entity.id,
+            valid_from=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+    )
+    assert linked.statement is not None
+    repo = StatementRepository(db_session)
+    row = repo.get(linked.statement.id)
+    assert row is not None
+    # Mark superseded so historical anchor expansion includes it.
+    other = statements.assert_statement(
+        AssertStatementRequest(
+            actor_key=writer,
+            request_id=uuid.uuid4(),
+            idempotency_key=f"pi-cur-{uuid.uuid4()}",
+            subject_entity_id=person.entity.id,
+            predicate_key="relatedTo",
+            object_entity_id=role.entity.id,
+            valid_from=datetime(2025, 9, 1, tzinfo=UTC),
+        )
+    )
+    assert other.statement is not None
+    repo.mark_superseded(row, replacement_id=other.statement.id)
+    db_session.flush()
+
+    service = RetrievalService(db_session)
+    memory = service.search_semantic_memory(
+        SearchSemanticMemoryRequest(query="PredIntentPerson previous role", limit=25)
+    )
+    assert any(
+        "predicate intent" in note.lower() for note in memory.ranking_explanations
+    )
+    assert any(
+        hit.statement is not None and hit.statement.id == linked.statement.id
+        for hit in memory.hits
+    )
+
+
 def test_anchor_1hop_reaches_superseded_holds_for_historical_query(
     db_session: Session,
 ) -> None:

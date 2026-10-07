@@ -77,9 +77,15 @@ def detect_temporal_intent(query: str | None) -> TemporalIntent:
     historical = any(_has_phrase(q, spaced, phrase) for phrase in _HISTORICAL_PHRASES)
     current = any(_has_phrase(q, spaced, phrase) for phrase in _CURRENT_PHRASES)
 
-    # Soft past-tense cue when no current cue (e.g. "when was Didac at INPG").
+    # Soft past-tense cue when no current cue (e.g. "when was Didac at INPG",
+    # "Didac studied").
     soft_past = (not current) and (
-        " was " in spaced or spaced.startswith("was ") or " were " in spaced
+        " was " in spaced
+        or spaced.startswith("was ")
+        or " were " in spaced
+        or " studied " in spaced
+        or spaced.endswith(" studied")
+        or spaced.startswith("studied ")
     )
 
     if historical and current:

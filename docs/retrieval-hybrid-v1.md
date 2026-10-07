@@ -110,20 +110,52 @@ Report: [`benchmarks/retrieval/v1/anchor_v1_report.json`](../benchmarks/retrieva
 - `Didac current Airbus role` → no superseded leakage; asserted-only path unchanged
 - Latency: historical ~350ms LAN; current ~140ms (expansion skipped)
 
-### Remaining gaps
+## Checkpoint: soft predicate intent (`predicate_intent_v1`) — **end of retrieval v1**
 
-- Historical superseded boost currently promotes *all* superseded entity-valued neighbors equally (holdsRole and hasGoal tie) — soft predicate intent would separate them
-- `when-did-didac-start-current-role` still has mild competition from non-role adjacency on some phrasings
-- Embeddings still not justified
+Ontology-derived cues (camelCase key / label / description / aliases) plus a tiny NL
+overlay (`job`/`position`/`study`/`goal`/`role`…). Soft ranking boost + bounded
+predicate-keyed candidate pull. **Never a hard filter.**
+
+Shared stems (e.g. bare `role` on both `holdsRole` and `roleAt`) only boost when
+distinctive or NL-targeted. Generic/temporal predicates (`startedAt`, `relatedTo`, …)
+are excluded from intent boosts.
+
+Report: [`benchmarks/retrieval/v1/predicate_intent_v1_report.json`](../benchmarks/retrieval/v1/predicate_intent_v1_report.json)
+
+| Metric | Anchor v1 (40) | Predicate intent (43) |
+| --- | ---: | ---: |
+| Recall@1 | 97.5% | **97.7%** (orig-40 slice **97.5%**) |
+| Recall@3 | 100% | **100%** |
+| MRR | 0.988 | **0.988** |
+
+### Disambiguation (new cases)
+
+| Query | Top predicate |
+| --- | --- |
+| `Didac previous role` | **holdsRole** (superseded) |
+| `Didac previous goals` | **hasGoal** (superseded) |
+| `Didac studied` | **studiedAt** |
+
+### Final retrieval v1 stack
+
+```text
+tokenized lexical
++ entity-name matching
++ temporal intent / effective-state
++ historical-only bounded 1-hop anchors
++ soft predicate intent
+```
+
+**Stop here.** Embeddings remain optional future evidence, not a foundation.
 
 ## Implementation order
 
 1. ~~Benchmark + baseline~~ (`f82ecad`)
 2. ~~Tokenized multi-term lexical matching~~ (`ab49f57`)
 3. ~~Temporal intent / effective-state + legacy demotion~~ (`a7a7123`)
-4. ~~Bounded 1-hop anchor expansion (historical-only)~~ (this checkpoint)
-5. Soft predicate intent — only if role-vs-goal historical ties matter in practice
-6. Embeddings only after measuring remaining gaps
+4. ~~Bounded 1-hop anchor expansion (historical-only)~~ (`082424b`)
+5. ~~Soft predicate intent~~ (this checkpoint) — **retrieval v1 complete**
+6. Embeddings only if a measured gap appears in production use
 
 Principle:
 

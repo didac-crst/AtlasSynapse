@@ -56,6 +56,12 @@ from semantic_memory.services.lexical import (
     lexical_tokens,
     score_lexical_relevance,
 )
+from semantic_memory.services.predicate_intent import (
+    PredicateLexicon,
+    build_predicate_lexicon,
+    score_predicate_intent,
+    top_intent_predicates,
+)
 from semantic_memory.services.provenance import ProvenanceService
 from semantic_memory.services.statements import StatementService
 from semantic_memory.services.temporal_intent import (
@@ -179,6 +185,9 @@ class RetrievalService:
             ],
         )
         temporal_intent = detect_temporal_intent(request.query)
+        predicate_lexicon = (
+            build_predicate_lexicon(self._session) if request.query else None
+        )
         stmt = select(Statement)
         if request.status is not None:
             stmt = stmt.where(Statement.status == request.status.value)
@@ -283,6 +292,7 @@ class RetrievalService:
                     else None
                 ),
                 temporal_intent=temporal_intent,
+                predicate_lexicon=predicate_lexicon,
             )
             hits.append(
                 RankedStatementHit(
@@ -308,6 +318,10 @@ class RetrievalService:
                     f"Temporal intent for ranking: {temporal_intent.value} "
                     "(current prefers effective open-ended facts; "
                     "historical promotes ended/superseded/legacy descriptive rows)."
+                ),
+                (
+                    "Predicate intent is a soft ranking boost from ontology "
+                    "labels/descriptions/aliases (never a hard filter)."
                 ),
                 (
                     "ranking_score reflects lexical match, temporal validity, "
@@ -490,6 +504,40 @@ class RetrievalService:
                     statement_hits.append(hit)
                     seen.add(hit.statement.id)
 
+        # Soft predicate-intent candidate pull: when the query clearly cues a
+        # predicate (studied/goal/role), also fetch that predicate's rows so
+        # entity-valued facts aren't lost to created_at pagination. Not a filter.
+        predicate_lexicon = build_predicate_lexicon(self._session)
+        intent_keys = top_intent_predicates(request.query, predicate_lexicon)
+        seen_statement_ids = {hit.statement.id for hit in statement_hits}
+        for pred_key in intent_keys:
+            extra = self.search_statements(
+                SearchStatementsRequest(
+                    predicate_key=pred_key,
+                    entity_id=request.entity_id,
+                    as_of=request.as_of,
+                    limit=min(15, request.limit),
+                    status=(
+                        None
+                        if temporal_intent == TemporalIntent.HISTORICAL
+                        else StatementStatus.ASSERTED
+                    ),
+                    query=None,
+                )
+            ).hits
+            rescored = self._rescore_statements_for_query(
+                [hit.statement.id for hit in extra],
+                query=request.query,
+                as_of=request.as_of,
+                temporal_intent=temporal_intent,
+                predicate_lexicon=predicate_lexicon,
+            )
+            for hit in rescored:
+                if hit.statement.id in seen_statement_ids:
+                    continue
+                statement_hits.append(hit)
+                seen_statement_ids.add(hit.statement.id)
+
         # Anchor expansion is historical-only: it exists to reach entity-valued
         # superseded facts with empty object_string. Running it on current/default
         # queries adds adjacency noise without a measured gain.
@@ -501,8 +549,8 @@ class RetrievalService:
                 focus_entity_id=request.entity_id,
                 as_of=request.as_of,
                 temporal_intent=temporal_intent,
+                predicate_lexicon=predicate_lexicon,
             )
-            seen_statement_ids = {hit.statement.id for hit in statement_hits}
             for hit in anchor_hits:
                 if hit.statement.id in seen_statement_ids:
                     existing_idx = next(
@@ -584,6 +632,10 @@ class RetrievalService:
                     f"(used {anchor_count} strong entity anchor(s); deduplicated)."
                     if temporal_intent == TemporalIntent.HISTORICAL
                     else "Bounded 1-hop anchor expansion skipped (non-historical intent)."
+                ),
+                (
+                    "Predicate intent softly boosts ontology-matching predicates "
+                    "(e.g. role→holdsRole); it never filters candidates out."
                 ),
                 "Vector search was not required and was not used.",
                 "ranking_score is for ordering only and is not a truth score.",
@@ -688,6 +740,64 @@ class RetrievalService:
             },
         )
 
+    def _rescore_statements_for_query(
+        self,
+        statement_ids: list[uuid.UUID],
+        *,
+        query: str,
+        as_of: datetime | None,
+        temporal_intent: TemporalIntent,
+        predicate_lexicon: PredicateLexicon | None,
+    ) -> list[RankedStatementHit]:
+        """Score already-fetched statement ids with the user query (dedupe-safe)."""
+        if not statement_ids:
+            return []
+        rows = list(
+            self._session.scalars(
+                select(Statement).where(Statement.id.in_(statement_ids))
+            ).all()
+        )
+        if not rows:
+            return []
+        now = as_of or datetime.now(UTC)
+        name_map = self._entity_name_map_for_statements(rows)
+        evidence_stats = self._provenance_repo.evidence_stats_for_statements(
+            [row.id for row in rows]
+        )
+        specificity_cache: dict[uuid.UUID, float] = {}
+        hits: list[RankedStatementHit] = []
+        for statement in rows:
+            if statement.status == StatementStatus.RETRACTED.value:
+                continue
+            count, reliability = evidence_stats.get(statement.id, (0, 0.0))
+            signals, reasons = self._score_statement(
+                statement,
+                query=query,
+                focus_entity_id=None,
+                now=now,
+                evidence_count=count,
+                source_reliability=reliability,
+                specificity_cache=specificity_cache,
+                subject_name=name_map.get(statement.subject_entity_id),
+                object_name=(
+                    name_map.get(statement.object_entity_id)
+                    if statement.object_entity_id is not None
+                    else None
+                ),
+                temporal_intent=temporal_intent,
+                predicate_lexicon=predicate_lexicon,
+            )
+            reasons = list(dict.fromkeys([*reasons, "predicate_intent_candidate"]))
+            hits.append(
+                RankedStatementHit(
+                    statement=self._statement_service.to_response(statement),
+                    signals=signals,
+                    ranking_score=signals.ranking_score,
+                    match_reasons=reasons,
+                )
+            )
+        return hits
+
     def _select_strong_anchors(
         self,
         entity_hits: list[RankedEntityHit],
@@ -722,6 +832,7 @@ class RetrievalService:
         focus_entity_id: uuid.UUID | None,
         as_of: datetime | None,
         temporal_intent: TemporalIntent,
+        predicate_lexicon: PredicateLexicon | None = None,
     ) -> tuple[list[RankedStatementHit], int]:
         """Expand 1-hop statements around strong entity anchors.
 
@@ -803,6 +914,7 @@ class RetrievalService:
                 ),
                 temporal_intent=temporal_intent,
                 from_anchor=True,
+                predicate_lexicon=predicate_lexicon,
             )
             hits.append(
                 RankedStatementHit(
@@ -900,6 +1012,7 @@ class RetrievalService:
         object_name: str | None = None,
         temporal_intent: TemporalIntent | None = None,
         from_anchor: bool = False,
+        predicate_lexicon: PredicateLexicon | None = None,
     ) -> tuple[RankingSignals, list[str]]:
         notes: list[str] = []
         reasons: list[str] = []
@@ -946,14 +1059,34 @@ class RetrievalService:
                 intent == TemporalIntent.HISTORICAL
                 and statement.status == StatementStatus.SUPERSEDED.value
             ):
-                floor = max(floor, 0.92)
-                reasons.append("anchor_historical_superseded_boost")
+                # Keep the high superseded floor only when the query's predicate
+                # intent agrees (or is empty). Otherwise study/goal cues lose to
+                # every superseded neighbor.
+                apply_high_floor = True
+                if query and predicate_lexicon is not None:
+                    intent_keys = top_intent_predicates(query, predicate_lexicon, limit=2)
+                    my_key = predicate_lexicon.key_for(statement.predicate_id)
+                    if intent_keys and my_key not in intent_keys:
+                        apply_high_floor = False
+                if apply_high_floor:
+                    floor = max(floor, 0.92)
+                    reasons.append("anchor_historical_superseded_boost")
             if lexical < floor:
                 lexical = floor
                 notes.append(
                     f"Applied anchor lexical floor {floor:.2f} "
                     "for entity-valued / low-text statements."
                 )
+
+        if query and predicate_lexicon is not None:
+            predicate_key = predicate_lexicon.key_for(statement.predicate_id)
+            intent_boost, intent_reasons, intent_notes = score_predicate_intent(
+                query, predicate_key, predicate_lexicon
+            )
+            if intent_boost > 0:
+                lexical = min(1.0, lexical + 0.22 * intent_boost)
+                reasons.extend(intent_reasons)
+                notes.extend(intent_notes)
 
         temporal, temporal_reasons, temporal_notes = score_temporal_validity(
             valid_from=statement.valid_from,
