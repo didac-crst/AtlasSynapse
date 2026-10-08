@@ -237,10 +237,19 @@ class MemoryQualityResolution(StrEnum):
     CORRECTED = "corrected"
     RETRACTED = "retracted"
     SUPERSEDED = "superseded"
+    STRUCTURAL_REPAIR = "structural_repair"
     CONFIRMED_SAME = "confirmed_same"
     CONFIRMED_DIFFERENT = "confirmed_different"
     UNKNOWN = "unknown"
     NO_ACTION = "no_action"
+
+
+class SupersessionRepairOutcome(StrEnum):
+    """Outcomes for repair_supersession_integrity."""
+
+    REPAIRED = "REPAIRED"
+    WOULD_REPAIR = "WOULD_REPAIR"
+    NO_LONGER_APPLICABLE = "NO_LONGER_APPLICABLE"
 
 
 class QualityRouteOutcome(StrEnum):

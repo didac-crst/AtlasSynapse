@@ -1,6 +1,6 @@
 # Memory Quality v1 — Checkpoint design pack
 
-**Status:** approved for checkpoint 1 implementation (architecture locked).
+**Status:** checkpoint 1 closed (`890575c`); checkpoint 2 adds governed structural repair.
 
 **Branch:** `feat/memory-quality-v1` from `main`.  
 Do not modify retrieval hybrid v1 ranking behavior beyond optional relevance-bounded metadata.
@@ -361,6 +361,39 @@ governed writes. Therefore:
 > Detect that something may be wrong, store why, route to the correct existing
 > mechanism, expose unresolved ambiguity through ChatGPT when useful, and never
 > change truth unless an existing governed mutation authorizes it.
+
+---
+
+## 13. Checkpoint 2 — governed structural repair
+
+Closes the healing loop for `supersession_integrity` only. No new detectors.
+
+```text
+detect → surface → user/agent chooses successor
+  → repair_supersession_integrity(issue_id, successor_statement_id)
+  → revalidate → close only if fixed
+```
+
+### Operation
+
+`repair_supersession_integrity` (HTTP + MCP agent tool):
+
+- MutationRunner + knowledge.write + idempotency + dry-run + post_execute quality
+- Client supplies `issue_id` + `successor_statement_id` only
+- Server derives the target statement from the open issue
+- Validates compatibility (same subject/predicate), no self-link, no cycle
+- Applies **only** the supersession pointer (and ensures status=superseded)
+- Re-runs detector; closes with `resolution=structural_repair` only when clean
+- Stale/already-fixed → `NO_LONGER_APPLICABLE` + `no_action` (no graph mutation)
+- Dry-run → `WOULD_REPAIR`, nothing persisted
+
+Not a generic `resolve_quality_issue`. Does not change subject/predicate/object/validity/provenance.
+
+### Still out of scope after checkpoint 2
+
+Possible-duplicate entity detector, negative identity, LLM assessors,
+`get_memory_health`, schedulers, weak provenance, retrieval ranking,
+generic repair framework, “restore superseded → asserted”.
 
 ---
 

@@ -14,7 +14,10 @@ from semantic_memory.models.enums import (
     MemoryQualityResolution,
     MemoryQualitySeverity,
     QualityRouteOutcome,
+    SupersessionRepairOutcome,
 )
+from semantic_memory.schemas.common import MutationEnvelope
+from semantic_memory.schemas.dry_run import OperationMode
 
 
 class QualityWarning(BaseModel):
@@ -94,3 +97,25 @@ class MemoryQualityIssueListResponse(BaseModel):
     total: int = 0
     limit: int = 50
     offset: int = 0
+
+
+class RepairSupersessionIntegrityRequest(MutationEnvelope):
+    """Governed repair of a corrupted supersession edge anchored by an open issue."""
+
+    issue_id: uuid.UUID
+    successor_statement_id: uuid.UUID
+
+
+class RepairSupersessionIntegrityResponse(BaseModel):
+    outcome: SupersessionRepairOutcome
+    issue_id: uuid.UUID
+    statement_id: uuid.UUID | None = None
+    previous_successor_statement_id: uuid.UUID | None = None
+    successor_statement_id: uuid.UUID | None = None
+    issue_resolved: bool = False
+    resolution: MemoryQualityResolution | None = None
+    quality_warnings: list[QualityWarning] = Field(default_factory=list)
+    request_id: uuid.UUID
+    dry_run: bool = False
+    operation_mode: OperationMode = OperationMode.EXECUTE
+    would_persist: bool | None = None

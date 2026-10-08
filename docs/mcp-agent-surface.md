@@ -25,7 +25,7 @@ HTTP APIs are unchanged.
 | Catalog | Tool count |
 | --- | ---: |
 | Full registry (`all`) | **41** (incl. aliases) |
-| Default `agent` | **12** |
+| Default `agent` | **13** |
 
 Roughly a **~70% reduction** in tools presented to ChatGPT.
 
@@ -39,6 +39,7 @@ get_timeline
 assert_statement
 correct_statement
 retract_statement
+repair_supersession_integrity
 
 answer_identity_clarification
 answer_semantic_clarification
@@ -61,6 +62,7 @@ apply_ontology_proposal
 | `assert_statement` | “Store this fact” |
 | `correct_statement` | “Fix this fact” |
 | `retract_statement` | “Withdraw this fact” |
+| `repair_supersession_integrity` | “Fix this bad supersession edge” |
 | `answer_identity_clarification` | “Which Didac?” |
 | `propose_*` / `apply_*` | Ontology change lifecycle |
 

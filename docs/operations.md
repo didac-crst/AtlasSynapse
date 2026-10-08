@@ -71,6 +71,8 @@ the primary write). Residual problems open `memory_quality_issue` rows; competin
 effective facts remain owned exclusively by `conflict`. Warnings appear on the
 mutation response immediately and again on retrieval when relevant
 (`quality_warnings`). ChatGPT is the HMI — there is no default MCP quality CRUD.
+Open issues can be healed via `repair_supersession_integrity` (issue_id +
+explicit successor); the issue closes only after revalidation.
 See [memory-quality-v1.md](memory-quality-v1.md).
 
 ## Health behavior

@@ -10,6 +10,10 @@ from sqlalchemy.orm import Session
 
 from semantic_memory.api.transactions import run_audited_mutation
 from semantic_memory.db import get_db_session
+from semantic_memory.schemas.memory_quality import (
+    RepairSupersessionIntegrityRequest,
+    RepairSupersessionIntegrityResponse,
+)
 from semantic_memory.schemas.provenance import ExplainStatementResponse
 from semantic_memory.schemas.statements import (
     AssertStatementRequest,
@@ -26,6 +30,7 @@ from semantic_memory.schemas.write_clarifications import (
     AnswerIdentityClarificationRequest,
     AnswerIdentityClarificationResponse,
 )
+from semantic_memory.services.memory_quality import SupersessionIntegrityRepairService
 from semantic_memory.services.provenance import ProvenanceService
 from semantic_memory.services.statements import StatementService
 from semantic_memory.services.write_clarifications import WriteClarificationService
@@ -87,6 +92,19 @@ def retract_statement(
 ) -> RetractStatementResponse:
     return run_audited_mutation(
         session, lambda: StatementService(session).retract_statement(request)
+    )
+
+
+@router.post(
+    "/memory-quality/repair-supersession",
+    response_model=RepairSupersessionIntegrityResponse,
+)
+def repair_supersession_integrity(
+    request: RepairSupersessionIntegrityRequest, session: DbSession
+) -> RepairSupersessionIntegrityResponse:
+    return run_audited_mutation(
+        session,
+        lambda: SupersessionIntegrityRepairService(session).repair(request),
     )
 
 

@@ -32,6 +32,7 @@ _RESOLUTIONS = (
     "corrected",
     "retracted",
     "superseded",
+    "structural_repair",
     "confirmed_same",
     "confirmed_different",
     "unknown",

@@ -11,8 +11,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from semantic_memory.models.enums import EntityStatus, StatementStatus
 from semantic_memory.schemas.conflicts import ConflictResponse
-from semantic_memory.schemas.memory_quality import QualityWarning
 from semantic_memory.schemas.entities import EntityResponse
+from semantic_memory.schemas.memory_quality import QualityWarning
 from semantic_memory.schemas.provenance import ExplainStatementResponse
 from semantic_memory.schemas.statements import StatementResponse, TimelineResponse
 

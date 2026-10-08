@@ -114,6 +114,31 @@ class MemoryQualityService:
             return None
         return self._to_response(row)
 
+    def mark_resolved_after_repair(
+        self,
+        *,
+        issue: MemoryQualityIssue,
+        actor_id: uuid.UUID,
+        operation_id: uuid.UUID | None,
+        resolution: MemoryQualityResolution,
+    ) -> MemoryQualityIssue:
+        """Bookkeeping close after a governed repair revalidated clean.
+
+        Not a public graph-mutation API.
+        """
+        from datetime import UTC, datetime
+
+        if issue.status != MemoryQualityIssueStatus.OPEN.value:
+            return issue
+        issue.status = MemoryQualityIssueStatus.RESOLVED.value
+        issue.resolution = resolution.value
+        issue.resolved_by_actor_id = actor_id
+        issue.resolution_operation_id = operation_id
+        issue.resolved_at = datetime.now(UTC)
+        issue.updated_at = datetime.now(UTC)
+        self._session.flush()
+        return issue
+
     def _inspect_and_route(self, change_context: ChangeContext) -> list[QualityWarning]:
         # Competing facts remain owned exclusively by ConflictService (assert/supersede
         # paths). Quality never opens parallel conflict rows here.
