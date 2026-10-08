@@ -615,14 +615,14 @@ class RetrievalService:
         limited = hits[: request.limit]
         entity_ids: list[uuid.UUID] = []
         statement_ids: list[uuid.UUID] = []
-        for hit in limited:
-            if hit.entity is not None:
-                entity_ids.append(hit.entity.id)
-            if hit.statement is not None:
-                statement_ids.append(hit.statement.id)
-                entity_ids.append(hit.statement.subject_entity_id)
-                if hit.statement.object_entity_id is not None:
-                    entity_ids.append(hit.statement.object_entity_id)
+        for memory_hit in limited:
+            if memory_hit.entity is not None:
+                entity_ids.append(memory_hit.entity.id)
+            if memory_hit.statement is not None:
+                statement_ids.append(memory_hit.statement.id)
+                entity_ids.append(memory_hit.statement.subject_entity_id)
+                if memory_hit.statement.object_entity_id is not None:
+                    entity_ids.append(memory_hit.statement.object_entity_id)
         return SearchSemanticMemoryResponse(
             query=request.query,
             hits=limited,
@@ -741,11 +741,11 @@ class RetrievalService:
             entity_ids.append(entity.id)
         if request.entity_id is not None:
             entity_ids.append(request.entity_id)
-        for hit in limited_statements:
-            statement_ids.append(hit.statement.id)
-            entity_ids.append(hit.statement.subject_entity_id)
-            if hit.statement.object_entity_id is not None:
-                entity_ids.append(hit.statement.object_entity_id)
+        for ranked in limited_statements:
+            statement_ids.append(ranked.statement.id)
+            entity_ids.append(ranked.statement.subject_entity_id)
+            if ranked.statement.object_entity_id is not None:
+                entity_ids.append(ranked.statement.object_entity_id)
         return RelevantContextResponse(
             entity=entity,
             timeline=timeline,
