@@ -56,6 +56,7 @@ from semantic_memory.services.lexical import (
     lexical_tokens,
     score_lexical_relevance,
 )
+from semantic_memory.services.memory_quality import MemoryQualityService
 from semantic_memory.services.predicate_intent import (
     PredicateLexicon,
     build_predicate_lexicon,
@@ -105,6 +106,7 @@ class RetrievalService:
         self._statement_service = StatementService(session)
         self._provenance = ProvenanceService(session)
         self._conflicts = ConflictService(session)
+        self._memory_quality = MemoryQualityService(session)
 
     def search_entities(self, request: SearchEntitiesRequest) -> SearchEntitiesResponse:
         timer = RequestTimer(operation="search_entities")
@@ -610,9 +612,20 @@ class RetrievalService:
                     )
                 )
         hits.sort(key=lambda item: item.ranking_score, reverse=True)
+        limited = hits[: request.limit]
+        entity_ids: list[uuid.UUID] = []
+        statement_ids: list[uuid.UUID] = []
+        for memory_hit in limited:
+            if memory_hit.entity is not None:
+                entity_ids.append(memory_hit.entity.id)
+            if memory_hit.statement is not None:
+                statement_ids.append(memory_hit.statement.id)
+                entity_ids.append(memory_hit.statement.subject_entity_id)
+                if memory_hit.statement.object_entity_id is not None:
+                    entity_ids.append(memory_hit.statement.object_entity_id)
         return SearchSemanticMemoryResponse(
             query=request.query,
-            hits=hits[: request.limit],
+            hits=limited,
             ranking_explanations=[
                 "Semantic memory search merges entity, statement, and optional conflict hits.",
                 "Lexical matching is tokenized and punctuation-insensitive (no embeddings).",
@@ -635,6 +648,10 @@ class RetrievalService:
                 "ranking_score is for ordering only and is not a truth score.",
             ],
             vector_search_used=False,
+            quality_warnings=self._memory_quality.warnings_for_hits(
+                entity_ids=list(dict.fromkeys(entity_ids)),
+                statement_ids=list(dict.fromkeys(statement_ids)),
+            ),
         )
 
     def get_relevant_context(self, request: RelevantContextRequest) -> RelevantContextResponse:
@@ -717,11 +734,23 @@ class RetrievalService:
 
         timings = timer.finish()
         set_last_timings(timings)
+        limited_statements = statements[: request.limit]
+        entity_ids: list[uuid.UUID] = []
+        statement_ids: list[uuid.UUID] = []
+        if entity is not None:
+            entity_ids.append(entity.id)
+        if request.entity_id is not None:
+            entity_ids.append(request.entity_id)
+        for ranked in limited_statements:
+            statement_ids.append(ranked.statement.id)
+            entity_ids.append(ranked.statement.subject_entity_id)
+            if ranked.statement.object_entity_id is not None:
+                entity_ids.append(ranked.statement.object_entity_id)
         return RelevantContextResponse(
             entity=entity,
             timeline=timeline,
             neighborhood=neighborhood,
-            statements=statements[: request.limit],
+            statements=limited_statements,
             conflicts=conflicts,
             explanation=explanation,
             ranking_explanations=ranking_explanations,
@@ -730,6 +759,10 @@ class RetrievalService:
                 "llm_used": False,
                 "timings_ms": timings.get("timings_ms"),
             },
+            quality_warnings=self._memory_quality.warnings_for_hits(
+                entity_ids=list(dict.fromkeys(entity_ids)),
+                statement_ids=list(dict.fromkeys(statement_ids)),
+            ),
         )
 
     def _rescore_statements_for_query(

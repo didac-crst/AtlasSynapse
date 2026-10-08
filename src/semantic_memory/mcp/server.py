@@ -26,6 +26,7 @@ from semantic_memory.mcp.tools import (
     StatementMCPTools,
 )
 from semantic_memory.runtime_info import runtime_config
+from semantic_memory.schemas.memory_quality import RepairSupersessionIntegrityRequest
 from semantic_memory.schemas.proposals import (
     ApplyProposalRequest,
     ProposeAliasRequest,
@@ -355,6 +356,17 @@ def build_all_mcp_tools() -> list[ToolSpec]:
             "in statement metadata.",
             lambda session, payload: StatementMCPTools(session).retract_statement(payload),
             request_model=RetractStatementRequest,
+            surface=McpToolSurface.AGENT,
+        ),
+        _payload_tool(
+            "repair_supersession_integrity",
+            "Repair a corrupted supersession edge for an open memory-quality issue. "
+            "Pass issue_id from quality_warnings and an explicit successor_statement_id. "
+            "Server revalidates; does not guess successors.",
+            lambda session, payload: StatementMCPTools(session).repair_supersession_integrity(
+                payload
+            ),
+            request_model=RepairSupersessionIntegrityRequest,
             surface=McpToolSurface.AGENT,
         ),
         ToolSpec(

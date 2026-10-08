@@ -12,7 +12,7 @@ def package_version() -> str:
     try:
         return version("atlas-synapse")
     except PackageNotFoundError:
-        return "0.1.0.dev5"
+        return "0.1.0.dev6"
 
 
 def runtime_config(settings: Settings | None = None) -> dict[str, Any]:

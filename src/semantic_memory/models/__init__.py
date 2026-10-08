@@ -20,10 +20,15 @@ from semantic_memory.models.enums import (
     GateDecision,
     LlmCallStatus,
     LlmCostStatus,
+    MemoryQualityIssueStatus,
+    MemoryQualityIssueType,
+    MemoryQualityResolution,
+    MemoryQualitySeverity,
     OntologyChangeObjectType,
     OperationStatus,
     ProposalStatus,
     ProposalType,
+    QualityRouteOutcome,
     SemanticChallengeStatus,
     SemanticClarificationStatus,
     SemanticReviewStage,
@@ -49,6 +54,7 @@ from semantic_memory.models.knowledge import (
     StatementQualifier,
 )
 from semantic_memory.models.llm_calls import LlmCallLog
+from semantic_memory.models.memory_quality import MemoryQualityIssue
 from semantic_memory.models.ontology import (
     OntologyAlias,
     OntologyClass,
@@ -109,6 +115,11 @@ __all__ = [
     "LlmCallLog",
     "LlmCallStatus",
     "LlmCostStatus",
+    "MemoryQualityIssue",
+    "MemoryQualityIssueStatus",
+    "MemoryQualityIssueType",
+    "MemoryQualityResolution",
+    "MemoryQualitySeverity",
     "OntologyAlias",
     "OntologyChange",
     "OntologyChangeObjectType",
@@ -134,6 +145,7 @@ __all__ = [
     "OperationStatus",
     "ProposalStatus",
     "ProposalType",
+    "QualityRouteOutcome",
     "SemanticChallengeStatus",
     "SemanticReviewStage",
     "Source",

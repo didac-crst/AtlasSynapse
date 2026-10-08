@@ -52,6 +52,7 @@ AGENT_TOOL_NAMES: frozenset[str] = frozenset(
         "assert_statement",
         "correct_statement",
         "retract_statement",
+        "repair_supersession_integrity",
         "answer_identity_clarification",
         "propose_class",
         "propose_predicate",

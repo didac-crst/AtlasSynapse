@@ -47,6 +47,7 @@ class MutationRunner:
         response_model: type[T],
         execute: Callable[[], T],
         constraint_name: str,
+        post_execute: Callable[[T, uuid.UUID], T] | None = None,
     ) -> T:
         payload = request.model_dump(
             mode="json",
@@ -90,6 +91,7 @@ class MutationRunner:
                         response_model=response_model,
                         execute=execute,
                         operation_log_id=operation.id,
+                        post_execute=post_execute,
                     )
             response_payload = prepare_audit_payload(
                 result.model_dump(mode="json"),
@@ -186,6 +188,7 @@ class MutationRunner:
         response_model: type[T],
         execute: Callable[[], T],
         operation_log_id: uuid.UUID,
+        post_execute: Callable[[T, uuid.UUID], T] | None = None,
     ) -> T:
         reservation, created = self._idempotency.reserve_or_get(
             actor_id=actor_id,
@@ -206,6 +209,7 @@ class MutationRunner:
                 request_id=str(request.request_id),
             )
         if reservation.response_payload is not None:
+            # Idempotent replay: return cached final response (incl. quality_warnings).
             return response_model.model_validate(reservation.response_payload)
         if not created:
             raise InternalError(
@@ -215,5 +219,7 @@ class MutationRunner:
             )
 
         result = execute()
+        if post_execute is not None:
+            result = post_execute(result, operation_log_id)
         self._idempotency.store_response(reservation, result.model_dump(mode="json"))
         return result

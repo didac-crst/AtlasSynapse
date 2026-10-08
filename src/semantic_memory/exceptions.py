@@ -80,6 +80,10 @@ class UnknownConflictError(DomainError):
     error_code = "UNKNOWN_CONFLICT"
 
 
+class UnknownMemoryQualityIssueError(DomainError):
+    error_code = "UNKNOWN_MEMORY_QUALITY_ISSUE"
+
+
 class OntologyCycleError(DomainError):
     error_code = "ONTOLOGY_CYCLE"
 

@@ -63,6 +63,18 @@ Retrieval (`search_entities`, `search_statements`, `search_semantic_memory` / `s
 
 Agents may report quality observations via `report_feedback` / `POST /v1/feedback` without treating a successful operation as a failure. Feedback lives in `agent_feedback`, separate from `operation_log`, `llm_call_log`, and ontology proposals. Open rows with the same fingerprint are deduplicated by incrementing `occurrence_count`. Context payloads follow the same retention/redaction policy as operation audits. Listing and resolution require `feedback.read` / `feedback.manage` (or `admin`).
 
+## Memory quality (post-write)
+
+After successful knowledge mutations, AtlasSynapse runs a **neighborhood-scoped**
+deterministic quality inspection in a nested savepoint (failures do not roll back
+the primary write). Residual problems open `memory_quality_issue` rows; competing
+effective facts remain owned exclusively by `conflict`. Warnings appear on the
+mutation response immediately and again on retrieval when relevant
+(`quality_warnings`). ChatGPT is the HMI — there is no default MCP quality CRUD.
+Open issues can be healed via `repair_supersession_integrity` (issue_id +
+explicit successor); the issue closes only after revalidation.
+See [memory-quality-v1.md](memory-quality-v1.md).
+
 ## Health behavior
 
 `/health/live` reports process liveness. `/health/ready` verifies database connectivity and migration compatibility. The readiness check must not require an external LLM or embedding provider.
@@ -73,7 +85,7 @@ Application HTTP routes require a shared API token (`Authorization: Bearer` or `
 
 ## Admin inspection
 
-`/v1/admin/*` is HTTP-only, read-only observability for humans/ops: list/get filters over operations, LLM calls, feedback, ontology proposals, conflicts, and ingestion batches, plus `GET /v1/admin/summary`. Collection views return metadata projections (no request/response payloads, LLM metadata, feedback context, or proposal payloads). Detail endpoints may opt in with `include_payloads=true`. Pagination is deterministic (`created_at DESC, id DESC`) with exact totals. No MCP admin tools.
+`/v1/admin/*` is HTTP-only, read-only observability for humans/ops: list/get filters over operations, LLM calls, feedback, ontology proposals, conflicts, ingestion batches, and memory quality issues, plus `GET /v1/admin/summary`. Collection views return metadata projections (no request/response payloads, LLM metadata, feedback context, or proposal payloads). Detail endpoints may opt in with `include_payloads=true`. Pagination is deterministic (`created_at DESC, id DESC`) with exact totals. No MCP admin tools.
 
 ## Deployment
 

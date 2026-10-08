@@ -27,6 +27,7 @@ from semantic_memory.schemas.entities import (
 )
 from semantic_memory.schemas.errors import ErrorEnvelope
 from semantic_memory.schemas.feedback import ReportFeedbackRequest
+from semantic_memory.schemas.memory_quality import RepairSupersessionIntegrityRequest
 from semantic_memory.schemas.ontology import (
     OntologyClassResponse,
     OntologyContextResponse,
@@ -72,6 +73,7 @@ from semantic_memory.services.batches import BatchService
 from semantic_memory.services.conflicts import ConflictService
 from semantic_memory.services.entities import EntityService
 from semantic_memory.services.feedback import FeedbackService
+from semantic_memory.services.memory_quality import SupersessionIntegrityRepairService
 from semantic_memory.services.ontology import OntologyService
 from semantic_memory.services.proposals import ProposalService
 from semantic_memory.services.provenance import ProvenanceService
@@ -381,6 +383,15 @@ class StatementMCPTools:
             self._session,
             payload,
             lambda p: self._statements.retract_statement(RetractStatementRequest.model_validate(p)),
+        )
+
+    def repair_supersession_integrity(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return _run_mutation(
+            self._session,
+            payload,
+            lambda p: SupersessionIntegrityRepairService(self._session).repair(
+                RepairSupersessionIntegrityRequest.model_validate(p)
+            ),
         )
 
     def get_timeline(self, entity_id: str) -> dict[str, Any]:

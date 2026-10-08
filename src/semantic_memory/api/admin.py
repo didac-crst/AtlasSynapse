@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from semantic_memory.api.deps import require_admin_token
@@ -26,7 +26,12 @@ from semantic_memory.schemas.admin import (
     ProposalDetail,
     ProposalListResponse,
 )
+from semantic_memory.schemas.memory_quality import (
+    MemoryQualityIssueListResponse,
+    MemoryQualityIssueResponse,
+)
 from semantic_memory.services.admin import AdminInspectionService
+from semantic_memory.services.memory_quality import MemoryQualityService
 
 router = APIRouter(
     prefix="/v1/admin",
@@ -274,3 +279,32 @@ def admin_summary(
         created_after=created_after,
         created_before=created_before,
     )
+
+
+@router.get("/memory-quality-issues", response_model=MemoryQualityIssueListResponse)
+def list_memory_quality_issues(
+    session: DbSession,
+    status: str | None = None,
+    issue_type: str | None = None,
+    subject_entity_id: uuid.UUID | None = None,
+    limit: Limit = 50,
+    offset: Offset = 0,
+) -> MemoryQualityIssueListResponse:
+    return MemoryQualityService(session).list_issues(
+        status=status,
+        issue_type=issue_type,
+        subject_entity_id=subject_entity_id,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get(
+    "/memory-quality-issues/{issue_id}",
+    response_model=MemoryQualityIssueResponse,
+)
+def get_memory_quality_issue(issue_id: uuid.UUID, session: DbSession) -> MemoryQualityIssueResponse:
+    row = MemoryQualityService(session).get_issue(issue_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="memory quality issue not found")
+    return row

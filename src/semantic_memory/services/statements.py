@@ -26,6 +26,7 @@ from semantic_memory.repositories.entities import EntityRepository
 from semantic_memory.repositories.ontology import OntologyRepository
 from semantic_memory.repositories.statements import StatementRepository
 from semantic_memory.schemas.identity import IdentityResolutionResult
+from semantic_memory.schemas.memory_quality import ChangeContext
 from semantic_memory.schemas.statements import (
     AssertionOutcome,
     AssertStatementRequest,
@@ -46,6 +47,7 @@ from semantic_memory.services.identity_write import (
     CLARIFY_MESSAGE,
     identity_clarify_details,
 )
+from semantic_memory.services.memory_quality import MemoryQualityService
 from semantic_memory.services.mutation_projections import MutationProjectionMixin
 from semantic_memory.services.mutations import MutationRunner
 from semantic_memory.services.write_clarifications import WriteClarificationService
@@ -82,6 +84,7 @@ class StatementService(MutationProjectionMixin):
         self._mutations = MutationRunner(session)
         self._conflicts = ConflictService(session)
         self._write_clarifications = WriteClarificationService(session)
+        self._memory_quality = MemoryQualityService(session)
 
     def get(self, statement_id: uuid.UUID) -> StatementResponse:
         statement = self._statements.get(statement_id)
@@ -116,6 +119,9 @@ class StatementService(MutationProjectionMixin):
                 request=request,
                 actor_id=actor.id,
                 force_create_sides=sides,
+            ),
+            post_execute=lambda response, operation_id: self._attach_quality_warnings_assert(
+                response, actor_id=actor.id, operation_id=operation_id
             ),
         )
         if (
@@ -170,6 +176,9 @@ class StatementService(MutationProjectionMixin):
             response_model=SupersedeStatementResponse,
             constraint_name="statement_supersede",
             execute=lambda: self._supersede_body(request=request, actor_id=actor.id),
+            post_execute=lambda response, operation_id: self._attach_quality_warnings_supersede(
+                response, actor_id=actor.id, operation_id=operation_id
+            ),
         )
 
     def retract_statement(self, request: RetractStatementRequest) -> RetractStatementResponse:
@@ -182,6 +191,9 @@ class StatementService(MutationProjectionMixin):
             response_model=RetractStatementResponse,
             constraint_name="statement_retract",
             execute=lambda: self._retract_body(request=request),
+            post_execute=lambda response, operation_id: self._attach_quality_warnings_retract(
+                response, actor_id=actor.id, operation_id=operation_id
+            ),
         )
 
     def correct_statement(self, request: CorrectStatementRequest) -> SupersedeStatementResponse:
@@ -196,6 +208,9 @@ class StatementService(MutationProjectionMixin):
             response_model=SupersedeStatementResponse,
             constraint_name="statement_correct",
             execute=lambda: self._supersede_body(request=supersede, actor_id=actor.id),
+            post_execute=lambda response, operation_id: self._attach_quality_warnings_supersede(
+                response, actor_id=actor.id, operation_id=operation_id
+            ),
         )
 
     def get_timeline(self, entity_id: uuid.UUID) -> TimelineResponse:
@@ -812,3 +827,88 @@ class StatementService(MutationProjectionMixin):
             created_at=statement.created_at,
             metadata=dict(statement.metadata_json or {}),
         )
+
+    def _attach_quality_warnings_assert(
+        self,
+        result: AssertStatementResponse,
+        *,
+        actor_id: uuid.UUID,
+        operation_id: uuid.UUID,
+    ) -> AssertStatementResponse:
+        if result.outcome == AssertionOutcome.CLARIFY or result.statement is None:
+            return result
+        ctx = ChangeContext(
+            actor_id=actor_id,
+            operation_id=operation_id,
+            request_id=result.request_id,
+            operation_name="assert_statement",
+            dry_run=bool(result.dry_run),
+            touched_entity_ids=[result.statement.subject_entity_id]
+            + (
+                [result.statement.object_entity_id]
+                if result.statement.object_entity_id is not None
+                else []
+            ),
+            touched_statement_ids=[result.statement.id],
+            touched_predicate_ids=[result.statement.predicate_id],
+        )
+        warnings = self._memory_quality.inspect_after_write(ctx)
+        if not warnings:
+            return result
+        return result.model_copy(update={"quality_warnings": warnings})
+
+    def _attach_quality_warnings_supersede(
+        self,
+        result: SupersedeStatementResponse,
+        *,
+        actor_id: uuid.UUID,
+        operation_id: uuid.UUID,
+    ) -> SupersedeStatementResponse:
+        touched_entities = [
+            result.statement.subject_entity_id,
+            result.previous_statement.subject_entity_id,
+        ]
+        if result.statement.object_entity_id is not None:
+            touched_entities.append(result.statement.object_entity_id)
+        if result.previous_statement.object_entity_id is not None:
+            touched_entities.append(result.previous_statement.object_entity_id)
+        ctx = ChangeContext(
+            actor_id=actor_id,
+            operation_id=operation_id,
+            request_id=result.request_id,
+            operation_name="supersede_statement",
+            dry_run=bool(result.dry_run),
+            touched_entity_ids=list(dict.fromkeys(touched_entities)),
+            touched_statement_ids=[result.statement.id, result.previous_statement.id],
+            touched_predicate_ids=[result.statement.predicate_id],
+            supersession_edges=[(result.previous_statement.id, result.statement.id)],
+        )
+        warnings = self._memory_quality.inspect_after_write(ctx)
+        if not warnings:
+            return result
+        return result.model_copy(update={"quality_warnings": warnings})
+
+    def _attach_quality_warnings_retract(
+        self,
+        result: RetractStatementResponse,
+        *,
+        actor_id: uuid.UUID,
+        operation_id: uuid.UUID,
+    ) -> RetractStatementResponse:
+        touched_entities = [result.statement.subject_entity_id]
+        if result.statement.object_entity_id is not None:
+            touched_entities.append(result.statement.object_entity_id)
+        ctx = ChangeContext(
+            actor_id=actor_id,
+            operation_id=operation_id,
+            request_id=result.request_id,
+            operation_name="retract_statement",
+            dry_run=bool(result.dry_run),
+            touched_entity_ids=touched_entities,
+            touched_statement_ids=[result.statement.id],
+            touched_predicate_ids=[result.statement.predicate_id],
+        )
+        warnings = self._memory_quality.inspect_after_write(ctx)
+        if not warnings:
+            return result
+        return result.model_copy(update={"quality_warnings": warnings})

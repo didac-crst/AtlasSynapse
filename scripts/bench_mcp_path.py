@@ -278,12 +278,9 @@ def main() -> None:
             f"  (tunnel-client enqueue_to_response, n={int(tunnel['tools_call_count'] or 0)})"
         )
         if tunnel["poll_to_response_avg_ms"] is not None:
-            print(
-                f"   poll_to_response avg:   {tunnel['poll_to_response_avg_ms']:8.1f} ms"
-            )
+            print(f"   poll_to_response avg:   {tunnel['poll_to_response_avg_ms']:8.1f} ms")
         print(
-            f"   tunnel − local MCP:     "
-            f"{tunnel['enqueue_to_response_avg_ms'] - local_p50:8.1f} ms"
+            f"   tunnel − local MCP:     {tunnel['enqueue_to_response_avg_ms'] - local_p50:8.1f} ms"
         )
     else:
         print("3 Secure Tunnel MCP:      (metrics unavailable — is tunnel-client up?)")
