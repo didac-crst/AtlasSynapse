@@ -70,9 +70,7 @@ class SupersessionIntegrityDetector:
                 findings.append(finding)
         return findings
 
-    def _check_row(
-        self, row: Statement, by_id: dict[uuid.UUID, Statement]
-    ) -> list[QualityFinding]:
+    def _check_row(self, row: Statement, by_id: dict[uuid.UUID, Statement]) -> list[QualityFinding]:
         out: list[QualityFinding] = []
         if row.status == StatementStatus.SUPERSEDED.value:
             if row.superseded_by_statement_id is None:
@@ -80,9 +78,7 @@ class SupersessionIntegrityDetector:
                     self._finding(
                         row,
                         related=[],
-                        summary=(
-                            f"Statement {row.id} is superseded but has no successor link."
-                        ),
+                        summary=(f"Statement {row.id} is superseded but has no successor link."),
                         notes=["missing_successor"],
                         requires_clarification=True,
                     )
@@ -140,9 +136,7 @@ class SupersessionIntegrityDetector:
                         )
         return out
 
-    def _detect_cycle(
-        self, start: Statement, by_id: dict[uuid.UUID, Statement]
-    ) -> list[uuid.UUID]:
+    def _detect_cycle(self, start: Statement, by_id: dict[uuid.UUID, Statement]) -> list[uuid.UUID]:
         """Return the cycle node list when a repeat is found.
 
         Reaching the hop budget on an acyclic chain is **not** a cycle — return [].
@@ -187,9 +181,7 @@ class SupersessionIntegrityDetector:
                 "notes": notes,
                 "statement_id": str(row.id),
                 "superseded_by_statement_id": (
-                    str(row.superseded_by_statement_id)
-                    if row.superseded_by_statement_id
-                    else None
+                    str(row.superseded_by_statement_id) if row.superseded_by_statement_id else None
                 ),
             },
             subject_entity_id=row.subject_entity_id,

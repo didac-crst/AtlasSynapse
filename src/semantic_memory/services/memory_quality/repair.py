@@ -122,9 +122,7 @@ class SupersessionIntegrityRepairService:
                 previous_successor_statement_id=target.superseded_by_statement_id,
                 successor_statement_id=None,
                 issue_resolved=not request.dry_run,
-                resolution=(
-                    MemoryQualityResolution.NO_ACTION if not request.dry_run else None
-                ),
+                resolution=(MemoryQualityResolution.NO_ACTION if not request.dry_run else None),
                 request_id=request.request_id,
             )
 
@@ -260,9 +258,7 @@ class SupersessionIntegrityRepairService:
         return response.model_copy(update={"quality_warnings": warnings})
 
     def _findings_for_statement(self, statement_id: uuid.UUID) -> list[QualityFinding]:
-        findings = self._detector.inspect(
-            ChangeContext(touched_statement_ids=[statement_id])
-        )
+        findings = self._detector.inspect(ChangeContext(touched_statement_ids=[statement_id]))
         return [f for f in findings if f.statement_id == statement_id]
 
     def _validate_successor_edge(

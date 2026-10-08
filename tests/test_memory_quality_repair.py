@@ -91,9 +91,7 @@ def _open_missing_successor_issue(
 def test_repair_missing_successor(db_session: Session) -> None:
     _ensure_writer(db_session)
     person = _create_person(db_session, "Repair Missing")
-    issue_id, statement_id, successor_id = _open_missing_successor_issue(
-        db_session, person=person
-    )
+    issue_id, statement_id, successor_id = _open_missing_successor_issue(db_session, person=person)
     result = SupersessionIntegrityRepairService(db_session).repair(
         RepairSupersessionIntegrityRequest(
             actor_key="writer",
@@ -210,9 +208,7 @@ def test_repair_rejects_incompatible_successor(db_session: Session) -> None:
 def test_repair_rejects_cycle(db_session: Session) -> None:
     _ensure_writer(db_session)
     person = _create_person(db_session, "Repair Cycle Reject")
-    issue_id, statement_id, successor_id = _open_missing_successor_issue(
-        db_session, person=person
-    )
+    issue_id, statement_id, successor_id = _open_missing_successor_issue(db_session, person=person)
     # Point successor back at the corrupted statement to form a cycle if linked.
     succ = db_session.get(Statement, successor_id)
     assert succ is not None
@@ -288,11 +284,7 @@ def test_repair_breaks_existing_cycle(db_session: Session) -> None:
     )
     # Find the cycle issue on statement C (or A).
     cycle_issue = next(
-        (
-            w
-            for w in warnings
-            if "cycle" in w.summary.lower() or w.requires_clarification
-        ),
+        (w for w in warnings if "cycle" in w.summary.lower() or w.requires_clarification),
         warnings[0],
     )
     # Prefer issue whose statement is C if present.
@@ -315,9 +307,7 @@ def test_repair_breaks_existing_cycle(db_session: Session) -> None:
 def test_stale_issue_no_longer_applicable(db_session: Session) -> None:
     _ensure_writer(db_session)
     person = _create_person(db_session, "Repair Stale")
-    issue_id, statement_id, successor_id = _open_missing_successor_issue(
-        db_session, person=person
-    )
+    issue_id, statement_id, successor_id = _open_missing_successor_issue(db_session, person=person)
     # Silently fix graph before repair.
     row = db_session.get(Statement, statement_id)
     assert row is not None
@@ -342,9 +332,7 @@ def test_stale_issue_no_longer_applicable(db_session: Session) -> None:
 def test_repair_dry_run(db_session: Session) -> None:
     _ensure_writer(db_session)
     person = _create_person(db_session, "Repair Dry Run")
-    issue_id, statement_id, successor_id = _open_missing_successor_issue(
-        db_session, person=person
-    )
+    issue_id, statement_id, successor_id = _open_missing_successor_issue(db_session, person=person)
     result = SupersessionIntegrityRepairService(db_session).repair(
         RepairSupersessionIntegrityRequest(
             actor_key="writer",
@@ -369,9 +357,7 @@ def test_repair_dry_run(db_session: Session) -> None:
 def test_repair_idempotent_replay(db_session: Session) -> None:
     _ensure_writer(db_session)
     person = _create_person(db_session, "Repair Idempotent")
-    issue_id, _statement_id, successor_id = _open_missing_successor_issue(
-        db_session, person=person
-    )
+    issue_id, _statement_id, successor_id = _open_missing_successor_issue(db_session, person=person)
     req = RepairSupersessionIntegrityRequest(
         actor_key="writer",
         request_id=uuid.uuid4(),

@@ -63,9 +63,7 @@ class MemoryQualityService:
                     "event": "memory_quality_inspect_failed",
                     "operation": change_context.operation_name,
                     "request_id": (
-                        str(change_context.request_id)
-                        if change_context.request_id
-                        else None
+                        str(change_context.request_id) if change_context.request_id else None
                     ),
                 },
             )
@@ -278,9 +276,7 @@ class MemoryQualityService:
             evidence=dict(row.evidence or {}),
             requires_clarification=bool(row.requires_clarification),
             occurrence_count=int(row.occurrence_count or 1),
-            resolution=(
-                MemoryQualityResolution(row.resolution) if row.resolution else None
-            ),
+            resolution=(MemoryQualityResolution(row.resolution) if row.resolution else None),
             created_at=row.created_at,
             updated_at=row.updated_at,
             resolved_at=row.resolved_at,
