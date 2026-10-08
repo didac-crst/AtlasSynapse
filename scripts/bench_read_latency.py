@@ -57,11 +57,7 @@ def bench(label: str, fn, n: int = 20, warmup: int = 1) -> list[float]:
         f"{label}: n={n} client_p50={_pct(samples, 50):.1f}ms "
         f"p90={_pct(samples, 90):.1f}ms p95={_pct(samples, 95):.1f}ms "
         f"max={max(samples):.1f}ms bytes~{int(statistics.mean(sizes))}"
-        + (
-            f" server_p50={_pct(server_ms, 50):.1f}ms"
-            if server_ms
-            else ""
-        )
+        + (f" server_p50={_pct(server_ms, 50):.1f}ms" if server_ms else "")
     )
     return samples
 

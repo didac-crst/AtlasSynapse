@@ -348,8 +348,7 @@ def main() -> None:
     superseded = sum(1 for r in results if r.superseded_in_topk)
     # Misses contribute 0 so MRR denominator includes every evaluated case.
     rr_values = [
-        (1.0 / r.first_relevant_rank) if r.first_relevant_rank is not None else 0.0
-        for r in results
+        (1.0 / r.first_relevant_rank) if r.first_relevant_rank is not None else 0.0 for r in results
     ]
     mrr = statistics.mean(rr_values) if rr_values else 0.0
 

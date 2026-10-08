@@ -303,9 +303,7 @@ def list_memory_quality_issues(
     "/memory-quality-issues/{issue_id}",
     response_model=MemoryQualityIssueResponse,
 )
-def get_memory_quality_issue(
-    issue_id: uuid.UUID, session: DbSession
-) -> MemoryQualityIssueResponse:
+def get_memory_quality_issue(issue_id: uuid.UUID, session: DbSession) -> MemoryQualityIssueResponse:
     row = MemoryQualityService(session).get_issue(issue_id)
     if row is None:
         raise HTTPException(status_code=404, detail="memory quality issue not found")

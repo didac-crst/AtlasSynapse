@@ -168,9 +168,7 @@ class ConcurrentMcpSession:
         return wall, ids
 
 
-def bench_mode(
-    max_inflight: int, batches: list[int], rounds: int, *, local: bool
-) -> None:
+def bench_mode(max_inflight: int, batches: list[int], rounds: int, *, local: bool) -> None:
     label = "local host" if local else "docker"
     print(f"\n=== MCP_MAX_INFLIGHT={max_inflight} ({label}) ===")
     session = ConcurrentMcpSession(max_inflight=max_inflight, local=local)

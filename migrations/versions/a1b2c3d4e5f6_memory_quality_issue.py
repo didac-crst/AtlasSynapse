@@ -156,12 +156,8 @@ def upgrade() -> None:
             name=op.f("fk_memory_quality_issue_resolved_by_actor_id_actor"),
         ),
     )
-    op.create_index(
-        "ix_memory_quality_issue_status", "memory_quality_issue", ["status"]
-    )
-    op.create_index(
-        "ix_memory_quality_issue_issue_type", "memory_quality_issue", ["issue_type"]
-    )
+    op.create_index("ix_memory_quality_issue_status", "memory_quality_issue", ["status"])
+    op.create_index("ix_memory_quality_issue_issue_type", "memory_quality_issue", ["issue_type"])
     op.create_index(
         "ix_memory_quality_issue_subject_entity_id",
         "memory_quality_issue",
@@ -172,12 +168,8 @@ def upgrade() -> None:
         "memory_quality_issue",
         ["statement_id"],
     )
-    op.create_index(
-        "ix_memory_quality_issue_updated_at", "memory_quality_issue", ["updated_at"]
-    )
-    op.create_index(
-        "ix_memory_quality_issue_fingerprint", "memory_quality_issue", ["fingerprint"]
-    )
+    op.create_index("ix_memory_quality_issue_updated_at", "memory_quality_issue", ["updated_at"])
+    op.create_index("ix_memory_quality_issue_fingerprint", "memory_quality_issue", ["fingerprint"])
     op.create_index(
         "uq_memory_quality_issue_open_fingerprint",
         "memory_quality_issue",
@@ -195,9 +187,7 @@ def downgrade() -> None:
     op.drop_index("ix_memory_quality_issue_fingerprint", table_name="memory_quality_issue")
     op.drop_index("ix_memory_quality_issue_updated_at", table_name="memory_quality_issue")
     op.drop_index("ix_memory_quality_issue_statement_id", table_name="memory_quality_issue")
-    op.drop_index(
-        "ix_memory_quality_issue_subject_entity_id", table_name="memory_quality_issue"
-    )
+    op.drop_index("ix_memory_quality_issue_subject_entity_id", table_name="memory_quality_issue")
     op.drop_index("ix_memory_quality_issue_issue_type", table_name="memory_quality_issue")
     op.drop_index("ix_memory_quality_issue_status", table_name="memory_quality_issue")
     op.drop_table("memory_quality_issue")

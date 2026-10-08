@@ -35,9 +35,7 @@ class MemoryQualityIssue(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "memory_quality_issue"
     __table_args__ = (
         CheckConstraint(
-            "issue_type IN ("
-            + ", ".join(repr(v.value) for v in MemoryQualityIssueType)
-            + ")",
+            "issue_type IN (" + ", ".join(repr(v.value) for v in MemoryQualityIssueType) + ")",
             name="issue_type",
         ),
         CheckConstraint(
@@ -85,17 +83,11 @@ class MemoryQualityIssue(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     statement_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("statement.id")
     )
-    related_entity_ids: Mapped[list[Any]] = mapped_column(
-        JSONB, nullable=False, default=list
-    )
-    related_statement_ids: Mapped[list[Any]] = mapped_column(
-        JSONB, nullable=False, default=list
-    )
+    related_entity_ids: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
+    related_statement_ids: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
     summary: Mapped[str] = mapped_column(Text, nullable=False)
     evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
-    requires_clarification: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False
-    )
+    requires_clarification: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     trigger_operation_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("operation_log.id")
     )

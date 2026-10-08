@@ -40,9 +40,7 @@ def upgrade() -> None:
     op.create_check_constraint(
         op.f("ck_memory_quality_issue_resolution"),
         "memory_quality_issue",
-        "resolution IS NULL OR resolution IN ("
-        + ", ".join(repr(v) for v in _RESOLUTIONS)
-        + ")",
+        "resolution IS NULL OR resolution IN (" + ", ".join(repr(v) for v in _RESOLUTIONS) + ")",
     )
 
 
