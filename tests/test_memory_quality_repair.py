@@ -270,7 +270,7 @@ def test_repair_breaks_existing_cycle(db_session: Session) -> None:
             touched_entity_ids=[person],
         )
     )
-    assert any("cycle" in (w.summary.lower()) for w in warnings) or warnings
+    assert any("cycle" in w.summary.lower() for w in warnings)
     # Break cycle by pointing C at a terminal leaf (no outgoing) — use a fresh asserted peer.
     leaf = service.assert_statement(
         AssertStatementRequest(
@@ -283,10 +283,7 @@ def test_repair_breaks_existing_cycle(db_session: Session) -> None:
         )
     )
     # Find the cycle issue on statement C (or A).
-    cycle_issue = next(
-        (w for w in warnings if "cycle" in w.summary.lower() or w.requires_clarification),
-        warnings[0],
-    )
+    cycle_issue = next(w for w in warnings if "cycle" in w.summary.lower())
     # Prefer issue whose statement is C if present.
     for w in warnings:
         if w.related_statement_ids and c.statement.id in w.related_statement_ids:
@@ -429,6 +426,11 @@ def test_repair_reveals_another_quality_issue(db_session: Session) -> None:
     assert issue.status == MemoryQualityIssueStatus.RESOLVED
     assert result.quality_warnings
     assert any(
-        w.issue_id != original_issue_id and succ.id in (w.related_statement_ids or [])
+        w.issue_id != original_issue_id
+        and (
+            succ.id in (w.related_statement_ids or [])
+            or "no successor" in w.summary.lower()
+            or "missing" in w.summary.lower()
+        )
         for w in result.quality_warnings
-    ) or any(w.issue_id != original_issue_id for w in result.quality_warnings)
+    )

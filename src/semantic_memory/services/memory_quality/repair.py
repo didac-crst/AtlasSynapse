@@ -157,6 +157,7 @@ class SupersessionIntegrityRepairService:
             )
 
         # Ensure status reflects superseded history linkage when repairing.
+        previous_status = target.status
         if target.status != StatementStatus.SUPERSEDED.value:
             target.status = StatementStatus.SUPERSEDED.value
         target.superseded_by_statement_id = successor.id
@@ -166,6 +167,7 @@ class SupersessionIntegrityRepairService:
         if remaining:
             # Edge applied but problem remains — roll back by raising after restore.
             target.superseded_by_statement_id = previous_successor
+            target.status = previous_status
             self._session.flush()
             raise ValidationFailedError(
                 "Proposed supersession repair did not clear the integrity problem",
