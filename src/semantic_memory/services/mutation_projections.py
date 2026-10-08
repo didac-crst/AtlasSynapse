@@ -97,6 +97,7 @@ def apply_return_mode_assert(
             dry_run=response.dry_run,
             operation_mode=response.operation_mode,
             would_persist=response.would_persist,
+            quality_warnings=list(response.quality_warnings),
             changes=MutationChanges(
                 statement_action=response.statement_action,
                 created_statement_id=(
@@ -132,6 +133,7 @@ def apply_return_mode_supersede(
             dry_run=response.dry_run,
             operation_mode=response.operation_mode,
             would_persist=response.would_persist,
+            quality_warnings=list(response.quality_warnings),
             changes=MutationChanges(
                 statement_action=response.statement_action,
                 created_statement_id=response.statement.id,
@@ -156,6 +158,7 @@ def apply_return_mode_retract(
             reason=response.reason,
             statement_action=response.statement_action,
             dry_run=response.dry_run,
+            quality_warnings=list(response.quality_warnings),
             operation_mode=response.operation_mode,
             would_persist=response.would_persist,
             changes=MutationChanges(

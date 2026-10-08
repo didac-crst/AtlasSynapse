@@ -49,6 +49,13 @@ Low-volume governed operations:
 External agents create proposals. Applying an ontology change is a separate,
 capability-gated commit — proposal ≠ mutation.
 
+### Memory quality (residual post-write)
+
+After writes, a bounded deterministic inspector may open `memory_quality_issue`
+rows for residual problems that existing mechanisms do not own. Competing
+effective facts stay on `conflict`. Quality warnings surface on mutation
+responses and relevance-bounded retrieval. See [memory-quality-v1.md](memory-quality-v1.md).
+
 ### Clarification as operational state
 
 Identity (and some ontology) ambiguity creates durable **control-plane** handles

@@ -15,6 +15,7 @@ from semantic_memory.schemas.common import MutationEnvelope
 from semantic_memory.schemas.dry_run import OperationMode, StatementWriteAction
 from semantic_memory.schemas.entities import EntityInput
 from semantic_memory.schemas.identity import IdentityResolutionResult
+from semantic_memory.schemas.memory_quality import QualityWarning
 
 _OBJECT_FIELD_NAMES = (
     "object_entity_id",
@@ -219,6 +220,7 @@ class AssertStatementResponse(BaseModel):
     clarification: ClarificationAction | None = None
     context: MutationContextSlice | None = None
     warnings: list[str] = Field(default_factory=list)
+    quality_warnings: list[QualityWarning] = Field(default_factory=list)
 
 
 class SupersedeStatementRequest(StatementMutationRequest):
@@ -286,6 +288,7 @@ class SupersedeStatementResponse(BaseModel):
     clarification: ClarificationAction | None = None
     context: MutationContextSlice | None = None
     warnings: list[str] = Field(default_factory=list)
+    quality_warnings: list[QualityWarning] = Field(default_factory=list)
 
 
 class CorrectStatementRequest(StatementMutationRequest):
@@ -351,6 +354,7 @@ class RetractStatementResponse(BaseModel):
     effective_state: EffectiveState | None = None
     context: MutationContextSlice | None = None
     warnings: list[str] = Field(default_factory=list)
+    quality_warnings: list[QualityWarning] = Field(default_factory=list)
 
 
 class TimelineEntry(BaseModel):

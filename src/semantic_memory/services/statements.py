@@ -26,6 +26,7 @@ from semantic_memory.repositories.entities import EntityRepository
 from semantic_memory.repositories.ontology import OntologyRepository
 from semantic_memory.repositories.statements import StatementRepository
 from semantic_memory.schemas.identity import IdentityResolutionResult
+from semantic_memory.schemas.memory_quality import ChangeContext
 from semantic_memory.schemas.statements import (
     AssertionOutcome,
     AssertStatementRequest,
@@ -46,6 +47,7 @@ from semantic_memory.services.identity_write import (
     CLARIFY_MESSAGE,
     identity_clarify_details,
 )
+from semantic_memory.services.memory_quality import MemoryQualityService
 from semantic_memory.services.mutation_projections import MutationProjectionMixin
 from semantic_memory.services.mutations import MutationRunner
 from semantic_memory.services.write_clarifications import WriteClarificationService
@@ -82,6 +84,7 @@ class StatementService(MutationProjectionMixin):
         self._mutations = MutationRunner(session)
         self._conflicts = ConflictService(session)
         self._write_clarifications = WriteClarificationService(session)
+        self._memory_quality = MemoryQualityService(session)
 
     def get(self, statement_id: uuid.UUID) -> StatementResponse:
         statement = self._statements.get(statement_id)
@@ -140,7 +143,7 @@ class StatementService(MutationProjectionMixin):
                     ),
                 }
             )
-        return result
+        return self._attach_quality_warnings_assert(result)
 
     def assert_statement_resumed(
         self,
@@ -163,7 +166,7 @@ class StatementService(MutationProjectionMixin):
     def supersede_statement(self, request: SupersedeStatementRequest) -> SupersedeStatementResponse:
         actor = self._actors.require_active_actor(request.actor_key)
         self._actors.require_capability(actor, Capability.KNOWLEDGE_WRITE)
-        return self._mutations.run(
+        result = self._mutations.run(
             actor=actor,
             operation_name="supersede_statement",
             request=request,
@@ -171,11 +174,12 @@ class StatementService(MutationProjectionMixin):
             constraint_name="statement_supersede",
             execute=lambda: self._supersede_body(request=request, actor_id=actor.id),
         )
+        return self._attach_quality_warnings_supersede(result)
 
     def retract_statement(self, request: RetractStatementRequest) -> RetractStatementResponse:
         actor = self._actors.require_active_actor(request.actor_key)
         self._actors.require_capability(actor, Capability.KNOWLEDGE_WRITE)
-        return self._mutations.run(
+        result = self._mutations.run(
             actor=actor,
             operation_name="retract_statement",
             request=request,
@@ -183,13 +187,14 @@ class StatementService(MutationProjectionMixin):
             constraint_name="statement_retract",
             execute=lambda: self._retract_body(request=request),
         )
+        return self._attach_quality_warnings_retract(result)
 
     def correct_statement(self, request: CorrectStatementRequest) -> SupersedeStatementResponse:
         """Correct temporal bounds or object via supersession (immutable history)."""
         actor = self._actors.require_active_actor(request.actor_key)
         self._actors.require_capability(actor, Capability.KNOWLEDGE_WRITE)
         supersede = self._correct_to_supersede(request)
-        return self._mutations.run(
+        result = self._mutations.run(
             actor=actor,
             operation_name="correct_statement",
             request=request,
@@ -197,6 +202,7 @@ class StatementService(MutationProjectionMixin):
             constraint_name="statement_correct",
             execute=lambda: self._supersede_body(request=supersede, actor_id=actor.id),
         )
+        return self._attach_quality_warnings_supersede(result)
 
     def get_timeline(self, entity_id: uuid.UUID) -> TimelineResponse:
         entity = self._entities.get(entity_id)
@@ -812,3 +818,62 @@ class StatementService(MutationProjectionMixin):
             created_at=statement.created_at,
             metadata=dict(statement.metadata_json or {}),
         )
+
+    def _attach_quality_warnings_assert(
+        self, result: AssertStatementResponse
+    ) -> AssertStatementResponse:
+        if result.outcome == AssertionOutcome.CLARIFY or result.statement is None:
+            return result
+        ctx = ChangeContext(
+            request_id=result.request_id,
+            operation_name="assert_statement",
+            dry_run=bool(result.dry_run),
+            touched_entity_ids=[result.statement.subject_entity_id]
+            + (
+                [result.statement.object_entity_id]
+                if result.statement.object_entity_id is not None
+                else []
+            ),
+            touched_statement_ids=[result.statement.id],
+            touched_predicate_ids=[result.statement.predicate_id],
+        )
+        warnings = self._memory_quality.inspect_after_write(ctx)
+        if not warnings:
+            return result
+        return result.model_copy(update={"quality_warnings": warnings})
+
+    def _attach_quality_warnings_supersede(
+        self, result: SupersedeStatementResponse
+    ) -> SupersedeStatementResponse:
+        ctx = ChangeContext(
+            request_id=result.request_id,
+            operation_name="supersede_statement",
+            dry_run=bool(result.dry_run),
+            touched_entity_ids=[
+                result.statement.subject_entity_id,
+                result.previous_statement.subject_entity_id,
+            ],
+            touched_statement_ids=[result.statement.id, result.previous_statement.id],
+            touched_predicate_ids=[result.statement.predicate_id],
+            supersession_edges=[(result.previous_statement.id, result.statement.id)],
+        )
+        warnings = self._memory_quality.inspect_after_write(ctx)
+        if not warnings:
+            return result
+        return result.model_copy(update={"quality_warnings": warnings})
+
+    def _attach_quality_warnings_retract(
+        self, result: RetractStatementResponse
+    ) -> RetractStatementResponse:
+        ctx = ChangeContext(
+            request_id=result.request_id,
+            operation_name="retract_statement",
+            dry_run=bool(result.dry_run),
+            touched_entity_ids=[result.statement.subject_entity_id],
+            touched_statement_ids=[result.statement.id],
+            touched_predicate_ids=[result.statement.predicate_id],
+        )
+        warnings = self._memory_quality.inspect_after_write(ctx)
+        if not warnings:
+            return result
+        return result.model_copy(update={"quality_warnings": warnings})

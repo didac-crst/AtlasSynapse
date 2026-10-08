@@ -206,3 +206,48 @@ class WriteClarificationResolution(StrEnum):
     CHOSEN_ENTITY = "chosen_entity"
     CREATE_NEW = "create_new"
     REJECT = "reject"
+
+
+class MemoryQualityIssueType(StrEnum):
+    """Residual post-write quality issue types (not conflicts)."""
+
+    SUPERSESSION_INTEGRITY = "supersession_integrity"
+    POSSIBLE_DUPLICATE_ENTITY = "possible_duplicate_entity"
+    WEAK_OR_MISSING_PROVENANCE = "weak_or_missing_provenance"
+
+
+class MemoryQualityIssueStatus(StrEnum):
+    OPEN = "open"
+    RESOLVED = "resolved"
+    DISMISSED = "dismissed"
+
+
+class MemoryQualitySeverity(StrEnum):
+    INFO = "info"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class MemoryQualityResolution(StrEnum):
+    """Terminal resolutions; null while status=open."""
+
+    AUTO_RESOLVED = "auto_resolved"
+    CORRECTED = "corrected"
+    RETRACTED = "retracted"
+    SUPERSEDED = "superseded"
+    CONFIRMED_SAME = "confirmed_same"
+    CONFIRMED_DIFFERENT = "confirmed_different"
+    UNKNOWN = "unknown"
+    NO_ACTION = "no_action"
+
+
+class QualityRouteOutcome(StrEnum):
+    """Post-write quality router outcomes (no REQUEST_CLARIFICATION)."""
+
+    IGNORE = "ignore"
+    OPEN_QUALITY_ISSUE = "open_quality_issue"
+    UPSERT_CONFLICT = "upsert_conflict"
+    IDENTITY_REVIEW = "identity_review"
+    AUTO_RESOLVE = "auto_resolve"
