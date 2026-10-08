@@ -1,7 +1,7 @@
 """memory quality issue
 
 Revision ID: a1b2c3d4e5f6
-Revises: f3b8e2a91c4d
+Revises: b8e2c4a91d0f
 Create Date: 2026-10-08 09:50:00.000000
 
 Residual post-write memory quality issues (not a conflict parallel table).

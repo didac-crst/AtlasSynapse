@@ -143,13 +143,17 @@ class SupersessionIntegrityDetector:
     def _detect_cycle(
         self, start: Statement, by_id: dict[uuid.UUID, Statement]
     ) -> list[uuid.UUID]:
+        """Return the cycle node list when a repeat is found.
+
+        Reaching the hop budget on an acyclic chain is **not** a cycle — return [].
+        """
         seen: list[uuid.UUID] = []
         current: Statement | None = start
-        for _ in range(32):
+        for _ in range(64):
             if current is None or current.superseded_by_statement_id is None:
                 return []
             nxt_id = current.superseded_by_statement_id
-            if nxt_id in seen:
+            if nxt_id in seen or nxt_id == start.id:
                 return seen + [nxt_id]
             seen.append(nxt_id)
             nxt = by_id.get(nxt_id)
@@ -158,7 +162,8 @@ class SupersessionIntegrityDetector:
                 if nxt is not None:
                     by_id[nxt.id] = nxt
             current = nxt
-        return seen
+        # Long acyclic history: stop inspecting; do not raise a false cycle.
+        return []
 
     def _finding(
         self,

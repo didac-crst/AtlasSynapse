@@ -621,6 +621,8 @@ class RetrievalService:
             if hit.statement is not None:
                 statement_ids.append(hit.statement.id)
                 entity_ids.append(hit.statement.subject_entity_id)
+                if hit.statement.object_entity_id is not None:
+                    entity_ids.append(hit.statement.object_entity_id)
         return SearchSemanticMemoryResponse(
             query=request.query,
             hits=limited,
@@ -742,6 +744,8 @@ class RetrievalService:
         for hit in limited_statements:
             statement_ids.append(hit.statement.id)
             entity_ids.append(hit.statement.subject_entity_id)
+            if hit.statement.object_entity_id is not None:
+                entity_ids.append(hit.statement.object_entity_id)
         return RelevantContextResponse(
             entity=entity,
             timeline=timeline,

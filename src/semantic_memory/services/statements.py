@@ -120,6 +120,9 @@ class StatementService(MutationProjectionMixin):
                 actor_id=actor.id,
                 force_create_sides=sides,
             ),
+            post_execute=lambda response, operation_id: self._attach_quality_warnings_assert(
+                response, actor_id=actor.id, operation_id=operation_id
+            ),
         )
         if (
             issue_clarification
@@ -143,7 +146,7 @@ class StatementService(MutationProjectionMixin):
                     ),
                 }
             )
-        return self._attach_quality_warnings_assert(result)
+        return result
 
     def assert_statement_resumed(
         self,
@@ -166,43 +169,49 @@ class StatementService(MutationProjectionMixin):
     def supersede_statement(self, request: SupersedeStatementRequest) -> SupersedeStatementResponse:
         actor = self._actors.require_active_actor(request.actor_key)
         self._actors.require_capability(actor, Capability.KNOWLEDGE_WRITE)
-        result = self._mutations.run(
+        return self._mutations.run(
             actor=actor,
             operation_name="supersede_statement",
             request=request,
             response_model=SupersedeStatementResponse,
             constraint_name="statement_supersede",
             execute=lambda: self._supersede_body(request=request, actor_id=actor.id),
+            post_execute=lambda response, operation_id: self._attach_quality_warnings_supersede(
+                response, actor_id=actor.id, operation_id=operation_id
+            ),
         )
-        return self._attach_quality_warnings_supersede(result)
 
     def retract_statement(self, request: RetractStatementRequest) -> RetractStatementResponse:
         actor = self._actors.require_active_actor(request.actor_key)
         self._actors.require_capability(actor, Capability.KNOWLEDGE_WRITE)
-        result = self._mutations.run(
+        return self._mutations.run(
             actor=actor,
             operation_name="retract_statement",
             request=request,
             response_model=RetractStatementResponse,
             constraint_name="statement_retract",
             execute=lambda: self._retract_body(request=request),
+            post_execute=lambda response, operation_id: self._attach_quality_warnings_retract(
+                response, actor_id=actor.id, operation_id=operation_id
+            ),
         )
-        return self._attach_quality_warnings_retract(result)
 
     def correct_statement(self, request: CorrectStatementRequest) -> SupersedeStatementResponse:
         """Correct temporal bounds or object via supersession (immutable history)."""
         actor = self._actors.require_active_actor(request.actor_key)
         self._actors.require_capability(actor, Capability.KNOWLEDGE_WRITE)
         supersede = self._correct_to_supersede(request)
-        result = self._mutations.run(
+        return self._mutations.run(
             actor=actor,
             operation_name="correct_statement",
             request=request,
             response_model=SupersedeStatementResponse,
             constraint_name="statement_correct",
             execute=lambda: self._supersede_body(request=supersede, actor_id=actor.id),
+            post_execute=lambda response, operation_id: self._attach_quality_warnings_supersede(
+                response, actor_id=actor.id, operation_id=operation_id
+            ),
         )
-        return self._attach_quality_warnings_supersede(result)
 
     def get_timeline(self, entity_id: uuid.UUID) -> TimelineResponse:
         entity = self._entities.get(entity_id)
@@ -820,11 +829,17 @@ class StatementService(MutationProjectionMixin):
         )
 
     def _attach_quality_warnings_assert(
-        self, result: AssertStatementResponse
+        self,
+        result: AssertStatementResponse,
+        *,
+        actor_id: uuid.UUID,
+        operation_id: uuid.UUID,
     ) -> AssertStatementResponse:
         if result.outcome == AssertionOutcome.CLARIFY or result.statement is None:
             return result
         ctx = ChangeContext(
+            actor_id=actor_id,
+            operation_id=operation_id,
             request_id=result.request_id,
             operation_name="assert_statement",
             dry_run=bool(result.dry_run),
@@ -843,16 +858,27 @@ class StatementService(MutationProjectionMixin):
         return result.model_copy(update={"quality_warnings": warnings})
 
     def _attach_quality_warnings_supersede(
-        self, result: SupersedeStatementResponse
+        self,
+        result: SupersedeStatementResponse,
+        *,
+        actor_id: uuid.UUID,
+        operation_id: uuid.UUID,
     ) -> SupersedeStatementResponse:
+        touched_entities = [
+            result.statement.subject_entity_id,
+            result.previous_statement.subject_entity_id,
+        ]
+        if result.statement.object_entity_id is not None:
+            touched_entities.append(result.statement.object_entity_id)
+        if result.previous_statement.object_entity_id is not None:
+            touched_entities.append(result.previous_statement.object_entity_id)
         ctx = ChangeContext(
+            actor_id=actor_id,
+            operation_id=operation_id,
             request_id=result.request_id,
             operation_name="supersede_statement",
             dry_run=bool(result.dry_run),
-            touched_entity_ids=[
-                result.statement.subject_entity_id,
-                result.previous_statement.subject_entity_id,
-            ],
+            touched_entity_ids=list(dict.fromkeys(touched_entities)),
             touched_statement_ids=[result.statement.id, result.previous_statement.id],
             touched_predicate_ids=[result.statement.predicate_id],
             supersession_edges=[(result.previous_statement.id, result.statement.id)],
@@ -863,13 +889,22 @@ class StatementService(MutationProjectionMixin):
         return result.model_copy(update={"quality_warnings": warnings})
 
     def _attach_quality_warnings_retract(
-        self, result: RetractStatementResponse
+        self,
+        result: RetractStatementResponse,
+        *,
+        actor_id: uuid.UUID,
+        operation_id: uuid.UUID,
     ) -> RetractStatementResponse:
+        touched_entities = [result.statement.subject_entity_id]
+        if result.statement.object_entity_id is not None:
+            touched_entities.append(result.statement.object_entity_id)
         ctx = ChangeContext(
+            actor_id=actor_id,
+            operation_id=operation_id,
             request_id=result.request_id,
             operation_name="retract_statement",
             dry_run=bool(result.dry_run),
-            touched_entity_ids=[result.statement.subject_entity_id],
+            touched_entity_ids=touched_entities,
             touched_statement_ids=[result.statement.id],
             touched_predicate_ids=[result.statement.predicate_id],
         )

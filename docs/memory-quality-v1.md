@@ -163,16 +163,20 @@ Detectors emit findings only. Router + quality service own side effects.
 ## 4. Post-write trigger and transaction boundaries
 
 ```text
-primary mutation body succeeds (MutationRunner)
+MutationRunner (execute path only)
         ↓
-flush / effective state visible
+mutation body
         ↓
-bounded quality inspection in a separate short transaction
-  (nested savepoint on the request session, or equivalent)
+post_execute: bounded quality inspection (nested savepoint)
         ↓
-attach quality_warnings to mutation response
+attach quality_warnings to response
+        ↓
+cache final response (incl. warnings) + audit
         ↓
 outer commit (API/MCP)
+
+idempotent replay → return cached final response (no quality re-inspect)
+dry_run → no post_execute / no durable quality rows
 ```
 
 ### Guarantees

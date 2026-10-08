@@ -83,14 +83,7 @@ class MemoryQualityService:
             statement_ids=statement_ids,
             limit=limit,
         )
-        # Relevance filter: also match related_* JSON membership loosely.
-        entity_set = {str(e) for e in entity_ids}
-        statement_set = {str(s) for s in statement_ids}
-        filtered: list[MemoryQualityIssue] = []
-        for row in rows:
-            if self._intersects(row, entity_set, statement_set):
-                filtered.append(row)
-        return [self._to_warning(row) for row in filtered[:limit]]
+        return [self._to_warning(row) for row in rows]
 
     def list_issues(
         self,
@@ -230,26 +223,6 @@ class MemoryQualityService:
             related_statement_ids=related_statements,
             trigger_operation_id=change_context.operation_id,
         )
-
-    @staticmethod
-    def _intersects(
-        row: MemoryQualityIssue,
-        entity_set: set[str],
-        statement_set: set[str],
-    ) -> bool:
-        if row.subject_entity_id and str(row.subject_entity_id) in entity_set:
-            return True
-        if row.object_entity_id and str(row.object_entity_id) in entity_set:
-            return True
-        if row.statement_id and str(row.statement_id) in statement_set:
-            return True
-        for eid in row.related_entity_ids or []:
-            if str(eid) in entity_set:
-                return True
-        for sid in row.related_statement_ids or []:
-            if str(sid) in statement_set:
-                return True
-        return False
 
     def _to_warning(self, row: MemoryQualityIssue) -> QualityWarning:
         return QualityWarning(

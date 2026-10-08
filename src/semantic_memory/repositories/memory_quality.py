@@ -6,11 +6,20 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
 from semantic_memory.models.enums import MemoryQualityIssueStatus
 from semantic_memory.models.memory_quality import MemoryQualityIssue
+
+_SEVERITY_RANK = case(
+    (MemoryQualityIssue.severity == "critical", 5),
+    (MemoryQualityIssue.severity == "high", 4),
+    (MemoryQualityIssue.severity == "medium", 3),
+    (MemoryQualityIssue.severity == "low", 2),
+    (MemoryQualityIssue.severity == "info", 1),
+    else_=0,
+)
 
 
 class MemoryQualityRepository:
@@ -101,12 +110,17 @@ class MemoryQualityRepository:
     ) -> list[MemoryQualityIssue]:
         if not entity_ids and not statement_ids:
             return []
-        clauses = []
+        clauses: list[Any] = []
         if entity_ids:
             clauses.append(MemoryQualityIssue.subject_entity_id.in_(entity_ids))
             clauses.append(MemoryQualityIssue.object_entity_id.in_(entity_ids))
+            for eid in entity_ids:
+                # JSONB array membership for related_entity_ids (string UUIDs).
+                clauses.append(MemoryQualityIssue.related_entity_ids.contains([str(eid)]))
         if statement_ids:
             clauses.append(MemoryQualityIssue.statement_id.in_(statement_ids))
+            for sid in statement_ids:
+                clauses.append(MemoryQualityIssue.related_statement_ids.contains([str(sid)]))
         stmt = (
             select(MemoryQualityIssue)
             .where(
@@ -114,32 +128,13 @@ class MemoryQualityRepository:
                 or_(*clauses),
             )
             .order_by(
-                MemoryQualityIssue.severity.desc(),
+                _SEVERITY_RANK.desc(),
                 MemoryQualityIssue.updated_at.desc(),
                 MemoryQualityIssue.id.desc(),
             )
             .limit(limit)
         )
-        # Severity is lexical; filter in Python for priority order.
-        rows = list(self._session.scalars(stmt).all())
-        severity_rank = {"critical": 5, "high": 4, "medium": 3, "low": 2, "info": 1}
-        rows.sort(
-            key=lambda r: (
-                -severity_rank.get(r.severity, 0),
-                r.updated_at,
-                r.id,
-            ),
-            reverse=False,
-        )
-        # updated_at desc: fix sort
-        rows.sort(
-            key=lambda r: (
-                severity_rank.get(r.severity, 0),
-                r.updated_at,
-            ),
-            reverse=True,
-        )
-        return rows[:limit]
+        return list(self._session.scalars(stmt).all())
 
     def list_issues(
         self,
