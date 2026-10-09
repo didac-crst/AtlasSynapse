@@ -252,48 +252,99 @@ def _ensure_predicate(
         {"ns": ns_id, "key": key},
     ).scalar()
     datatype = "xsd:string" if value_kind == "string" else None
-    if pred_id is None:
-        pred_id = _sid("predicate", _CORE_NS, key)
-        rev_id = _sid("predicate_revision", _CORE_NS, key, "1")
-        conn.execute(
-            sa.text(
-                "INSERT INTO ontology_predicate "
-                "(id, namespace_id, key, current_revision_id, is_deprecated, created_at, updated_at) "
-                "VALUES (:id, :ns, :key, NULL, false, NOW(), NOW())"
-            ),
-            {"id": pred_id, "ns": ns_id, "key": key},
+    if pred_id is not None:
+        # Fail closed: reuse only when existing predicate already matches required
+        # semantics. Do not silently attach Claim domains/ranges onto a foreign key.
+        row = (
+            conn.execute(
+                sa.text(
+                    "SELECT r.id, r.value_kind, r.cardinality "
+                    "FROM ontology_predicate p "
+                    "JOIN ontology_predicate_revision r ON r.id = p.current_revision_id "
+                    "WHERE p.id = :id"
+                ),
+                {"id": pred_id},
+            )
+            .mappings()
+            .first()
         )
-        conn.execute(
-            sa.text(
-                "INSERT INTO ontology_predicate_revision "
-                "(id, predicate_id, revision_number, label, description, value_kind, datatype, "
-                "cardinality, is_symmetric, is_transitive, metadata, created_by_actor_id, created_at) "
-                "VALUES (:id, :predicate_id, 1, :label, :description, :value_kind, :datatype, "
-                ":cardinality, false, false, CAST(:metadata AS jsonb), :actor_id, NOW())"
-            ),
-            {
-                "id": rev_id,
-                "predicate_id": pred_id,
-                "label": key,
-                "description": description,
-                "value_kind": value_kind,
-                "datatype": datatype,
-                "cardinality": cardinality,
-                "metadata": '{"seed_extension": "claim_ontology"}',
-                "actor_id": actor_id,
-            },
-        )
-        conn.execute(
-            sa.text("UPDATE ontology_predicate SET current_revision_id = :rev WHERE id = :id"),
-            {"rev": rev_id, "id": pred_id},
-        )
-    else:
-        rev_id = conn.execute(
-            sa.text("SELECT current_revision_id FROM ontology_predicate WHERE id = :id"),
-            {"id": pred_id},
-        ).scalar()
-        if rev_id is None:
-            return
+        if row is None:
+            raise RuntimeError(
+                f"core.{key} exists without a current revision; refuse Claim ontology migration"
+            )
+        if row["value_kind"] != value_kind or row["cardinality"] != cardinality:
+            raise RuntimeError(
+                f"core.{key} incompatible with Claim ontology "
+                f"(found value_kind={row['value_kind']!r} cardinality={row['cardinality']!r}; "
+                f"required value_kind={value_kind!r} cardinality={cardinality!r})"
+            )
+        rev_id = row["id"]
+        for class_key in domain_keys:
+            exists = conn.execute(
+                sa.text(
+                    "SELECT 1 FROM ontology_predicate_domain d "
+                    "JOIN ontology_class c ON c.id = d.class_id "
+                    "JOIN ontology_namespace n ON n.id = c.namespace_id "
+                    "WHERE d.predicate_revision_id = :rev AND n.key = :ns AND c.key = :key"
+                ),
+                {"rev": rev_id, "ns": _CORE_NS, "key": class_key},
+            ).scalar()
+            if exists is None:
+                raise RuntimeError(
+                    f"core.{key} missing required domain {class_key!r}; "
+                    "refuse to mutate incompatible predicate during Claim migration"
+                )
+        for class_key in range_keys:
+            exists = conn.execute(
+                sa.text(
+                    "SELECT 1 FROM ontology_predicate_range r "
+                    "JOIN ontology_class c ON c.id = r.class_id "
+                    "JOIN ontology_namespace n ON n.id = c.namespace_id "
+                    "WHERE r.predicate_revision_id = :rev AND n.key = :ns AND c.key = :key"
+                ),
+                {"rev": rev_id, "ns": _CORE_NS, "key": class_key},
+            ).scalar()
+            if exists is None:
+                raise RuntimeError(
+                    f"core.{key} missing required range {class_key!r}; "
+                    "refuse to mutate incompatible predicate during Claim migration"
+                )
+        return
+
+    pred_id = _sid("predicate", _CORE_NS, key)
+    rev_id = _sid("predicate_revision", _CORE_NS, key, "1")
+    conn.execute(
+        sa.text(
+            "INSERT INTO ontology_predicate "
+            "(id, namespace_id, key, current_revision_id, is_deprecated, created_at, updated_at) "
+            "VALUES (:id, :ns, :key, NULL, false, NOW(), NOW())"
+        ),
+        {"id": pred_id, "ns": ns_id, "key": key},
+    )
+    conn.execute(
+        sa.text(
+            "INSERT INTO ontology_predicate_revision "
+            "(id, predicate_id, revision_number, label, description, value_kind, datatype, "
+            "cardinality, is_symmetric, is_transitive, metadata, created_by_actor_id, created_at) "
+            "VALUES (:id, :predicate_id, 1, :label, :description, :value_kind, :datatype, "
+            ":cardinality, false, false, CAST(:metadata AS jsonb), :actor_id, NOW())"
+        ),
+        {
+            "id": rev_id,
+            "predicate_id": pred_id,
+            "label": key,
+            "description": description,
+            "value_kind": value_kind,
+            "datatype": datatype,
+            "cardinality": cardinality,
+            "metadata": '{"seed_extension": "claim_ontology"}',
+            "actor_id": actor_id,
+        },
+    )
+    conn.execute(
+        sa.text("UPDATE ontology_predicate SET current_revision_id = :rev WHERE id = :id"),
+        {"rev": rev_id, "id": pred_id},
+    )
 
     for class_key in domain_keys:
         class_id = conn.execute(
@@ -305,27 +356,19 @@ def _ensure_predicate(
             {"ns": _CORE_NS, "key": class_key},
         ).scalar()
         if class_id is None:
-            continue
-        exists = conn.execute(
+            raise RuntimeError(f"missing domain class {class_key} for {key}")
+        conn.execute(
             sa.text(
-                "SELECT 1 FROM ontology_predicate_domain "
-                "WHERE predicate_revision_id = :rev AND class_id = :class_id"
+                "INSERT INTO ontology_predicate_domain "
+                "(id, predicate_revision_id, class_id) "
+                "VALUES (:id, :rev, :class_id)"
             ),
-            {"rev": rev_id, "class_id": class_id},
-        ).scalar()
-        if exists is None:
-            conn.execute(
-                sa.text(
-                    "INSERT INTO ontology_predicate_domain "
-                    "(id, predicate_revision_id, class_id) "
-                    "VALUES (:id, :rev, :class_id)"
-                ),
-                {
-                    "id": _sid("predicate_domain", _CORE_NS, key, class_key),
-                    "rev": rev_id,
-                    "class_id": class_id,
-                },
-            )
+            {
+                "id": _sid("predicate_domain", _CORE_NS, key, class_key),
+                "rev": rev_id,
+                "class_id": class_id,
+            },
+        )
 
     for class_key in range_keys:
         class_id = conn.execute(
@@ -337,27 +380,19 @@ def _ensure_predicate(
             {"ns": _CORE_NS, "key": class_key},
         ).scalar()
         if class_id is None:
-            continue
-        exists = conn.execute(
+            raise RuntimeError(f"missing range class {class_key} for {key}")
+        conn.execute(
             sa.text(
-                "SELECT 1 FROM ontology_predicate_range "
-                "WHERE predicate_revision_id = :rev AND class_id = :class_id"
+                "INSERT INTO ontology_predicate_range "
+                "(id, predicate_revision_id, class_id) "
+                "VALUES (:id, :rev, :class_id)"
             ),
-            {"rev": rev_id, "class_id": class_id},
-        ).scalar()
-        if exists is None:
-            conn.execute(
-                sa.text(
-                    "INSERT INTO ontology_predicate_range "
-                    "(id, predicate_revision_id, class_id) "
-                    "VALUES (:id, :rev, :class_id)"
-                ),
-                {
-                    "id": _sid("predicate_range", _CORE_NS, key, class_key),
-                    "rev": rev_id,
-                    "class_id": class_id,
-                },
-            )
+            {
+                "id": _sid("predicate_range", _CORE_NS, key, class_key),
+                "rev": rev_id,
+                "class_id": class_id,
+            },
+        )
 
 
 def upgrade() -> None:

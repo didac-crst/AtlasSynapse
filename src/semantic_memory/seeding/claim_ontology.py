@@ -1,5 +1,6 @@
 """Idempotent Claim class and epistemic binding predicates (Phase A).
 
+Single runtime source of truth for the Claim core-namespace extension.
 Claim interiors are not world beliefs. Retrieval uses CLAIM_BINDING_PREDICATE_KEYS
 to exclude epistemic graph material unless include_claims is set.
 """
@@ -11,6 +12,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from semantic_memory.exceptions import OntologySeedConflictError
 from semantic_memory.models import (
     Actor,
     Cardinality,
@@ -51,7 +53,7 @@ CLAIM_BINDING_PREDICATE_KEYS: frozenset[str] = frozenset(
 )
 
 # key, description, value_kind, cardinality, domain_keys, range_keys
-_CLAIM_PREDICATES: tuple[
+CLAIM_PREDICATES: tuple[
     tuple[str, str, ValueKind, Cardinality, tuple[str, ...], tuple[str, ...]],
     ...,
 ] = (
@@ -154,8 +156,98 @@ def _system_actor(session: Session) -> Actor:
     return actor
 
 
+def _verify_existing_predicate(
+    session: Session,
+    *,
+    predicate: OntologyPredicate,
+    key: str,
+    value_kind: ValueKind,
+    cardinality: Cardinality,
+    domain_keys: tuple[str, ...],
+    range_keys: tuple[str, ...],
+) -> None:
+    if predicate.current_revision_id is None:
+        raise OntologySeedConflictError(
+            f"core.{key} exists without a current revision; refuse Claim ontology bootstrap",
+            details={"predicate_key": key},
+        )
+    revision = session.get(OntologyPredicateRevision, predicate.current_revision_id)
+    if revision is None:
+        raise OntologySeedConflictError(
+            f"core.{key} current revision missing; refuse Claim ontology bootstrap",
+            details={"predicate_key": key},
+        )
+    if revision.value_kind != value_kind.value:
+        raise OntologySeedConflictError(
+            f"core.{key} value_kind={revision.value_kind!r} incompatible with "
+            f"required {value_kind.value!r}",
+            details={
+                "predicate_key": key,
+                "found_value_kind": revision.value_kind,
+                "required_value_kind": value_kind.value,
+            },
+        )
+    if revision.cardinality != cardinality.value:
+        raise OntologySeedConflictError(
+            f"core.{key} cardinality={revision.cardinality!r} incompatible with "
+            f"required {cardinality.value!r}",
+            details={
+                "predicate_key": key,
+                "found_cardinality": revision.cardinality,
+                "required_cardinality": cardinality.value,
+            },
+        )
+    found_domains = set(
+        session.execute(
+            select(OntologyClass.key)
+            .join(
+                OntologyPredicateDomain,
+                OntologyPredicateDomain.class_id == OntologyClass.id,
+            )
+            .where(OntologyPredicateDomain.predicate_revision_id == revision.id)
+        ).scalars()
+    )
+    missing_domains = set(domain_keys) - found_domains
+    if missing_domains:
+        raise OntologySeedConflictError(
+            f"core.{key} missing required domain(s) {sorted(missing_domains)}; "
+            "refuse to mutate incompatible predicate",
+            details={
+                "predicate_key": key,
+                "found_domains": sorted(found_domains),
+                "required_domains": list(domain_keys),
+            },
+        )
+    found_ranges = set(
+        session.execute(
+            select(OntologyClass.key)
+            .join(
+                OntologyPredicateRange,
+                OntologyPredicateRange.class_id == OntologyClass.id,
+            )
+            .where(OntologyPredicateRange.predicate_revision_id == revision.id)
+        ).scalars()
+    )
+    missing_ranges = set(range_keys) - found_ranges
+    if missing_ranges:
+        raise OntologySeedConflictError(
+            f"core.{key} missing required range(s) {sorted(missing_ranges)}; "
+            "refuse to mutate incompatible predicate",
+            details={
+                "predicate_key": key,
+                "found_ranges": sorted(found_ranges),
+                "required_ranges": list(range_keys),
+            },
+        )
+
+
 def ensure_claim_ontology(session: Session) -> dict[str, Any]:
-    """Ensure Claim ⊑ Thing and all Claim-binding predicates exist (idempotent)."""
+    """Ensure Claim ⊑ Thing and Claim-binding predicates exist (idempotent).
+
+    Existing same-key ontology is reused only when compatible (value kind,
+    cardinality, required domains/ranges, Claim→Thing). Incompatible
+    collisions fail closed.
+    """
     namespace = session.scalar(
         select(OntologyNamespace).where(OntologyNamespace.key == CORE_NAMESPACE_KEY)
     )
@@ -219,7 +311,7 @@ def ensure_claim_ontology(session: Session) -> dict[str, Any]:
         created_parents = 1
 
     created_predicates = 0
-    for key, description, value_kind, cardinality, domains, ranges in _CLAIM_PREDICATES:
+    for key, description, value_kind, cardinality, domains, ranges in CLAIM_PREDICATES:
         existing = session.scalar(
             select(OntologyPredicate).where(
                 OntologyPredicate.namespace_id == namespace.id,
@@ -227,6 +319,15 @@ def ensure_claim_ontology(session: Session) -> dict[str, Any]:
             )
         )
         if existing is not None:
+            _verify_existing_predicate(
+                session,
+                predicate=existing,
+                key=key,
+                value_kind=value_kind,
+                cardinality=cardinality,
+                domain_keys=domains,
+                range_keys=ranges,
+            )
             continue
         predicate = OntologyPredicate(
             id=stable_seed_id("predicate", CORE_NAMESPACE_KEY, key),

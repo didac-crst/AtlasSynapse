@@ -48,11 +48,11 @@ Sources are reusable records. Evidence links statements to sources with optional
 
 ## Bootstrap ontology
 
-Namespace `core` contains:
+Namespace `core` base seed contains:
 
 ```text
 Thing, Agent, Person, Organization, Place, Event, Activity,
-Project, Document, Observation, Decision, RelationshipContext, Claim
+Project, Document, Observation, Decision, RelationshipContext
 ```
 
 Initial inheritance:
@@ -69,7 +69,6 @@ Document -> Thing
 Observation -> Event
 Decision -> Event
 RelationshipContext -> Thing
-Claim -> Thing
 ```
 
 Initial predicates:
@@ -77,16 +76,25 @@ Initial predicates:
 ```text
 name, description, actor, hasParticipant, occurredAt,
 startedAt, endedAt, locatedAt, relatedTo, source,
-authoredBy, publicationContext,
+authoredBy, publicationContext
+```
+
+### Claim extension (Phase A)
+
+`Claim` is a **core-namespace bootstrap extension** via `ensure_claim_ontology()`
+(not part of the exact base `seed_core_ontology` specification):
+
+```text
+Claim -> Thing
 makesClaim, claimText, claimSubject, claimPredicateKey,
 claimObject, claimObjectString, epistemicKind, claimPolarity,
 claimStatus, claimDerivation, aboutEntity
 ```
 
 `Claim` is a source-scoped speech-act occurrence (`Document --makesClaim--> Claim`).
-Claim interiors (`claimText`, `claimSubject`, `claimPredicateKey`, …) are **not**
-world beliefs. Default retrieval excludes Claims unless `include_claims=true`
-(see [knowledge-ingestion-v1.md](knowledge-ingestion-v1.md) Phase A).
+Claim interiors are **not** world beliefs. Default retrieval excludes Claims unless
+`include_claims=true` (see [knowledge-ingestion-v1.md](knowledge-ingestion-v1.md)).
 
-This seed stays intentionally small beyond the Claim epistemic bootstrap.
-User or domain concepts belong in governed proposals.
+Incompatible pre-existing same-key ontology fails closed on bootstrap/migration.
+
+This seed stays intentionally small. User or domain concepts belong in governed proposals.

@@ -296,3 +296,225 @@ def test_project_context_does_not_treat_hypothesis_as_fact(db_session: Session) 
     if ctx.timeline is not None:
         for entry in ctx.timeline.entries:
             assert entry.statement.predicate_key not in CLAIM_BINDING_PREDICATE_KEYS
+
+
+def test_claim_crowd_out_does_not_hide_world_fact(db_session: Session) -> None:
+    """More Claim matches than the limit must not crowd out a matching world fact."""
+    bootstrap_system_ontology(db_session)
+    writer = _writer(db_session, key="crowd-writer")
+    entities = EntityService(db_session)
+    statements = StatementService(db_session)
+    shared = "UniqueCrowdTokenXYZ42"
+
+    project = entities.create_entity(
+        CreateEntityRequest(
+            actor_key=writer,
+            request_id=uuid.uuid4(),
+            idempotency_key=f"crowd-proj-{uuid.uuid4()}",
+            canonical_name=f"Project {shared}",
+            class_key="Project",
+        )
+    )
+    document = entities.create_entity(
+        CreateEntityRequest(
+            actor_key=writer,
+            request_id=uuid.uuid4(),
+            idempotency_key=f"crowd-doc-{uuid.uuid4()}",
+            canonical_name=f"Doc {shared}",
+            class_key="Document",
+        )
+    )
+    assert project.entity is not None and document.entity is not None
+
+    statements.assert_statement(
+        AssertStatementRequest(
+            actor_key=writer,
+            request_id=uuid.uuid4(),
+            idempotency_key=f"crowd-desc-{uuid.uuid4()}",
+            subject_entity_id=project.entity.id,
+            predicate_key="description",
+            object_string=f"World fact about {shared}",
+        )
+    )
+
+    for i in range(12):
+        claim = entities.create_entity(
+            CreateEntityRequest(
+                actor_key=writer,
+                request_id=uuid.uuid4(),
+                idempotency_key=f"crowd-claim-{i}-{uuid.uuid4()}",
+                canonical_name=f"Claim {i} {shared}",
+                class_key=CLAIM_CLASS_KEY,
+            )
+        )
+        assert claim.entity is not None
+        statements.assert_statement(
+            AssertStatementRequest(
+                actor_key=writer,
+                request_id=uuid.uuid4(),
+                idempotency_key=f"crowd-text-{i}-{uuid.uuid4()}",
+                subject_entity_id=claim.entity.id,
+                predicate_key="claimText",
+                object_string=f"Hypothesis mentioning {shared} number {i}",
+            )
+        )
+        statements.assert_statement(
+            AssertStatementRequest(
+                actor_key=writer,
+                request_id=uuid.uuid4(),
+                idempotency_key=f"crowd-makes-{i}-{uuid.uuid4()}",
+                subject_entity_id=document.entity.id,
+                predicate_key="makesClaim",
+                object_entity_id=claim.entity.id,
+            )
+        )
+
+    retrieval = RetrievalService(db_session)
+    result = retrieval.search_semantic_memory(SearchSemanticMemoryRequest(query=shared, limit=5))
+    descriptions = [
+        hit.statement.object_string
+        for hit in result.hits
+        if hit.statement is not None and hit.statement.predicate_key == "description"
+    ]
+    assert f"World fact about {shared}" in descriptions
+    claim_entity_hits = [
+        hit
+        for hit in result.hits
+        if hit.entity is not None and any(t.class_key == CLAIM_CLASS_KEY for t in hit.entity.types)
+    ]
+    assert claim_entity_hits == []
+
+
+def test_class_key_claim_without_include_claims_does_not_broaden(
+    db_session: Session,
+) -> None:
+    ids = _seed_hypothesis_graph(db_session)
+    retrieval = RetrievalService(db_session)
+
+    blocked = retrieval.search_semantic_memory(
+        SearchSemanticMemoryRequest(
+            query="AtlasSynapse",
+            class_key=CLAIM_CLASS_KEY,
+            include_claims=False,
+            limit=25,
+        )
+    )
+    # Zero Claim entity results; must not broaden to Project/Document entities.
+    assert all(hit.entity is None for hit in blocked.hits)
+    assert all(
+        hit.statement is None or hit.statement.predicate_key not in CLAIM_BINDING_PREDICATE_KEYS
+        for hit in blocked.hits
+    )
+
+    opted = retrieval.search_semantic_memory(
+        SearchSemanticMemoryRequest(
+            query="AtlasSynapse should use AGPL",
+            class_key=CLAIM_CLASS_KEY,
+            include_claims=True,
+            limit=25,
+        )
+    )
+    claim_hits = [
+        hit
+        for hit in opted.hits
+        if hit.entity is not None and any(t.class_key == CLAIM_CLASS_KEY for t in hit.entity.types)
+    ]
+    assert any(
+        hit.entity is not None and hit.entity.id == ids["claim_id"] for hit in claim_hits
+    ) or (
+        "claimText"
+        in {hit.statement.predicate_key for hit in opted.hits if hit.statement is not None}
+    )
+
+
+def test_incompatible_makes_claim_collision_fails_closed(db_session: Session) -> None:
+    from sqlalchemy import select
+
+    from semantic_memory.exceptions import OntologySeedConflictError
+    from semantic_memory.models import (
+        Actor,
+        OntologyClass,
+        OntologyNamespace,
+        OntologyPredicate,
+        OntologyPredicateDomain,
+        OntologyPredicateRevision,
+        ValueKind,
+    )
+    from semantic_memory.seeding.ontology import (
+        CORE_NAMESPACE_KEY,
+        seed_core_ontology,
+        stable_seed_id,
+    )
+
+    seed_core_ontology(db_session)
+    # Migration may already have Claim ontology; remove makesClaim only if we can
+    # plant an incompatible stand-in. Prefer creating a fresh incompatible key path
+    # by deleting Claim predicates created by migration within this savepoint session.
+    namespace = db_session.scalar(
+        select(OntologyNamespace).where(OntologyNamespace.key == CORE_NAMESPACE_KEY)
+    )
+    assert namespace is not None
+    actor = db_session.scalar(select(Actor).where(Actor.name == "system"))
+    assert actor is not None
+
+    existing = db_session.scalar(
+        select(OntologyPredicate).where(
+            OntologyPredicate.namespace_id == namespace.id,
+            OntologyPredicate.key == "makesClaim",
+        )
+    )
+    if existing is not None and existing.current_revision_id is not None:
+        # Overwrite current revision semantics in-place to simulate a foreign key.
+        rev = db_session.get(OntologyPredicateRevision, existing.current_revision_id)
+        assert rev is not None
+        rev.value_kind = ValueKind.STRING.value
+        rev.cardinality = "one"
+        rev.datatype = "xsd:string"
+        db_session.flush()
+    else:
+        document = db_session.scalar(
+            select(OntologyClass).where(
+                OntologyClass.namespace_id == namespace.id,
+                OntologyClass.key == "Document",
+            )
+        )
+        assert document is not None
+        pred = OntologyPredicate(
+            id=stable_seed_id("predicate", CORE_NAMESPACE_KEY, "makesClaim"),
+            namespace_id=namespace.id,
+            key="makesClaim",
+        )
+        db_session.add(pred)
+        db_session.flush()
+        rev = OntologyPredicateRevision(
+            id=stable_seed_id("predicate_revision", CORE_NAMESPACE_KEY, "makesClaim", "1"),
+            predicate_id=pred.id,
+            revision_number=1,
+            label="makesClaim",
+            description="incompatible stand-in",
+            value_kind=ValueKind.STRING.value,
+            datatype="xsd:string",
+            cardinality="one",
+            is_symmetric=False,
+            is_transitive=False,
+            metadata_json={},
+            created_by_actor_id=actor.id,
+        )
+        db_session.add(rev)
+        db_session.flush()
+        pred.current_revision_id = rev.id
+        db_session.add(
+            OntologyPredicateDomain(
+                id=stable_seed_id("predicate_domain", CORE_NAMESPACE_KEY, "makesClaim", "Document"),
+                predicate_revision_id=rev.id,
+                class_id=document.id,
+            )
+        )
+        db_session.flush()
+
+    try:
+        ensure_claim_ontology(db_session)
+        raise AssertionError("expected OntologySeedConflictError")
+    except OntologySeedConflictError as exc:
+        assert "makesClaim" in str(exc)
+        assert exc.details.get("predicate_key") == "makesClaim"

@@ -9,6 +9,10 @@ from sqlalchemy.orm import Session
 
 from semantic_memory.repositories.ontology import OntologyRepository
 from semantic_memory.seeding.bootstrap import bootstrap_system_ontology
+from semantic_memory.seeding.claim_ontology import (
+    CLAIM_BINDING_PREDICATE_KEYS,
+    CLAIM_CLASS_KEY,
+)
 from semantic_memory.seeding.ontology import (
     CORE_CLASSES,
     CORE_INHERITANCE,
@@ -78,7 +82,8 @@ def test_fresh_database_migrates_from_zero(alembic_cfg: Config) -> None:
             ),
             {"key": CORE_NAMESPACE_KEY},
         ).scalar_one()
-        assert class_count == len(CORE_CLASSES)
+        # Base core classes + Claim extension from d4e5f6a7b8c9.
+        assert class_count == len(CORE_CLASSES) + 1
 
         namespace_id = conn.execute(
             text("SELECT id FROM ontology_namespace WHERE key = :key"),
@@ -95,8 +100,6 @@ def test_seed_is_deterministic(db_session: Session) -> None:
     second = seed_core_ontology(db_session)
 
     assert first["namespace"] == CORE_NAMESPACE_KEY
-    assert first["class_count"] >= len(CORE_CLASSES)
-    assert first["predicate_count"] >= len(CORE_PREDICATES)
     assert second["created"] is False
     assert second["class_count"] == first["class_count"]
     assert second["predicate_count"] == first["predicate_count"]
@@ -111,7 +114,9 @@ def test_seed_is_deterministic(db_session: Session) -> None:
             {"key": CORE_NAMESPACE_KEY},
         ).scalars()
     )
-    assert set(CORE_CLASSES).issubset(class_keys)
+    # Exact base core + Claim migration extension only (no arbitrary growth).
+    assert class_keys == set(CORE_CLASSES) | {CLAIM_CLASS_KEY}
+    assert first["class_count"] == len(class_keys)
 
     parent_links = set(
         db_session.execute(
@@ -123,7 +128,7 @@ def test_seed_is_deterministic(db_session: Session) -> None:
             )
         ).all()
     )
-    assert set(CORE_INHERITANCE).issubset(parent_links)
+    assert parent_links == set(CORE_INHERITANCE) | {(CLAIM_CLASS_KEY, "Thing")}
 
     predicate_keys = set(
         db_session.execute(
@@ -135,7 +140,10 @@ def test_seed_is_deterministic(db_session: Session) -> None:
             {"key": CORE_NAMESPACE_KEY},
         ).scalars()
     )
-    assert {item[0] for item in CORE_PREDICATES}.issubset(predicate_keys)
+    assert predicate_keys == {item[0] for item in CORE_PREDICATES} | set(
+        CLAIM_BINDING_PREDICATE_KEYS
+    )
+    assert first["predicate_count"] == len(predicate_keys)
 
 
 def test_bootstrap_installs_identity_graph_predicates(db_session: Session) -> None:

@@ -43,7 +43,6 @@ CORE_CLASSES: tuple[str, ...] = (
     "Observation",
     "Decision",
     "RelationshipContext",
-    "Claim",
 )
 
 CORE_INHERITANCE: tuple[tuple[str, str], ...] = (
@@ -58,7 +57,6 @@ CORE_INHERITANCE: tuple[tuple[str, str], ...] = (
     ("Observation", "Event"),
     ("Decision", "Event"),
     ("RelationshipContext", "Thing"),
-    ("Claim", "Thing"),
 )
 
 # predicate_key, value_kind, cardinality, domain_keys, range_keys
@@ -95,18 +93,6 @@ CORE_PREDICATES: tuple[
         ("Document",),
         ("Organization",),
     ),
-    # Claim / epistemic graph (Phase A). Also ensured by ensure_claim_ontology().
-    ("makesClaim", ValueKind.ENTITY, Cardinality.MANY, ("Document",), ("Claim",)),
-    ("claimText", ValueKind.STRING, Cardinality.ONE, ("Claim",), ()),
-    ("claimSubject", ValueKind.ENTITY, Cardinality.ONE, ("Claim",), ("Thing",)),
-    ("claimPredicateKey", ValueKind.STRING, Cardinality.ONE, ("Claim",), ()),
-    ("claimObject", ValueKind.ENTITY, Cardinality.ONE, ("Claim",), ("Thing",)),
-    ("claimObjectString", ValueKind.STRING, Cardinality.ONE, ("Claim",), ()),
-    ("epistemicKind", ValueKind.STRING, Cardinality.ONE, ("Claim",), ()),
-    ("claimPolarity", ValueKind.STRING, Cardinality.ONE, ("Claim",), ()),
-    ("claimStatus", ValueKind.STRING, Cardinality.ONE, ("Claim",), ()),
-    ("claimDerivation", ValueKind.STRING, Cardinality.ONE, ("Claim",), ()),
-    ("aboutEntity", ValueKind.ENTITY, Cardinality.MANY, ("Claim",), ("Thing",)),
 )
 
 # Data-only extensions for Milestone B Phase 7 proofs. No new SQL tables.

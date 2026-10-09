@@ -10,7 +10,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, exists, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from semantic_memory.exceptions import UnknownEntityError, ValidationFailedError
@@ -122,7 +122,43 @@ class RetrievalService:
         self._conflicts = ConflictService(session)
         self._memory_quality = MemoryQualityService(session)
 
-    def search_entities(self, request: SearchEntitiesRequest) -> SearchEntitiesResponse:
+    def _claim_typed_entity_exists(self) -> Any:
+        """Correlated EXISTS: Entity.id is typed as Claim."""
+        return exists(
+            select(1)
+            .select_from(EntityType)
+            .join(OntologyClass, OntologyClass.id == EntityType.class_id)
+            .where(
+                EntityType.entity_id == Entity.id,
+                OntologyClass.key == CLAIM_CLASS_KEY,
+            )
+        )
+
+    def _apply_exclude_claims_to_statements(self, stmt: Select[Any]) -> Select[Any]:
+        """Exclude Claim-binding predicates and Claim-endpoint statements at query time."""
+        claim_predicate_ids = select(OntologyPredicate.id).where(
+            OntologyPredicate.key.in_(sorted(CLAIM_BINDING_PREDICATE_KEYS))
+        )
+        claim_entity_ids = (
+            select(EntityType.entity_id)
+            .join(OntologyClass, OntologyClass.id == EntityType.class_id)
+            .where(OntologyClass.key == CLAIM_CLASS_KEY)
+        )
+        return stmt.where(
+            ~Statement.predicate_id.in_(claim_predicate_ids),
+            ~Statement.subject_entity_id.in_(claim_entity_ids),
+            or_(
+                Statement.object_entity_id.is_(None),
+                ~Statement.object_entity_id.in_(claim_entity_ids),
+            ),
+        )
+
+    def search_entities(
+        self,
+        request: SearchEntitiesRequest,
+        *,
+        exclude_claims: bool = False,
+    ) -> SearchEntitiesResponse:
         timer = RequestTimer(operation="search_entities")
         patterns = lexical_match_patterns(request.query)
         token_match = or_(
@@ -153,6 +189,8 @@ class RetrievalService:
                 OntologyClass.key == request.class_key,
                 OntologyNamespace.key == request.namespace_key,
             )
+        if exclude_claims:
+            stmt = stmt.where(~self._claim_typed_entity_exists())
         with timer.measure("db"):
             rows = list(self._session.scalars(stmt).all())
             alias_map = self._alias_map_for_entities([entity.id for entity in rows])
@@ -188,7 +226,12 @@ class RetrievalService:
         set_last_timings(timer.finish())
         return response
 
-    def search_statements(self, request: SearchStatementsRequest) -> SearchStatementsResponse:
+    def search_statements(
+        self,
+        request: SearchStatementsRequest,
+        *,
+        exclude_claims: bool = False,
+    ) -> SearchStatementsResponse:
         empty = SearchStatementsResponse(
             query=request.query,
             total=0,
@@ -203,6 +246,8 @@ class RetrievalService:
         temporal_intent = detect_temporal_intent(request.query)
         predicate_lexicon = build_predicate_lexicon(self._session) if request.query else None
         stmt = select(Statement)
+        if exclude_claims:
+            stmt = self._apply_exclude_claims_to_statements(stmt)
         if request.status is not None:
             stmt = stmt.where(Statement.status == request.status.value)
         if request.subject_entity_id is not None:
@@ -369,6 +414,7 @@ class RetrievalService:
         *,
         limit: int = 50,
         as_of: datetime | None = None,
+        exclude_claims: bool = False,
     ) -> NeighborhoodResponse:
         timer = RequestTimer(operation="get_entity_neighborhood")
         with timer.measure("db_entity"):
@@ -384,6 +430,26 @@ class RetrievalService:
             survivor_id = self._entities.resolve_survivor_id(entity_id)
         with timer.measure("db_statements"):
             statements = self._statements.list_for_entity_timeline(list(identity_ids))
+        claim_predicate_ids: set[uuid.UUID] = set()
+        claim_entity_ids: set[uuid.UUID] = set()
+        if exclude_claims:
+            claim_predicate_ids = set(
+                self._session.scalars(
+                    select(OntologyPredicate.id).where(
+                        OntologyPredicate.key.in_(sorted(CLAIM_BINDING_PREDICATE_KEYS))
+                    )
+                ).all()
+            )
+            claim_entity_ids = self._claim_entity_id_set(
+                [
+                    *[row.subject_entity_id for row in statements],
+                    *[
+                        row.object_entity_id
+                        for row in statements
+                        if row.object_entity_id is not None
+                    ],
+                ]
+            )
         now = as_of or datetime.now(UTC)
         edges: list[NeighborhoodEdge] = []
         with timer.measure("ranking_assemble"):
@@ -396,6 +462,16 @@ class RetrievalService:
                 if statement.id in seen_statement_ids:
                     continue
                 seen_statement_ids.add(statement.id)
+                if exclude_claims:
+                    if statement.predicate_id in claim_predicate_ids:
+                        continue
+                    if statement.subject_entity_id in claim_entity_ids:
+                        continue
+                    if (
+                        statement.object_entity_id is not None
+                        and statement.object_entity_id in claim_entity_ids
+                    ):
+                        continue
                 subject_in_group = statement.subject_entity_id in identity_ids
                 object_in_group = (
                     statement.object_entity_id is not None
@@ -411,6 +487,8 @@ class RetrievalService:
                     # Self-loop within the merged identity group.
                     direction = "outgoing"
                     neighbor = survivor_id
+                if exclude_claims and neighbor is not None and neighbor in claim_entity_ids:
+                    continue
                 if neighbor is not None:
                     neighbor_ids.append(neighbor)
                 candidates.append((statement, direction, neighbor))
@@ -490,26 +568,38 @@ class RetrievalService:
         self, request: SearchSemanticMemoryRequest
     ) -> SearchSemanticMemoryResponse:
         temporal_intent = detect_temporal_intent(request.query)
-        # Never use class_key=Claim as a silent include_claims bypass for generic search.
-        entity_class_key = request.class_key
-        if (
-            not request.include_claims
-            and entity_class_key is not None
-            and entity_class_key == CLAIM_CLASS_KEY
-        ):
-            entity_class_key = None
-        entity_hits = self.search_entities(
-            SearchEntitiesRequest(
-                query=request.query,
-                class_key=entity_class_key,
-                namespace_key=request.namespace_key,
-                as_of=request.as_of,
-                limit=request.limit,
-            )
+        exclude_claims = not request.include_claims
+        claim_class_blocked = (
+            exclude_claims
+            and request.class_key is not None
+            and request.class_key == CLAIM_CLASS_KEY
         )
+        # class_key=Claim with include_claims=false must not broaden to other classes.
+        if claim_class_blocked:
+            entity_hits = SearchEntitiesResponse(
+                query=request.query,
+                hits=[],
+                ranking_explanations=[
+                    "class_key=Claim requires include_claims=true; "
+                    "Claim entities are excluded from default search "
+                    "(filter not broadened to other classes).",
+                ],
+            )
+        else:
+            entity_hits = self.search_entities(
+                SearchEntitiesRequest(
+                    query=request.query,
+                    class_key=request.class_key,
+                    namespace_key=request.namespace_key,
+                    as_of=request.as_of,
+                    limit=request.limit,
+                ),
+                exclude_claims=exclude_claims,
+            )
         # Always gather asserted lexical candidates. Historical intent widens the
         # asserted window and adds a superseded pass so prior beliefs are not
         # crowded out of search_statements' created_at pagination.
+        # Claim exclusion is applied inside search_statements before LIMIT.
         statement_limit = (
             min(100, request.limit * 2)
             if temporal_intent == TemporalIntent.HISTORICAL
@@ -523,7 +613,8 @@ class RetrievalService:
                     as_of=request.as_of,
                     limit=statement_limit,
                     status=StatementStatus.ASSERTED,
-                )
+                ),
+                exclude_claims=exclude_claims,
             ).hits
         )
         if temporal_intent == TemporalIntent.HISTORICAL:
@@ -534,7 +625,8 @@ class RetrievalService:
                     as_of=request.as_of,
                     limit=statement_limit,
                     status=StatementStatus.SUPERSEDED,
-                )
+                ),
+                exclude_claims=exclude_claims,
             ).hits
             seen = {hit.statement.id for hit in statement_hits}
             for hit in superseded_hits:
@@ -545,8 +637,13 @@ class RetrievalService:
         # Soft predicate-intent candidate pull: when the query clearly cues a
         # predicate (studied/goal/role), also fetch that predicate's rows so
         # entity-valued facts aren't lost to created_at pagination. Not a filter.
+        # Skip Claim-binding intent keys when Claims are excluded.
         predicate_lexicon = build_predicate_lexicon(self._session)
-        intent_keys = top_intent_predicates(request.query, predicate_lexicon)
+        intent_keys = [
+            key
+            for key in top_intent_predicates(request.query, predicate_lexicon)
+            if not (exclude_claims and key in CLAIM_BINDING_PREDICATE_KEYS)
+        ]
         # Once per query for superseded-anchor floor gating (not per candidate).
         intent_predicate_keys = frozenset(
             top_intent_predicates(request.query, predicate_lexicon, limit=2)
@@ -565,7 +662,8 @@ class RetrievalService:
                         else StatementStatus.ASSERTED
                     ),
                     query=None,
-                )
+                ),
+                exclude_claims=exclude_claims,
             ).hits
             rescored = self._rescore_statements_for_query(
                 [hit.statement.id for hit in extra],
@@ -664,33 +762,16 @@ class RetrievalService:
             "Claims included (include_claims=true)."
             if request.include_claims
             else (
-                "Claims excluded by default: Claim entities and Claim-binding "
-                "statements (makesClaim, claimText, …) are omitted unless "
-                "include_claims=true."
+                "Claims excluded before result limiting: Claim entities and "
+                "Claim-binding statements (makesClaim, claimText, …) are never "
+                "candidates unless include_claims=true."
             )
         )
-        if not request.include_claims:
-            endpoint_ids: list[uuid.UUID] = []
-            for memory_row in hits:
-                if memory_row.entity is not None:
-                    endpoint_ids.append(memory_row.entity.id)
-                if memory_row.statement is not None:
-                    endpoint_ids.append(memory_row.statement.subject_entity_id)
-                    if memory_row.statement.object_entity_id is not None:
-                        endpoint_ids.append(memory_row.statement.object_entity_id)
-            claim_ids = self._claim_entity_id_set(endpoint_ids)
-            filtered: list[SemanticMemoryHit] = []
-            for memory_row in hits:
-                if memory_row.entity is not None and (
-                    _entity_is_claim(memory_row.entity) or memory_row.entity.id in claim_ids
-                ):
-                    continue
-                if memory_row.statement is not None and self._statement_involves_claim(
-                    memory_row.statement, claim_ids
-                ):
-                    continue
-                filtered.append(memory_row)
-            hits = filtered
+        if claim_class_blocked:
+            claim_filter_note = (
+                "class_key=Claim ignored without include_claims=true "
+                "(no Claim results; search not broadened)."
+            )
 
         hits.sort(key=lambda item: item.ranking_score, reverse=True)
         limited = hits[: request.limit]
@@ -770,39 +851,51 @@ class RetrievalService:
             "No LLM or vector provider is required.",
         ]
 
-        if request.statement_id is not None:
+        # Resolve focus entity early so Claim exclusion applies before limits.
+        if request.entity_id is not None:
+            with timer.measure("entity_get"):
+                entity = self._entity_service.get(request.entity_id)
+        elif request.statement_id is not None:
             with timer.measure("statement_path"):
                 explanation = self._provenance.explain_statement(request.statement_id)
                 statement = self._statement_service.get(request.statement_id)
-                subject_id = statement.subject_entity_id
-                entity = self._entity_service.get(subject_id)
-                timeline = self._statement_service.get_timeline(subject_id)
-                neighborhood = self.get_entity_neighborhood(subject_id, as_of=request.as_of)
+                entity = self._entity_service.get(statement.subject_entity_id)
                 conflicts = self._conflicts.find_conflicts(
                     statement_id=request.statement_id
                 ).conflicts
 
-        if request.entity_id is not None:
-            with timer.measure("entity_get"):
-                entity = self._entity_service.get(request.entity_id)
+        focus_is_claim = entity is not None and _entity_is_claim(entity)
+        allow_claims = request.include_claims or focus_is_claim
+        exclude_claims = not allow_claims
+        focus_entity_id = (
+            request.entity_id
+            if request.entity_id is not None
+            else (entity.id if entity is not None else None)
+        )
+
+        if focus_entity_id is not None:
             with timer.measure("timeline"):
-                timeline = self._statement_service.get_timeline(request.entity_id)
+                timeline = self._statement_service.get_timeline(focus_entity_id)
             with timer.measure("neighborhood"):
-                neighborhood = self.get_entity_neighborhood(request.entity_id, as_of=request.as_of)
-            with timer.measure("conflicts"):
-                conflicts = self._conflicts.find_conflicts(entity_id=request.entity_id).conflicts
+                neighborhood = self.get_entity_neighborhood(
+                    focus_entity_id,
+                    as_of=request.as_of,
+                    exclude_claims=exclude_claims,
+                )
+            if request.entity_id is not None:
+                with timer.measure("conflicts"):
+                    conflicts = self._conflicts.find_conflicts(
+                        entity_id=request.entity_id
+                    ).conflicts
             with timer.measure("statements"):
                 statements = self.search_statements(
                     SearchStatementsRequest(
-                        entity_id=request.entity_id,
+                        entity_id=focus_entity_id,
                         as_of=request.as_of,
                         limit=request.limit,
-                    )
+                    ),
+                    exclude_claims=exclude_claims,
                 ).hits
-
-        # Direct Claim lookup exposes Claim structure; otherwise Claims are opt-in.
-        focus_is_claim = entity is not None and _entity_is_claim(entity)
-        allow_claims = request.include_claims or focus_is_claim
 
         if request.query:
             with timer.measure("semantic_memory"):
@@ -840,41 +933,19 @@ class RetrievalService:
                 details={},
             )
 
-        if not allow_claims:
-            endpoint_ids: list[uuid.UUID] = []
-            if entity is not None:
-                endpoint_ids.append(entity.id)
-            if request.entity_id is not None:
-                endpoint_ids.append(request.entity_id)
-            for ranked in statements:
-                endpoint_ids.append(ranked.statement.subject_entity_id)
-                if ranked.statement.object_entity_id is not None:
-                    endpoint_ids.append(ranked.statement.object_entity_id)
-            if timeline is not None:
-                for entry in timeline.entries:
-                    endpoint_ids.append(entry.statement.subject_entity_id)
-                    if entry.statement.object_entity_id is not None:
-                        endpoint_ids.append(entry.statement.object_entity_id)
-            if neighborhood is not None:
-                for edge in neighborhood.edges:
-                    endpoint_ids.append(edge.statement.subject_entity_id)
-                    if edge.statement.object_entity_id is not None:
-                        endpoint_ids.append(edge.statement.object_entity_id)
-                    if edge.neighbor_entity_id is not None:
-                        endpoint_ids.append(edge.neighbor_entity_id)
-            claim_ids = self._claim_entity_id_set(endpoint_ids)
-            statements = [
-                ranked
-                for ranked in statements
-                if not self._statement_involves_claim(ranked.statement, claim_ids)
+        # Timeline is unbounded; filter Claim bindings when excluded.
+        if exclude_claims and timeline is not None:
+            endpoint_ids = [entry.statement.subject_entity_id for entry in timeline.entries] + [
+                entry.statement.object_entity_id
+                for entry in timeline.entries
+                if entry.statement.object_entity_id is not None
             ]
-            if timeline is not None:
-                timeline = self._filter_timeline_claims(timeline, claim_ids)
-            if neighborhood is not None:
-                neighborhood = self._filter_neighborhood_claims(neighborhood, claim_ids)
+            claim_ids = self._claim_entity_id_set(endpoint_ids)
+            timeline = self._filter_timeline_claims(timeline, claim_ids)
             ranking_explanations.append(
-                "Claims excluded by default for ordinary entity/query context; "
-                "direct Claim entity_id lookup or include_claims=true opts in."
+                "Claims excluded before neighborhood/statement limiting for ordinary "
+                "entity/query context; direct Claim entity_id lookup or "
+                "include_claims=true opts in."
             )
         elif focus_is_claim:
             ranking_explanations.append("Direct Claim lookup: Claim structure (bindings) included.")

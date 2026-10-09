@@ -152,6 +152,12 @@ class ValidationFailedError(DomainError):
     error_code = "VALIDATION_FAILED"
 
 
+class OntologySeedConflictError(DomainError):
+    """Existing ontology key conflicts with required seed/extension semantics."""
+
+    error_code = "ONTOLOGY_SEED_CONFLICT"
+
+
 class DbConstraintError(DomainError):
     error_code = "DB_CONSTRAINT_ERROR"
 
