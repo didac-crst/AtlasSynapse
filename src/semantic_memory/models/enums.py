@@ -208,6 +208,106 @@ class WriteClarificationResolution(StrEnum):
     REJECT = "reject"
 
 
+class KnowledgeIngestionMode(StrEnum):
+    """Whether an ingestion run may persist commits (execute) or only preview (dry_run)."""
+
+    EXECUTE = "execute"
+    DRY_RUN = "dry_run"
+
+
+class KnowledgeIngestionStatus(StrEnum):
+    """Operational run status for governed knowledge ingestion."""
+
+    ACCEPTED = "accepted"
+    EXTRACTING = "extracting"
+    RESOLVING = "resolving"
+    AWAITING_CLARIFICATION = "awaiting_clarification"
+    PAUSED = "paused"
+    COMMITTING = "committing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class KnowledgeIngestionPauseReason(StrEnum):
+    """Operational pause reasons (not semantic decisions)."""
+
+    BUDGET_EXHAUSTED = "budget_exhausted"
+
+
+class KnowledgeCandidateKind(StrEnum):
+    ASSERTION = "assertion"
+    HYPOTHESIS = "hypothesis"
+    RECOMMENDATION = "recommendation"
+    QUESTION = "question"
+
+
+class KnowledgeCandidatePolarity(StrEnum):
+    POSITIVE = "positive"
+    NEGATIVE = "negative"
+
+
+class KnowledgeCandidateDerivation(StrEnum):
+    EXPLICIT = "explicit"
+    NORMALIZED = "normalized"
+    INFERRED = "inferred"
+
+
+class KnowledgeCandidateEpistemicStatus(StrEnum):
+    """Semantic lifecycle — orthogonal to processing state."""
+
+    ACTIVE = "active"
+    REJECTED = "rejected"
+    SUPERSEDED = "superseded"
+    OPEN = "open"
+    ANSWERED = "answered"
+
+
+class KnowledgeCandidateState(StrEnum):
+    """Processing state machine for a candidate within an ingestion run."""
+
+    EXTRACTED = "extracted"
+    ACTIONABLE = "actionable"
+    BLOCKED = "blocked"
+    RESOLVED_COMMIT_ELIGIBLE = "resolved_commit_eligible"
+    COMMITTED = "committed"
+    DISCARDED = "discarded"
+    FAILED = "failed"
+
+
+class KnowledgeCandidateDependencyKind(StrEnum):
+    """Why child waits on parent (parent is the prerequisite)."""
+
+    REQUIRES_RESOLUTION = "requires_resolution"
+    REQUIRES_COMMIT = "requires_commit"
+    SAME_SUBJECT = "same_subject"
+    GENERIC = "generic"
+
+
+class KnowledgeIngestionClarificationKind(StrEnum):
+    IDENTITY = "identity"
+    ONTOLOGY = "ontology"
+    PACKAGE_LOCAL = "package_local"
+    POLICY = "policy"
+
+
+class KnowledgeIngestionClarificationStatus(StrEnum):
+    OPEN = "open"
+    ANSWERED = "answered"
+    CANCELLED = "cancelled"
+    SUPERSEDED = "superseded"
+
+
+class KnowledgeIngestionEffectType(StrEnum):
+    CREATE_ENTITY = "create_entity"
+    ASSERT_STATEMENT = "assert_statement"
+    ADD_EVIDENCE = "add_evidence"
+
+
+class KnowledgeIngestionEffectStatus(StrEnum):
+    APPLIED = "applied"
+    FAILED = "failed"
+
+
 class MemoryQualityIssueType(StrEnum):
     """Residual post-write quality issue types (not conflicts)."""
 

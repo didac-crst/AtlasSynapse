@@ -132,6 +132,14 @@ class UnknownBatchError(DomainError):
     error_code = "UNKNOWN_BATCH"
 
 
+class UnknownKnowledgeIngestionError(DomainError):
+    error_code = "UNKNOWN_KNOWLEDGE_INGESTION"
+
+
+class UnknownKnowledgeCandidateError(DomainError):
+    error_code = "UNKNOWN_KNOWLEDGE_CANDIDATE"
+
+
 class InvalidLiteralTypeError(DomainError):
     error_code = "INVALID_LITERAL_TYPE"
 

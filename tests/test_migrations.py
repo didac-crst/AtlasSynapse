@@ -68,12 +68,17 @@ def test_fresh_database_migrates_from_zero(alembic_cfg: Config) -> None:
         "ontology_semantic_review",
         "ontology_semantic_challenge",
         "memory_quality_issue",
+        "knowledge_ingestion",
+        "knowledge_candidate",
+        "knowledge_candidate_dependency",
+        "knowledge_ingestion_clarification",
+        "knowledge_ingestion_effect",
     }
     assert required_tables.issubset(set(inspector.get_table_names()))
 
     with engine.connect() as conn:
         version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        assert version == "d4e5f6a7b8c9"
+        assert version == "e6f7a8b9c0d1"
         class_count = conn.execute(
             text(
                 "SELECT COUNT(*) FROM ontology_class c "
