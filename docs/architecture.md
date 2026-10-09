@@ -185,4 +185,6 @@ clustering.
 - [Design thesis](design-thesis.md)
 - [MCP contract](mcp-contract.md)
 - [Hybrid retrieval v1](retrieval-hybrid-v1.md)
+- [Memory quality v1](memory-quality-v1.md)
+- [Knowledge ingestion v1](knowledge-ingestion-v1.md) — design contract (Milestone H)
 - [Invariants](invariants.md)

@@ -405,3 +405,4 @@ generic repair framework, “restore superseded → asserted”.
 - [mcp-contract.md](mcp-contract.md)
 - [design-thesis.md](design-thesis.md)
 - [business-value.md](business-value.md)
+- [knowledge-ingestion-v1.md](knowledge-ingestion-v1.md) — next (Milestone H)

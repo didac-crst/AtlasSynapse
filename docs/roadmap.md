@@ -148,7 +148,7 @@ Status: Next.
 
 Prefer evidence from observed failure modes over speculative automation:
 
-- ingestion policy (what becomes durable memory);
+- ingestion policy (what becomes durable memory) — see [knowledge-ingestion-v1.md](knowledge-ingestion-v1.md);
 - inspection UI only if dogfooding justifies it;
 - advanced retrieval / embeddings only where the frozen gold set and live gaps show need;
 - ontology health / export tooling when operators need them.
@@ -162,7 +162,7 @@ Prefer evidence from observed failure modes over speculative automation:
 - Milestone E: phase 14 production readiness. — Done.
 - Milestone F: phases 15a–15b feedback + admin inspection. — Done.
 - Milestone G: post-15b identity, dry-run, clarification, MCP surfaces, hybrid retrieval (#11–#15). — Done.
-- Milestone H: ingestion policy / measured retrieval gaps / optional UI. — Next.
+- Milestone H: governed knowledge ingestion ([knowledge-ingestion-v1.md](knowledge-ingestion-v1.md)); measured retrieval gaps / optional UI. — Design locked; implement after go.
 
 ## Stop conditions
 

@@ -423,6 +423,8 @@ Authoritative catalogs: [MCP contract](docs/mcp-contract.md) and
 - [MCP contract](docs/mcp-contract.md)
 - [MCP agent surface](docs/mcp-agent-surface.md)
 - [Hybrid retrieval v1](docs/retrieval-hybrid-v1.md)
+- [Memory quality v1](docs/memory-quality-v1.md)
+- [Knowledge ingestion v1](docs/knowledge-ingestion-v1.md) — design contract (Milestone H)
 - [Operations](docs/operations.md)
 - [Deployment](docs/deployment.md)
 - [Error catalog](docs/error-catalog.md)
