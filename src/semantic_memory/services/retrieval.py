@@ -31,6 +31,7 @@ from semantic_memory.repositories.entities import EntityRepository
 from semantic_memory.repositories.ontology import OntologyRepository
 from semantic_memory.repositories.provenance import ProvenanceRepository
 from semantic_memory.repositories.statements import StatementRepository
+from semantic_memory.schemas.entities import EntityResponse
 from semantic_memory.schemas.retrieval import (
     MemoryHitType,
     NeighborhoodEdge,
@@ -48,6 +49,11 @@ from semantic_memory.schemas.retrieval import (
     SearchStatementsResponse,
     SemanticMemoryHit,
     TemporalState,
+)
+from semantic_memory.schemas.statements import StatementResponse, TimelineResponse
+from semantic_memory.seeding.claim_ontology import (
+    CLAIM_BINDING_PREDICATE_KEYS,
+    CLAIM_CLASS_KEY,
 )
 from semantic_memory.services.conflicts import ConflictService
 from semantic_memory.services.entities import EntityService
@@ -74,6 +80,14 @@ from semantic_memory.services.temporal_intent import (
 
 def _clamp(value: float) -> float:
     return max(0.0, min(1.0, value))
+
+
+def _entity_is_claim(entity: EntityResponse) -> bool:
+    return any(row.class_key == CLAIM_CLASS_KEY for row in entity.types)
+
+
+def _statement_is_claim_binding(statement: StatementResponse) -> bool:
+    return statement.predicate_key in CLAIM_BINDING_PREDICATE_KEYS
 
 
 # Bounded 1-hop anchor expansion (not a general graph walker).
@@ -446,14 +460,48 @@ class RetrievalService:
         set_last_timings(timer.finish())
         return response
 
+    def _claim_entity_id_set(self, entity_ids: list[uuid.UUID]) -> set[uuid.UUID]:
+        """Return the subset of entity_ids that are typed as Claim."""
+        unique = list(dict.fromkeys(entity_ids))
+        if not unique:
+            return set()
+        rows = self._session.execute(
+            select(EntityType.entity_id)
+            .join(OntologyClass, OntologyClass.id == EntityType.class_id)
+            .where(
+                EntityType.entity_id.in_(unique),
+                OntologyClass.key == CLAIM_CLASS_KEY,
+            )
+        ).scalars()
+        return set(rows.all())
+
+    def _statement_involves_claim(
+        self, statement: StatementResponse, claim_ids: set[uuid.UUID]
+    ) -> bool:
+        if _statement_is_claim_binding(statement):
+            return True
+        if statement.subject_entity_id in claim_ids:
+            return True
+        if statement.object_entity_id is not None and statement.object_entity_id in claim_ids:
+            return True
+        return False
+
     def search_semantic_memory(
         self, request: SearchSemanticMemoryRequest
     ) -> SearchSemanticMemoryResponse:
         temporal_intent = detect_temporal_intent(request.query)
+        # Never use class_key=Claim as a silent include_claims bypass for generic search.
+        entity_class_key = request.class_key
+        if (
+            not request.include_claims
+            and entity_class_key is not None
+            and entity_class_key == CLAIM_CLASS_KEY
+        ):
+            entity_class_key = None
         entity_hits = self.search_entities(
             SearchEntitiesRequest(
                 query=request.query,
-                class_key=request.class_key,
+                class_key=entity_class_key,
                 namespace_key=request.namespace_key,
                 as_of=request.as_of,
                 limit=request.limit,
@@ -611,6 +659,39 @@ class RetrievalService:
                         match_reasons=["open_or_matching_conflict"],
                     )
                 )
+
+        claim_filter_note = (
+            "Claims included (include_claims=true)."
+            if request.include_claims
+            else (
+                "Claims excluded by default: Claim entities and Claim-binding "
+                "statements (makesClaim, claimText, …) are omitted unless "
+                "include_claims=true."
+            )
+        )
+        if not request.include_claims:
+            endpoint_ids: list[uuid.UUID] = []
+            for memory_row in hits:
+                if memory_row.entity is not None:
+                    endpoint_ids.append(memory_row.entity.id)
+                if memory_row.statement is not None:
+                    endpoint_ids.append(memory_row.statement.subject_entity_id)
+                    if memory_row.statement.object_entity_id is not None:
+                        endpoint_ids.append(memory_row.statement.object_entity_id)
+            claim_ids = self._claim_entity_id_set(endpoint_ids)
+            filtered: list[SemanticMemoryHit] = []
+            for memory_row in hits:
+                if memory_row.entity is not None and (
+                    _entity_is_claim(memory_row.entity) or memory_row.entity.id in claim_ids
+                ):
+                    continue
+                if memory_row.statement is not None and self._statement_involves_claim(
+                    memory_row.statement, claim_ids
+                ):
+                    continue
+                filtered.append(memory_row)
+            hits = filtered
+
         hits.sort(key=lambda item: item.ranking_score, reverse=True)
         limited = hits[: request.limit]
         entity_ids: list[uuid.UUID] = []
@@ -644,6 +725,7 @@ class RetrievalService:
                     "Predicate intent softly boosts ontology-matching predicates "
                     "(e.g. role→holdsRole); it never filters candidates out."
                 ),
+                claim_filter_note,
                 "Vector search was not required and was not used.",
                 "ranking_score is for ordering only and is not a truth score.",
             ],
@@ -653,6 +735,27 @@ class RetrievalService:
                 statement_ids=list(dict.fromkeys(statement_ids)),
             ),
         )
+
+    def _filter_timeline_claims(
+        self, timeline: TimelineResponse, claim_ids: set[uuid.UUID]
+    ) -> TimelineResponse:
+        entries = [
+            entry
+            for entry in timeline.entries
+            if not self._statement_involves_claim(entry.statement, claim_ids)
+        ]
+        return timeline.model_copy(update={"entries": entries})
+
+    def _filter_neighborhood_claims(
+        self, neighborhood: NeighborhoodResponse, claim_ids: set[uuid.UUID]
+    ) -> NeighborhoodResponse:
+        edges = [
+            edge
+            for edge in neighborhood.edges
+            if not self._statement_involves_claim(edge.statement, claim_ids)
+            and (edge.neighbor_entity_id is None or edge.neighbor_entity_id not in claim_ids)
+        ]
+        return neighborhood.model_copy(update={"edges": edges})
 
     def get_relevant_context(self, request: RelevantContextRequest) -> RelevantContextResponse:
         timer = RequestTimer(operation="get_relevant_context")
@@ -697,6 +800,10 @@ class RetrievalService:
                     )
                 ).hits
 
+        # Direct Claim lookup exposes Claim structure; otherwise Claims are opt-in.
+        focus_is_claim = entity is not None and _entity_is_claim(entity)
+        allow_claims = request.include_claims or focus_is_claim
+
         if request.query:
             with timer.measure("semantic_memory"):
                 memory = self.search_semantic_memory(
@@ -705,6 +812,7 @@ class RetrievalService:
                         entity_id=request.entity_id,
                         namespace_key=request.namespace_key,
                         as_of=request.as_of,
+                        include_claims=allow_claims,
                         limit=request.limit,
                     )
                 )
@@ -732,6 +840,47 @@ class RetrievalService:
                 details={},
             )
 
+        if not allow_claims:
+            endpoint_ids: list[uuid.UUID] = []
+            if entity is not None:
+                endpoint_ids.append(entity.id)
+            if request.entity_id is not None:
+                endpoint_ids.append(request.entity_id)
+            for ranked in statements:
+                endpoint_ids.append(ranked.statement.subject_entity_id)
+                if ranked.statement.object_entity_id is not None:
+                    endpoint_ids.append(ranked.statement.object_entity_id)
+            if timeline is not None:
+                for entry in timeline.entries:
+                    endpoint_ids.append(entry.statement.subject_entity_id)
+                    if entry.statement.object_entity_id is not None:
+                        endpoint_ids.append(entry.statement.object_entity_id)
+            if neighborhood is not None:
+                for edge in neighborhood.edges:
+                    endpoint_ids.append(edge.statement.subject_entity_id)
+                    if edge.statement.object_entity_id is not None:
+                        endpoint_ids.append(edge.statement.object_entity_id)
+                    if edge.neighbor_entity_id is not None:
+                        endpoint_ids.append(edge.neighbor_entity_id)
+            claim_ids = self._claim_entity_id_set(endpoint_ids)
+            statements = [
+                ranked
+                for ranked in statements
+                if not self._statement_involves_claim(ranked.statement, claim_ids)
+            ]
+            if timeline is not None:
+                timeline = self._filter_timeline_claims(timeline, claim_ids)
+            if neighborhood is not None:
+                neighborhood = self._filter_neighborhood_claims(neighborhood, claim_ids)
+            ranking_explanations.append(
+                "Claims excluded by default for ordinary entity/query context; "
+                "direct Claim entity_id lookup or include_claims=true opts in."
+            )
+        elif focus_is_claim:
+            ranking_explanations.append("Direct Claim lookup: Claim structure (bindings) included.")
+        else:
+            ranking_explanations.append("Claims included (include_claims=true).")
+
         timings = timer.finish()
         set_last_timings(timings)
         limited_statements = statements[: request.limit]
@@ -758,6 +907,8 @@ class RetrievalService:
                 "vector_search_used": False,
                 "llm_used": False,
                 "timings_ms": timings.get("timings_ms"),
+                "include_claims": allow_claims,
+                "focus_is_claim": focus_is_claim,
             },
             quality_warnings=self._memory_quality.warnings_for_hits(
                 entity_ids=list(dict.fromkeys(entity_ids)),

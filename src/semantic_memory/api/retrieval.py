@@ -135,6 +135,7 @@ def search_semantic_memory(
     class_key: str | None = None,
     namespace_key: str = "core",
     include_conflicts: bool = True,
+    include_claims: bool = False,
     limit: int = Query(default=25, ge=1, le=100),
     as_of: datetime | None = None,
 ) -> SearchSemanticMemoryResponse:
@@ -145,6 +146,7 @@ def search_semantic_memory(
             class_key=class_key,
             namespace_key=namespace_key,
             include_conflicts=include_conflicts,
+            include_claims=include_claims,
             limit=limit,
             as_of=as_of,
         )

@@ -25,6 +25,7 @@ These rules are implementation acceptance criteria. They must be protected by a 
 21. Identity/write ambiguity issues a control-plane `clarification_request_id` (TTL, not knowledge). Answers resume the frozen mutation after re-checking current prod; stale situations re-issue rather than commit.
 22. A dry-run clarification can never resume into an execute write. Answering a handle created from `dry_run=true` remains dry-run; production persistence requires a separate explicit execute request.
 23. Write clarification handles are one-shot: once `resolved`, `expired`, or `superseded`, the same `clarification_request_id` cannot be answered again. Expired answers fail cleanly (no silent recreate/resume).
+24. Claim entities and Claim-binding statements (`makesClaim`, `claimText`, `claimSubject`, `claimPredicateKey`, `claimObject`, `claimObjectString`, `epistemicKind`, `claimPolarity`, `claimStatus`, `claimDerivation`, `aboutEntity`) are excluded from default `search_memory` / ordinary `get_relevant_context`. Opt in with `include_claims=true`. Direct Claim `entity_id` lookup may return Claim structure. `claimPredicateKey` never expands into an asserted domain triple.
 
 ## Critical database constraints
 

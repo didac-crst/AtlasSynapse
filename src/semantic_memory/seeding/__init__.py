@@ -1,6 +1,11 @@
 """Deterministic seed helpers."""
 
 from semantic_memory.seeding.bootstrap import bootstrap_system_ontology
+from semantic_memory.seeding.claim_ontology import (
+    CLAIM_BINDING_PREDICATE_KEYS,
+    CLAIM_CLASS_KEY,
+    ensure_claim_ontology,
+)
 from semantic_memory.seeding.ontology import (
     CORE_INHERITANCE,
     CORE_NAMESPACE_KEY,
@@ -10,10 +15,13 @@ from semantic_memory.seeding.ontology import (
 from semantic_memory.seeding.smoke_namespace import SMOKE_NAMESPACE_KEY, ensure_smoke_namespace
 
 __all__ = [
+    "CLAIM_BINDING_PREDICATE_KEYS",
+    "CLAIM_CLASS_KEY",
     "CORE_INHERITANCE",
     "CORE_NAMESPACE_KEY",
     "SMOKE_NAMESPACE_KEY",
     "bootstrap_system_ontology",
+    "ensure_claim_ontology",
     "ensure_rich_event_models",
     "ensure_smoke_namespace",
     "seed_core_ontology",

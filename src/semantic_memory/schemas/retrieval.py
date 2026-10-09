@@ -171,6 +171,14 @@ class SearchSemanticMemoryRequest(BaseModel):
     namespace_key: str = "core"
     as_of: datetime | None = None
     include_conflicts: bool = True
+    include_claims: bool = Field(
+        default=False,
+        description=(
+            "When false (default), Claim entities and Claim-binding statements "
+            "(makesClaim, claimText, …) are excluded from results. "
+            "Set true to opt into epistemic Claim retrieval."
+        ),
+    )
     limit: int = Field(default=25, ge=1, le=100)
 
 
@@ -188,6 +196,15 @@ class RelevantContextRequest(BaseModel):
     statement_id: uuid.UUID | None = None
     namespace_key: str = "core"
     as_of: datetime | None = None
+    include_claims: bool = Field(
+        default=False,
+        description=(
+            "When false (default), Claim entities and Claim-binding statements are "
+            "excluded for ordinary entity/query context. Direct lookup of a Claim "
+            "entity_id always returns Claim structure. Set true to include epistemic "
+            "Claims for non-Claim foci."
+        ),
+    )
     limit: int = Field(default=25, ge=1, le=100)
 
 

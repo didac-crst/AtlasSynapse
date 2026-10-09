@@ -409,19 +409,23 @@ def build_all_mcp_tools() -> list[ToolSpec]:
         ),
         _payload_tool(
             "search_memory",
-            "Search memory (entities + statements). Prefer this for ordinary agent lookup.",
+            "Search memory (entities + statements). Prefer this for ordinary agent lookup. "
+            "Claims and Claim-binding statements are excluded unless include_claims=true.",
             lambda session, payload: RetrievalMCPTools(session).search_semantic_memory(payload),
             surface=McpToolSurface.AGENT,
         ),
         _payload_tool(
             "search_semantic_memory",
-            "Search semantic memory (advanced alias of search_memory).",
+            "Search semantic memory (advanced alias of search_memory). "
+            "Claims excluded unless include_claims=true.",
             lambda session, payload: RetrievalMCPTools(session).search_semantic_memory(payload),
             surface=McpToolSurface.ADVANCED,
         ),
         _payload_tool(
             "get_relevant_context",
-            "Compose the relevant memory context for an entity (preferred agent read).",
+            "Compose the relevant memory context for an entity (preferred agent read). "
+            "Claims excluded for ordinary entities unless include_claims=true; "
+            "direct Claim entity_id lookup returns Claim structure.",
             lambda session, payload: RetrievalMCPTools(session).get_relevant_context(payload),
             surface=McpToolSurface.AGENT,
         ),

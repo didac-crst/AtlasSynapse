@@ -48,11 +48,11 @@ Sources are reusable records. Evidence links statements to sources with optional
 
 ## Bootstrap ontology
 
-Namespace `core` contains only:
+Namespace `core` contains:
 
 ```text
 Thing, Agent, Person, Organization, Place, Event, Activity,
-Project, Document, Observation, Decision, RelationshipContext
+Project, Document, Observation, Decision, RelationshipContext, Claim
 ```
 
 Initial inheritance:
@@ -69,13 +69,24 @@ Document -> Thing
 Observation -> Event
 Decision -> Event
 RelationshipContext -> Thing
+Claim -> Thing
 ```
 
 Initial predicates:
 
 ```text
 name, description, actor, hasParticipant, occurredAt,
-startedAt, endedAt, locatedAt, relatedTo, source
+startedAt, endedAt, locatedAt, relatedTo, source,
+authoredBy, publicationContext,
+makesClaim, claimText, claimSubject, claimPredicateKey,
+claimObject, claimObjectString, epistemicKind, claimPolarity,
+claimStatus, claimDerivation, aboutEntity
 ```
 
-This seed is intentionally small. User or domain concepts belong in governed proposals.
+`Claim` is a source-scoped speech-act occurrence (`Document --makesClaim--> Claim`).
+Claim interiors (`claimText`, `claimSubject`, `claimPredicateKey`, …) are **not**
+world beliefs. Default retrieval excludes Claims unless `include_claims=true`
+(see [knowledge-ingestion-v1.md](knowledge-ingestion-v1.md) Phase A).
+
+This seed stays intentionally small beyond the Claim epistemic bootstrap.
+User or domain concepts belong in governed proposals.

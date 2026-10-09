@@ -69,7 +69,7 @@ def test_fresh_database_migrates_from_zero(alembic_cfg: Config) -> None:
 
     with engine.connect() as conn:
         version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        assert version == "c2d3e4f5a6b7"
+        assert version == "d4e5f6a7b8c9"
         class_count = conn.execute(
             text(
                 "SELECT COUNT(*) FROM ontology_class c "
@@ -95,11 +95,11 @@ def test_seed_is_deterministic(db_session: Session) -> None:
     second = seed_core_ontology(db_session)
 
     assert first["namespace"] == CORE_NAMESPACE_KEY
-    assert first["class_count"] == len(CORE_CLASSES)
-    assert first["predicate_count"] == len(CORE_PREDICATES)
+    assert first["class_count"] >= len(CORE_CLASSES)
+    assert first["predicate_count"] >= len(CORE_PREDICATES)
     assert second["created"] is False
-    assert second["class_count"] == len(CORE_CLASSES)
-    assert second["predicate_count"] == len(CORE_PREDICATES)
+    assert second["class_count"] == first["class_count"]
+    assert second["predicate_count"] == first["predicate_count"]
 
     class_keys = set(
         db_session.execute(
@@ -111,7 +111,7 @@ def test_seed_is_deterministic(db_session: Session) -> None:
             {"key": CORE_NAMESPACE_KEY},
         ).scalars()
     )
-    assert class_keys == set(CORE_CLASSES)
+    assert set(CORE_CLASSES).issubset(class_keys)
 
     parent_links = set(
         db_session.execute(
@@ -123,7 +123,7 @@ def test_seed_is_deterministic(db_session: Session) -> None:
             )
         ).all()
     )
-    assert parent_links == set(CORE_INHERITANCE)
+    assert set(CORE_INHERITANCE).issubset(parent_links)
 
     predicate_keys = set(
         db_session.execute(
@@ -135,7 +135,7 @@ def test_seed_is_deterministic(db_session: Session) -> None:
             {"key": CORE_NAMESPACE_KEY},
         ).scalars()
     )
-    assert predicate_keys == {item[0] for item in CORE_PREDICATES}
+    assert {item[0] for item in CORE_PREDICATES}.issubset(predicate_keys)
 
 
 def test_bootstrap_installs_identity_graph_predicates(db_session: Session) -> None:
@@ -147,3 +147,31 @@ def test_bootstrap_installs_identity_graph_predicates(db_session: Session) -> No
     assert first["identity_graph"]["created_predicates"] in {0, 3}
     second = bootstrap_system_ontology(db_session)
     assert second["identity_graph"]["created_predicates"] == 0
+
+
+def test_bootstrap_installs_claim_ontology(db_session: Session) -> None:
+    first = bootstrap_system_ontology(db_session)
+    ontology = OntologyRepository(db_session)
+    claim = ontology.get_class_by_key(namespace_key=CORE_NAMESPACE_KEY, class_key="Claim")
+    assert claim is not None
+    for key in (
+        "makesClaim",
+        "claimText",
+        "claimSubject",
+        "claimPredicateKey",
+        "claimObject",
+        "claimObjectString",
+        "epistemicKind",
+        "claimPolarity",
+        "claimStatus",
+        "claimDerivation",
+        "aboutEntity",
+    ):
+        row = ontology.get_predicate_by_key(namespace_key=CORE_NAMESPACE_KEY, predicate_key=key)
+        assert row is not None, f"missing claim predicate {key}"
+    # Migration already seeded Claim; ensure is a no-op.
+    assert first["claim"]["created_classes"] == 0
+    assert first["claim"]["created_predicates"] == 0
+    second = bootstrap_system_ontology(db_session)
+    assert second["claim"]["created_classes"] == 0
+    assert second["claim"]["created_predicates"] == 0
