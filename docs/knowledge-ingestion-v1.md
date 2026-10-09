@@ -361,7 +361,7 @@ Agent surface: all three. No candidate CRUD, force-commit, or ontology internals
 
 | Phase | Deliverable |
 | --- | --- |
-| **A** | Claim ontology + retrieval exclusion + invariant tests (**first**) — implemented on `feat/knowledge-ingestion-v1` |
+| **A** | Claim ontology + retrieval exclusion + invariant tests (**first**) — **complete** on `feat/knowledge-ingestion-v1` |
 | **B** | `knowledge_ingestion*` tables + effect log with `effect_key` |
 | **C** | Structured extractor (YAML/JSON): kind, polarity, epistemic_status, claim_text, context_path, derivation |
 | **D** | Agenda resolver (identity + ontology reuse + necessity-gated proposals) |

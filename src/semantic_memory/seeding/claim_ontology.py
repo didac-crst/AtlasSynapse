@@ -245,8 +245,9 @@ def ensure_claim_ontology(session: Session) -> dict[str, Any]:
     """Ensure Claim ⊑ Thing and Claim-binding predicates exist (idempotent).
 
     Existing same-key ontology is reused only when compatible (value kind,
-    cardinality, required domains/ranges, Claim→Thing). Incompatible
-    collisions fail closed.
+    cardinality, required domains/ranges, Claim→Thing already present).
+    Incompatible collisions fail closed — including a pre-existing Claim
+    without Thing parent (no silent parent attach).
     """
     namespace = session.scalar(
         select(OntologyNamespace).where(OntologyNamespace.key == CORE_NAMESPACE_KEY)
@@ -301,6 +302,16 @@ def ensure_claim_ontology(session: Session) -> dict[str, Any]:
         )
     )
     if parent_exists is None:
+        if created_classes == 0:
+            # Pre-existing foreign Claim without Thing parent: fail closed.
+            raise OntologySeedConflictError(
+                "core.Claim exists without required Thing parent; "
+                "refuse to silently attach Claim→Thing",
+                details={
+                    "class_key": CLAIM_CLASS_KEY,
+                    "required_parent": "Thing",
+                },
+            )
         session.add(
             OntologyClassParent(
                 id=stable_seed_id("class_parent", CORE_NAMESPACE_KEY, CLAIM_CLASS_KEY, "Thing"),

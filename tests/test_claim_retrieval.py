@@ -427,6 +427,59 @@ def test_class_key_claim_without_include_claims_does_not_broaden(
     )
 
 
+def test_compatible_existing_claim_thing_parent_reused(db_session: Session) -> None:
+    """Pre-existing Claim→Thing is reused idempotently (no conflict)."""
+    bootstrap_system_ontology(db_session)
+    first = ensure_claim_ontology(db_session)
+    second = ensure_claim_ontology(db_session)
+    assert first["created_classes"] == 0
+    assert first["created_parents"] == 0
+    assert second == first
+
+
+def test_preexisting_claim_without_thing_parent_fails_closed(db_session: Session) -> None:
+    from sqlalchemy import delete, select
+
+    from semantic_memory.exceptions import OntologySeedConflictError
+    from semantic_memory.models import OntologyClass, OntologyClassParent, OntologyNamespace
+    from semantic_memory.seeding.ontology import CORE_NAMESPACE_KEY, seed_core_ontology
+
+    seed_core_ontology(db_session)
+    # Migration may already have created Claim→Thing; strip the parent to simulate
+    # a foreign pre-existing Claim without Thing inheritance.
+    namespace = db_session.scalar(
+        select(OntologyNamespace).where(OntologyNamespace.key == CORE_NAMESPACE_KEY)
+    )
+    assert namespace is not None
+    claim = db_session.scalar(
+        select(OntologyClass).where(
+            OntologyClass.namespace_id == namespace.id,
+            OntologyClass.key == CLAIM_CLASS_KEY,
+        )
+    )
+    thing = db_session.scalar(
+        select(OntologyClass).where(
+            OntologyClass.namespace_id == namespace.id,
+            OntologyClass.key == "Thing",
+        )
+    )
+    assert claim is not None and thing is not None
+    db_session.execute(
+        delete(OntologyClassParent).where(
+            OntologyClassParent.child_class_id == claim.id,
+            OntologyClassParent.parent_class_id == thing.id,
+        )
+    )
+    db_session.flush()
+
+    try:
+        ensure_claim_ontology(db_session)
+        raise AssertionError("expected OntologySeedConflictError")
+    except OntologySeedConflictError as exc:
+        assert "Thing" in str(exc)
+        assert exc.details.get("class_key") == CLAIM_CLASS_KEY
+
+
 def test_incompatible_makes_claim_collision_fails_closed(db_session: Session) -> None:
     from sqlalchemy import select
 

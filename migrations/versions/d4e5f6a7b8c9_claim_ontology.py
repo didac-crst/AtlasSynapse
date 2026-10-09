@@ -127,7 +127,10 @@ def _sid(*parts: str) -> uuid.UUID:
     return uuid.uuid5(_SEED_NS, ":".join(parts))
 
 
-def _ensure_class(conn: sa.Connection, *, key: str, description: str) -> uuid.UUID | None:
+def _ensure_class(
+    conn: sa.Connection, *, key: str, description: str
+) -> tuple[uuid.UUID, bool] | None:
+    """Return (class_id, created). created=True only when this migration inserted Claim."""
     ns_id = conn.execute(
         sa.text("SELECT id FROM ontology_namespace WHERE key = :ns"),
         {"ns": _CORE_NS},
@@ -145,7 +148,7 @@ def _ensure_class(conn: sa.Connection, *, key: str, description: str) -> uuid.UU
         {"ns": ns_id, "key": key},
     ).scalar()
     if class_id is not None:
-        return class_id
+        return (class_id, False)
 
     class_id = _sid("class", _CORE_NS, key)
     rev_id = _sid("class_revision", _CORE_NS, key, "1")
@@ -178,10 +181,20 @@ def _ensure_class(conn: sa.Connection, *, key: str, description: str) -> uuid.UU
         sa.text("UPDATE ontology_class SET current_revision_id = :rev WHERE id = :id"),
         {"rev": rev_id, "id": class_id},
     )
-    return class_id
+    return (class_id, True)
 
 
-def _ensure_parent(conn: sa.Connection, *, child_key: str, parent_key: str) -> None:
+def _ensure_parent(
+    conn: sa.Connection,
+    *,
+    child_key: str,
+    parent_key: str,
+    child_created: bool,
+) -> None:
+    """Attach parent only when this migration created the child class.
+
+    Pre-existing Claim without Thing parent fails closed (no silent repair).
+    """
     child_id = conn.execute(
         sa.text(
             "SELECT c.id FROM ontology_class c "
@@ -209,6 +222,11 @@ def _ensure_parent(conn: sa.Connection, *, child_key: str, parent_key: str) -> N
     ).scalar()
     if exists is not None:
         return
+    if not child_created:
+        raise RuntimeError(
+            f"core.{child_key} exists without required {parent_key} parent; "
+            f"refuse to silently attach {child_key}→{parent_key} during Claim migration"
+        )
     conn.execute(
         sa.text(
             "INSERT INTO ontology_class_parent "
@@ -397,7 +415,7 @@ def _ensure_predicate(
 
 def upgrade() -> None:
     conn = op.get_bind()
-    _ensure_class(
+    claim_result = _ensure_class(
         conn,
         key=_CLAIM,
         description=(
@@ -405,7 +423,13 @@ def upgrade() -> None:
             "Interiors are not world beliefs."
         ),
     )
-    _ensure_parent(conn, child_key=_CLAIM, parent_key="Thing")
+    child_created = claim_result[1] if claim_result is not None else False
+    _ensure_parent(
+        conn,
+        child_key=_CLAIM,
+        parent_key="Thing",
+        child_created=child_created,
+    )
     for key, description, value_kind, cardinality, domains, ranges in _PREDICATES:
         _ensure_predicate(
             conn,
