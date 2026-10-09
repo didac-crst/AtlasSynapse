@@ -1,6 +1,6 @@
-"""Minimal persistence API for knowledge-ingestion working state (Phase B).
+"""Persistence API for knowledge-ingestion working state (Phases B–D).
 
-No extraction, resolution, agenda, or commit orchestration.
+Extraction and resolution orchestration live in sibling packages; commit is Phase F.
 """
 
 from __future__ import annotations
@@ -384,6 +384,51 @@ class KnowledgeIngestionService:
             )
         return self._repo.update_candidate(row, state=value, blockers_json=blockers_json)
 
+    def persist_candidate_resolution(
+        self,
+        candidate_id: uuid.UUID,
+        *,
+        state: KnowledgeCandidateState | str,
+        resolution: Any,
+        blockers: list[Any] | None = None,
+        attempt_count: int | None = None,
+    ) -> KnowledgeCandidate:
+        """Persist a typed Phase D resolution plan + blockers + processing state."""
+        row = self.get_candidate(candidate_id)
+        value = str(state)
+        if value not in {m.value for m in KnowledgeCandidateState}:
+            raise ValidationFailedError(
+                f"Invalid candidate state: {value}",
+                details={"state": value},
+            )
+        if hasattr(resolution, "model_dump"):
+            resolution_json = resolution.model_dump(mode="json")
+        elif isinstance(resolution, dict):
+            resolution_json = resolution
+        else:
+            raise ValidationFailedError(
+                "resolution must be a Pydantic model or dict",
+                details={"candidate_id": str(candidate_id)},
+            )
+        blockers_json: list[Any] = []
+        for item in blockers or []:
+            if hasattr(item, "model_dump"):
+                blockers_json.append(item.model_dump(mode="json"))
+            elif isinstance(item, dict):
+                blockers_json.append(item)
+            else:
+                raise ValidationFailedError(
+                    "blockers must be Pydantic models or dicts",
+                    details={"candidate_id": str(candidate_id)},
+                )
+        return self._repo.update_candidate(
+            row,
+            state=value,
+            resolution_json=resolution_json,
+            blockers_json=blockers_json,
+            attempt_count=attempt_count,
+        )
+
     # --- dependencies ---
 
     def add_dependency(
@@ -436,6 +481,10 @@ class KnowledgeIngestionService:
                     "dependency_kind": kind_value,
                 },
             ) from exc
+
+    def list_dependencies(self, ingestion_id: uuid.UUID) -> list[KnowledgeCandidateDependency]:
+        self.get_ingestion(ingestion_id)
+        return self._repo.list_dependencies_for_ingestion(ingestion_id)
 
     # --- clarifications ---
 
