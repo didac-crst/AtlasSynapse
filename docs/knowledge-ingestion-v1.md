@@ -188,13 +188,22 @@ Unique `(ingestion_id, candidate_key)`.
 
 ### `knowledge_candidate_dependency`
 
-`parent_candidate_id`, `child_candidate_id`, `dependency_kind`.
+`parent_candidate_id`, `child_candidate_id`, `dependency_kind`
+(`requires_resolution` | `requires_commit` | `same_subject` | `generic`).
+
+**V1 parent-ready rule (all kinds):** a parent satisfies a dependency only when
+its processing state is `resolved_commit_eligible` or `committed`.
+`discarded` / `failed` parents are terminal but **never** count as satisfied —
+dependents are woken and re-evaluated, then typically remain blocked on an
+explicit dependency blocker. Kind-specific readiness (e.g. `requires_commit`
+demanding `committed` only) is deferred; do not invent parallel semantics in V1.
 
 ### `knowledge_ingestion_clarification`
 
 Package-level clarification; optional links to
 `write_clarification_request_id` / ontology semantic clarification id;
-`impact_blocked_count`; answer payload.
+`clarification_key` (stable planner fingerprint); optional
+`supersedes_clarification_id`; `impact_blocked_count`; answer payload.
 
 ### `knowledge_ingestion_effect`
 
@@ -263,17 +272,61 @@ stop when:
   OR budget exhausted → run status=paused
 ```
 
-Budgets (attempts, LLM calls, ontology proposals, wall time) are guardrails.
-Primary progress metrics: state transitions, blockers cleared, dependents woken.
+Budgets are guardrails. V1 splits them as:
+
+- **Cumulative / durable:** `candidate.attempt_count` and
+  `stats_json.resolution_cumulative` (LLM calls, proposals, attempts) — never
+  reset by continuation.
+- **Per execution slice:** `max_wall_ms`, `max_llm_calls`, `max_ontology_proposals`
+  (and the slice attempt counter) restart on each explicit `resolve_ingestion` /
+  `continue_ingestion` call. Pause means the synchronous slice exhausted its
+  operational budget, not that the ingestion is permanently forbidden.
+
+Do not auto-loop slices in the background. Primary progress metrics: state
+transitions, blockers cleared, dependents woken.
+
+Post-resolve / continue status (Phase E):
+
+- budget exhausted → `paused` / `budget_exhausted`
+- open user-answerable clarifications → `awaiting_clarification`
+- only external/non-answerable blockers → keep `resolving` (expose blockers)
+- all non-discarded candidates `resolved_commit_eligible` → `ready_for_commit=true`
+  (execute) or `would_complete=true` (dry-run); never enter `committing` in Phase E
 
 ---
 
 ## Clarifications
 
-- Rank by `impact_blocked_count` (root ambiguity first).
-- Identity → existing `WriteClarificationRequest` + `answer_identity_clarification`.
-- Ontology → existing propose / semantic clarification / apply.
-- Package-local synonym questions → `knowledge_ingestion_clarification`.
+- Rank by `impact_blocked_count` (root ambiguity first) over the package
+  dependency graph (transitive blocked descendants).
+- Stable `clarification_key` unique per ingestion; planner reuses the same row
+  for unchanged ambiguity and creates a new row (with lineage) when the
+  fingerprint changes.
+- Identity fingerprints use a canonicalized snapshot per offered entity:
+  `entity_id` + `status` + sorted `class_keys` (no timestamps, prose, scores, or
+  transient evidence wording). Same meaningful ambiguity → same key; materially
+  changed identity options/state → new key (so a stale answered choice cannot
+  permanently occupy the unique key).
+- When a new identity clarification replaces a prior one for the same
+  candidate/field, set `supersedes_clarification_id` to the prior row. If the
+  prior was still `open`, mark it `superseded`. If it was already `answered`,
+  leave it `answered` (never rewrite historical answers) but still link lineage.
+- **V1 architecture:** do **not** manufacture a `WriteClarificationRequest` for
+  ingestion identity ambiguity. That primitive freezes an `AssertStatementRequest`
+  for mutation resume. Package identity clarifications live only in
+  `knowledge_ingestion_clarification` and store a human decision
+  (`chosen_entity` / `create_new` / `reject`) over candidates produced by
+  `IdentityService`. The resolver revalidates on continue; Phase F revalidates
+  again before any create/reuse write.
+- Ontology semantic clarifications with a real
+  `ontology_clarification_request_id` delegate to
+  `ProposalService.answer_semantic_clarification`. Crash/retry reconciliation:
+  if the package clarification is still `open` but the linked ontology handle is
+  already answered/resolved/superseded, continuation marks the package row
+  answered without replaying the one-shot ontology answer.
+- `READY_TO_APPLY` ontology proposals are external governance blockers, not
+  package questions. Apply via existing ontology APIs, then `continue_ingestion`.
+- Package-local / structured policy choices → `knowledge_ingestion_clarification`.
 - No parallel clarification framework.
 
 Unknown term triage before ontology proposal:

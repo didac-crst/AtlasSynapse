@@ -227,7 +227,11 @@ class KnowledgeCandidateDependency(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
 
 class KnowledgeIngestionClarification(Base, UUIDPrimaryKeyMixin, TimestampMixin):
-    """Package-level clarification planner record (not a parallel clarification framework)."""
+    """Package-level clarification planner record (not a parallel clarification framework).
+
+    V1: identity ambiguity is orchestrated here without manufacturing a
+    ``WriteClarificationRequest`` (that primitive freezes an assert mutation).
+    """
 
     __tablename__ = "knowledge_ingestion_clarification"
     __table_args__ = (
@@ -243,8 +247,14 @@ class KnowledgeIngestionClarification(Base, UUIDPrimaryKeyMixin, TimestampMixin)
             + ")",
             name="status",
         ),
+        UniqueConstraint(
+            "ingestion_id",
+            "clarification_key",
+            name="uq_knowledge_ingestion_clarification_key",
+        ),
         Index("ix_knowledge_ingestion_clarification_ingestion_id", "ingestion_id"),
         Index("ix_knowledge_ingestion_clarification_status", "status"),
+        Index("ix_ki_clarification_clarification_key", "clarification_key"),
         Index(
             "ix_ki_clarification_write_clarification_request_id",
             "write_clarification_request_id",
@@ -254,6 +264,7 @@ class KnowledgeIngestionClarification(Base, UUIDPrimaryKeyMixin, TimestampMixin)
     ingestion_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("knowledge_ingestion.id"), nullable=False
     )
+    clarification_key: Mapped[str] = mapped_column(Text, nullable=False)
     root_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("knowledge_candidate.id")
     )
@@ -273,6 +284,9 @@ class KnowledgeIngestionClarification(Base, UUIDPrimaryKeyMixin, TimestampMixin)
     )
     ontology_clarification_request_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("ontology_semantic_clarification_request.id")
+    )
+    supersedes_clarification_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("knowledge_ingestion_clarification.id")
     )
     answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

@@ -15,6 +15,8 @@ from semantic_memory.models.enums import (
 )
 from semantic_memory.repositories.llm_calls import LlmCallLogRepository
 from semantic_memory.services.actors import ActorService
+from semantic_memory.services.knowledge_continuation.overrides import load_resolution_overrides
+from semantic_memory.services.knowledge_continuation.schemas import ResolutionOverrides
 from semantic_memory.services.knowledge_ingestion import KnowledgeIngestionService
 from semantic_memory.services.knowledge_resolution.budgets import ResolutionBudgets
 from semantic_memory.services.knowledge_resolution.resolve_candidate import resolve_candidate
@@ -51,7 +53,12 @@ class KnowledgeResolutionService:
         self._actors = ActorService(session)
         self._llm_calls = LlmCallLogRepository(session)
 
-    def resolve_ingestion(self, ingestion_id: uuid.UUID) -> ResolveIngestionStats:
+    def resolve_ingestion(
+        self,
+        ingestion_id: uuid.UUID,
+        *,
+        overrides: ResolutionOverrides | None = None,
+    ) -> ResolveIngestionStats:
         ingestion = self._ki.get_ingestion(ingestion_id)
         dry_run = ingestion.mode == KnowledgeIngestionMode.DRY_RUN.value
         actor = self._actors.get(ingestion.actor_id)
@@ -70,6 +77,7 @@ class KnowledgeResolutionService:
         )
         stats = ResolveIngestionStats()
         llm_baseline = self._llm_calls.count()
+        active_overrides = overrides or load_resolution_overrides(self._session, ingestion_id)
 
         deps = self._ki.list_dependencies(ingestion_id)
         parents_by_child: dict[uuid.UUID, list[uuid.UUID]] = {}
@@ -109,6 +117,7 @@ class KnowledgeResolutionService:
                 dry_run=dry_run,
                 unmet_parent_ids=unmet,
                 allow_propose=(budgets.can_propose_ontology() and budgets.remaining_llm_ok()),
+                overrides=active_overrides,
             )
 
             # Account for LLM calls from proposal semantic review (llm_call_log).
@@ -131,11 +140,12 @@ class KnowledgeResolutionService:
             else:
                 stats.domain_path += 1
 
-            new_state = (
-                KnowledgeCandidateState.RESOLVED_COMMIT_ELIGIBLE
-                if result.eligible
-                else KnowledgeCandidateState.BLOCKED
-            )
+            if result.discard_candidate:
+                new_state = KnowledgeCandidateState.DISCARDED
+            elif result.eligible:
+                new_state = KnowledgeCandidateState.RESOLVED_COMMIT_ELIGIBLE
+            else:
+                new_state = KnowledgeCandidateState.BLOCKED
             blockers_payload = [b.model_dump(mode="json") for b in result.blockers]
             previous_state = candidate.state
             previous_resolution = candidate.resolution_json
@@ -149,7 +159,9 @@ class KnowledgeResolutionService:
                 attempt_count=candidate.attempt_count + 1,
             )
 
-            if result.eligible:
+            if result.discard_candidate:
+                pass
+            elif result.eligible:
                 stats.eligible += 1
             else:
                 stats.blocked += 1
@@ -159,7 +171,7 @@ class KnowledgeResolutionService:
                 or previous_resolution != result.resolution.model_dump(mode="json")
                 or previous_blockers != blockers_payload
             )
-            if meaningful and result.eligible:
+            if meaningful and (result.eligible or result.discard_candidate):
                 woken = self._wake_children(
                     parent_id=candidate_id,
                     children_by_parent=children_by_parent,
@@ -183,7 +195,22 @@ class KnowledgeResolutionService:
         # Refresh ingestion row (status may have changed).
         ingestion = self._ki.get_ingestion(ingestion_id)
         merged_stats = dict(ingestion.stats_json) if isinstance(ingestion.stats_json, dict) else {}
-        merged_stats["resolution"] = stats.model_dump(mode="json")
+        slice_dump = stats.model_dump(mode="json")
+        merged_stats["resolution"] = slice_dump
+        cumulative = (
+            dict(merged_stats["resolution_cumulative"])
+            if isinstance(merged_stats.get("resolution_cumulative"), dict)
+            else {}
+        )
+        for key in (
+            "candidates_attempted",
+            "llm_calls",
+            "ontology_proposals_created",
+            "ontology_proposals_reused",
+            "dependents_woken",
+        ):
+            cumulative[key] = int(cumulative.get(key, 0) or 0) + int(slice_dump.get(key, 0) or 0)
+        merged_stats["resolution_cumulative"] = cumulative
 
         if budgets.exhausted:
             self._ki.mark_paused_budget_exhausted(ingestion_id, stats_json=merged_stats)

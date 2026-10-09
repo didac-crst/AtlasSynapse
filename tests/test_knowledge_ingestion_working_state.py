@@ -258,6 +258,7 @@ def test_clarification_links_write_clarification_handle(db_session: Session) -> 
     )
     clarification = service.record_clarification(
         ingestion_id=ingestion.id,
+        clarification_key="identity:test:subject:legacy",
         clarification_kind=KnowledgeIngestionClarificationKind.IDENTITY,
         question_payload={"q": "which engine?"},
         write_clarification_request_id=handle.id,
@@ -376,6 +377,7 @@ def test_completed_ingestion_retains_candidates_and_effects(db_session: Session)
     )
     service.record_clarification(
         ingestion_id=ingestion.id,
+        clarification_key="package_local:audit",
         clarification_kind=KnowledgeIngestionClarificationKind.PACKAGE_LOCAL,
         question_payload={"note": "audit"},
     )
@@ -446,6 +448,7 @@ def test_cross_ingestion_effect_and_clarification_rejected(db_session: Session) 
     with pytest.raises(ValidationFailedError, match="must belong to the same ingestion"):
         service.record_clarification(
             ingestion_id=a.id,
+            clarification_key="package_local:cross",
             clarification_kind=KnowledgeIngestionClarificationKind.PACKAGE_LOCAL,
             question_payload={"q": "x"},
             root_candidate_id=foreign,
@@ -492,4 +495,4 @@ def test_migration_head_includes_knowledge_ingestion_tables(db_session: Session)
     }
     assert required.issubset(tables)
     version = db_session.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-    assert version == "e6f7a8b9c0d1"
+    assert version == "f8a9b0c1d2e3"

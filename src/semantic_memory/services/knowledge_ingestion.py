@@ -492,14 +492,22 @@ class KnowledgeIngestionService:
         self,
         *,
         ingestion_id: uuid.UUID,
+        clarification_key: str,
         clarification_kind: KnowledgeIngestionClarificationKind | str,
         question_payload: dict[str, Any] | None = None,
         root_candidate_id: uuid.UUID | None = None,
         impact_blocked_count: int = 0,
         write_clarification_request_id: uuid.UUID | None = None,
         ontology_clarification_request_id: uuid.UUID | None = None,
+        supersedes_clarification_id: uuid.UUID | None = None,
     ) -> KnowledgeIngestionClarification:
         self.get_ingestion(ingestion_id)
+        key = clarification_key.strip()
+        if not key:
+            raise ValidationFailedError(
+                "clarification_key must not be blank",
+                details={"ingestion_id": str(ingestion_id)},
+            )
         kind_value = str(clarification_kind)
         if kind_value not in {m.value for m in KnowledgeIngestionClarificationKind}:
             raise ValidationFailedError(
@@ -525,15 +533,44 @@ class KnowledgeIngestionService:
                         "write_clarification_request_id": str(write_clarification_request_id),
                     },
                 )
-        return self._repo.create_clarification(
-            ingestion_id=ingestion_id,
-            clarification_kind=kind_value,
-            question_payload=question_payload,
-            root_candidate_id=root_candidate_id,
-            impact_blocked_count=impact_blocked_count,
-            write_clarification_request_id=write_clarification_request_id,
-            ontology_clarification_request_id=ontology_clarification_request_id,
-        )
+        if supersedes_clarification_id is not None:
+            prior = self._repo.get_clarification(supersedes_clarification_id)
+            if prior is None or prior.ingestion_id != ingestion_id:
+                raise ValidationFailedError(
+                    "supersedes_clarification_id must belong to the same ingestion",
+                    details={
+                        "ingestion_id": str(ingestion_id),
+                        "supersedes_clarification_id": str(supersedes_clarification_id),
+                    },
+                )
+        existing = self._repo.find_clarification_by_key(ingestion_id, key)
+        if existing is not None:
+            return self._repo.update_clarification(
+                existing,
+                impact_blocked_count=impact_blocked_count,
+                question_payload=question_payload or existing.question_payload,
+            )
+        try:
+            with self._session.begin_nested():
+                return self._repo.create_clarification(
+                    ingestion_id=ingestion_id,
+                    clarification_key=key,
+                    clarification_kind=kind_value,
+                    question_payload=question_payload,
+                    root_candidate_id=root_candidate_id,
+                    impact_blocked_count=impact_blocked_count,
+                    write_clarification_request_id=write_clarification_request_id,
+                    ontology_clarification_request_id=ontology_clarification_request_id,
+                    supersedes_clarification_id=supersedes_clarification_id,
+                )
+        except IntegrityError as exc:
+            raise ValidationFailedError(
+                "clarification_key must be unique within an ingestion",
+                details={
+                    "ingestion_id": str(ingestion_id),
+                    "clarification_key": key,
+                },
+            ) from exc
 
     def answer_clarification(
         self,
@@ -547,12 +584,62 @@ class KnowledgeIngestionService:
                 f"Unknown ingestion clarification: {clarification_id}",
                 details={"clarification_id": str(clarification_id)},
             )
+        if row.status == KnowledgeIngestionClarificationStatus.ANSWERED.value:
+            if row.answer_payload == answer_payload:
+                return row  # idempotent replay
+            raise InvalidStateTransitionError(
+                "Clarification already answered with a different payload",
+                details={
+                    "clarification_id": str(clarification_id),
+                    "status": row.status,
+                },
+            )
+        if row.status != KnowledgeIngestionClarificationStatus.OPEN.value:
+            raise InvalidStateTransitionError(
+                "Clarification is not open for answering",
+                details={
+                    "clarification_id": str(clarification_id),
+                    "status": row.status,
+                },
+            )
         return self._repo.update_clarification(
             row,
             status=KnowledgeIngestionClarificationStatus.ANSWERED.value,
             answer_payload=answer_payload,
             answered_at=datetime.now(UTC),
         )
+
+    def supersede_clarification(
+        self, clarification_id: uuid.UUID
+    ) -> KnowledgeIngestionClarification:
+        row = self._repo.get_clarification(clarification_id)
+        if row is None:
+            raise ValidationFailedError(
+                f"Unknown ingestion clarification: {clarification_id}",
+                details={"clarification_id": str(clarification_id)},
+            )
+        if row.status == KnowledgeIngestionClarificationStatus.SUPERSEDED.value:
+            return row
+        if row.status == KnowledgeIngestionClarificationStatus.ANSWERED.value:
+            return row  # historical answers remain answered
+        return self._repo.update_clarification(
+            row, status=KnowledgeIngestionClarificationStatus.SUPERSEDED.value
+        )
+
+    def get_clarification(self, clarification_id: uuid.UUID) -> KnowledgeIngestionClarification:
+        row = self._repo.get_clarification(clarification_id)
+        if row is None:
+            raise ValidationFailedError(
+                f"Unknown ingestion clarification: {clarification_id}",
+                details={"clarification_id": str(clarification_id)},
+            )
+        return row
+
+    def find_clarification_by_key(
+        self, ingestion_id: uuid.UUID, clarification_key: str
+    ) -> KnowledgeIngestionClarification | None:
+        self.get_ingestion(ingestion_id)
+        return self._repo.find_clarification_by_key(ingestion_id, clarification_key)
 
     def list_clarifications(self, ingestion_id: uuid.UUID) -> list[KnowledgeIngestionClarification]:
         self.get_ingestion(ingestion_id)

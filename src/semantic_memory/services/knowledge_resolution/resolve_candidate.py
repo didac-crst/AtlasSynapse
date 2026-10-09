@@ -15,6 +15,7 @@ from semantic_memory.models.enums import (
 )
 from semantic_memory.models.knowledge_ingestion import KnowledgeCandidate
 from semantic_memory.repositories.entities import EntityRepository
+from semantic_memory.services.knowledge_continuation.schemas import ResolutionOverrides
 from semantic_memory.services.knowledge_resolution.identity_plan import (
     plan_object_entity,
     plan_subject,
@@ -49,6 +50,7 @@ class CandidateResolveResult:
     ontology_proposal_created: bool = False
     ontology_proposal_reused: bool = False
     identity_blockers: int = 0
+    discard_candidate: bool = False
 
 
 def resolve_candidate(
@@ -59,6 +61,7 @@ def resolve_candidate(
     dry_run: bool,
     unmet_parent_ids: list[uuid.UUID] | None = None,
     allow_propose: bool = True,
+    overrides: ResolutionOverrides | None = None,
 ) -> CandidateResolveResult:
     """Produce a typed resolution for one candidate.
 
@@ -91,7 +94,7 @@ def resolve_candidate(
 
     path = route_commit_path(candidate)
     if path == CommitPath.CLAIM:
-        return _resolve_claim_path(session, candidate, dry_run=dry_run)
+        return _resolve_claim_path(session, candidate, dry_run=dry_run, overrides=overrides)
 
     domain_result = _resolve_domain_path(
         session,
@@ -99,12 +102,16 @@ def resolve_candidate(
         actor_key=actor_key,
         dry_run=dry_run,
         allow_propose=allow_propose,
+        overrides=overrides,
     )
     if domain_result.eligible or domain_result.blockers:
         return domain_result
 
+    if domain_result.discard_candidate:
+        return domain_result
+
     # Domain path unsafe/incomplete → Claim fallback (preserve epistemic memory).
-    fallback = _resolve_claim_path(session, candidate, dry_run=dry_run)
+    fallback = _resolve_claim_path(session, candidate, dry_run=dry_run, overrides=overrides)
     fallback.resolution.warnings.append(
         ResolutionWarning(
             code=ResolutionWarningCode.CLAIM_FALLBACK_UNSAFE_DOMAIN,
@@ -134,11 +141,13 @@ def _resolve_claim_path(
     candidate: KnowledgeCandidate,
     *,
     dry_run: bool,
+    overrides: ResolutionOverrides | None = None,
 ) -> CandidateResolveResult:
     del dry_run  # Claim path never proposes ontology.
     payload = _payload(candidate)
     warnings: list[ResolutionWarning] = []
     blockers: list[ResolutionBlocker] = []
+    ov = overrides or ResolutionOverrides()
 
     claim_text = candidate.claim_text
     if not claim_text or not str(claim_text).strip():
@@ -175,11 +184,26 @@ def _resolve_claim_path(
         )
 
     subject_text = _text_from_side(payload.get("subject"))
-    subject_plan, sub_warns, sub_block = plan_subject(
-        session, text=subject_text, required=False, adjudicate=False
+    subject_plan, sub_warns, _sub_block, sub_discard = plan_subject(
+        session,
+        text=subject_text,
+        required=False,
+        adjudicate=False,
+        override=ov.identity_for(candidate.id, "subject"),
     )
     warnings.extend(sub_warns)
-    del sub_block
+    if sub_discard:
+        return CandidateResolveResult(
+            resolution=CandidateResolution(
+                commit_path=CommitPath.CLAIM,
+                subject=subject_plan,
+                claim_text=claim_text,
+                epistemic_kind=claim_epistemic_kind(candidate),
+            ),
+            blockers=[],
+            eligible=False,
+            discard_candidate=True,
+        )
 
     pred_hint = payload.get("predicate_key_hint") or payload.get("predicate_text")
     pred_plan, pred_warns = plan_predicate_for_claim(
@@ -196,10 +220,28 @@ def _resolve_claim_path(
             detail="literal_object",
         )
     else:
-        object_plan, obj_warns, _obj_block = plan_object_entity(
-            session, text=object_text, required=False, adjudicate=False
+        object_plan, obj_warns, _obj_block, obj_discard = plan_object_entity(
+            session,
+            text=object_text,
+            required=False,
+            adjudicate=False,
+            override=ov.identity_for(candidate.id, "object"),
         )
         warnings.extend(obj_warns)
+        if obj_discard:
+            return CandidateResolveResult(
+                resolution=CandidateResolution(
+                    commit_path=CommitPath.CLAIM,
+                    subject=subject_plan,
+                    predicate=pred_plan,
+                    object=object_plan,
+                    claim_text=claim_text,
+                    epistemic_kind=claim_epistemic_kind(candidate),
+                ),
+                blockers=[],
+                eligible=False,
+                discard_candidate=True,
+            )
 
     resolution = CandidateResolution(
         commit_path=CommitPath.CLAIM,
@@ -220,6 +262,7 @@ def _resolve_domain_path(
     actor_key: str,
     dry_run: bool,
     allow_propose: bool = True,
+    overrides: ResolutionOverrides | None = None,
 ) -> CandidateResolveResult:
     payload = _payload(candidate)
     warnings: list[ResolutionWarning] = []
@@ -229,12 +272,29 @@ def _resolve_domain_path(
     proposal_reused = False
     proposal_ids: list[uuid.UUID] = []
     would_propose: list[dict[str, Any]] = []
+    ov = overrides or ResolutionOverrides()
 
     subject_text = _text_from_side(payload.get("subject"))
-    subject_plan, sub_warns, sub_needs = plan_subject(
-        session, text=subject_text, required=True, adjudicate=False
+    subject_plan, sub_warns, sub_needs, sub_discard = plan_subject(
+        session,
+        text=subject_text,
+        required=True,
+        adjudicate=False,
+        override=ov.identity_for(candidate.id, "subject"),
     )
     warnings.extend(sub_warns)
+    if sub_discard:
+        return CandidateResolveResult(
+            resolution=CandidateResolution(
+                commit_path=CommitPath.DOMAIN_ASSERTION,
+                subject=subject_plan,
+                claim_text=candidate.claim_text,
+                epistemic_kind=claim_epistemic_kind(candidate),
+            ),
+            blockers=[],
+            eligible=False,
+            discard_candidate=True,
+        )
     if sub_needs:
         identity_blockers += 1
         blockers.append(
@@ -243,8 +303,8 @@ def _resolve_domain_path(
                 field="subject",
                 ref=subject_text,
                 detail=(
-                    "required_identity_ambiguous; WriteClarificationRequest not issued "
-                    "(needs frozen assert payload — Phase E)"
+                    "required_identity_ambiguous; package clarification via "
+                    "knowledge_ingestion_clarification (no WriteClarificationRequest)"
                 ),
                 required=True,
             )
@@ -371,10 +431,30 @@ def _resolve_domain_path(
             detail="literal_value_kind",
         )
     else:
-        object_plan, obj_warns, obj_needs = plan_object_entity(
-            session, text=object_text, required=True, adjudicate=False
+        object_plan, obj_warns, obj_needs, obj_discard = plan_object_entity(
+            session,
+            text=object_text,
+            required=True,
+            adjudicate=False,
+            override=ov.identity_for(candidate.id, "object"),
         )
         warnings.extend(obj_warns)
+        if obj_discard:
+            return CandidateResolveResult(
+                resolution=CandidateResolution(
+                    commit_path=CommitPath.DOMAIN_ASSERTION,
+                    subject=subject_plan,
+                    predicate=pred_plan,
+                    object=object_plan,
+                    warnings=warnings,
+                    claim_text=candidate.claim_text,
+                    epistemic_kind=claim_epistemic_kind(candidate),
+                ),
+                blockers=[],
+                eligible=False,
+                discard_candidate=True,
+                identity_blockers=identity_blockers,
+            )
         if obj_needs:
             identity_blockers += 1
             blockers.append(
@@ -383,8 +463,8 @@ def _resolve_domain_path(
                     field="object",
                     ref=object_text,
                     detail=(
-                        "required_identity_ambiguous; WriteClarificationRequest not issued "
-                        "(needs frozen assert payload — Phase E)"
+                        "required_identity_ambiguous; package clarification via "
+                        "knowledge_ingestion_clarification (no WriteClarificationRequest)"
                     ),
                     required=True,
                 )

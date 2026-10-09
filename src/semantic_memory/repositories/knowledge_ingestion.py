@@ -260,10 +260,21 @@ class KnowledgeIngestionRepository:
     ) -> KnowledgeIngestionClarification | None:
         return self._session.get(KnowledgeIngestionClarification, clarification_id)
 
+    def find_clarification_by_key(
+        self, ingestion_id: uuid.UUID, clarification_key: str
+    ) -> KnowledgeIngestionClarification | None:
+        return self._session.scalar(
+            select(KnowledgeIngestionClarification).where(
+                KnowledgeIngestionClarification.ingestion_id == ingestion_id,
+                KnowledgeIngestionClarification.clarification_key == clarification_key,
+            )
+        )
+
     def create_clarification(
         self,
         *,
         ingestion_id: uuid.UUID,
+        clarification_key: str,
         clarification_kind: str,
         question_payload: dict[str, Any] | None = None,
         root_candidate_id: uuid.UUID | None = None,
@@ -271,12 +282,14 @@ class KnowledgeIngestionRepository:
         impact_blocked_count: int = 0,
         write_clarification_request_id: uuid.UUID | None = None,
         ontology_clarification_request_id: uuid.UUID | None = None,
+        supersedes_clarification_id: uuid.UUID | None = None,
         answer_payload: dict[str, Any] | None = None,
         answered_at: datetime | None = None,
     ) -> KnowledgeIngestionClarification:
         row = KnowledgeIngestionClarification(
             id=uuid.uuid4(),
             ingestion_id=ingestion_id,
+            clarification_key=clarification_key,
             root_candidate_id=root_candidate_id,
             clarification_kind=clarification_kind,
             question_payload=question_payload or {},
@@ -285,6 +298,7 @@ class KnowledgeIngestionRepository:
             impact_blocked_count=impact_blocked_count,
             write_clarification_request_id=write_clarification_request_id,
             ontology_clarification_request_id=ontology_clarification_request_id,
+            supersedes_clarification_id=supersedes_clarification_id,
             answered_at=answered_at,
         )
         self._session.add(row)
@@ -298,6 +312,7 @@ class KnowledgeIngestionRepository:
         status: str | None = None,
         answer_payload: dict[str, Any] | None = None,
         impact_blocked_count: int | None = None,
+        question_payload: dict[str, Any] | None = None,
         write_clarification_request_id: Any = _UNSET,
         ontology_clarification_request_id: Any = _UNSET,
         answered_at: Any = _UNSET,
@@ -308,6 +323,8 @@ class KnowledgeIngestionRepository:
             row.answer_payload = answer_payload
         if impact_blocked_count is not None:
             row.impact_blocked_count = impact_blocked_count
+        if question_payload is not None:
+            row.question_payload = question_payload
         if write_clarification_request_id is not _UNSET:
             row.write_clarification_request_id = write_clarification_request_id
         if ontology_clarification_request_id is not _UNSET:
@@ -320,8 +337,11 @@ class KnowledgeIngestionRepository:
     def list_clarifications(self, ingestion_id: uuid.UUID) -> list[KnowledgeIngestionClarification]:
         return list(
             self._session.scalars(
-                select(KnowledgeIngestionClarification).where(
-                    KnowledgeIngestionClarification.ingestion_id == ingestion_id
+                select(KnowledgeIngestionClarification)
+                .where(KnowledgeIngestionClarification.ingestion_id == ingestion_id)
+                .order_by(
+                    KnowledgeIngestionClarification.impact_blocked_count.desc(),
+                    KnowledgeIngestionClarification.clarification_key.asc(),
                 )
             ).all()
         )

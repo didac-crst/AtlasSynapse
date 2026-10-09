@@ -78,7 +78,7 @@ def test_fresh_database_migrates_from_zero(alembic_cfg: Config) -> None:
 
     with engine.connect() as conn:
         version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        assert version == "e6f7a8b9c0d1"
+        assert version == "f8a9b0c1d2e3"
         class_count = conn.execute(
             text(
                 "SELECT COUNT(*) FROM ontology_class c "
