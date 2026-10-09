@@ -119,6 +119,32 @@ class Settings(BaseSettings):
         default="disabled",
         alias="EMBEDDING_MODE",
     )
+    knowledge_extraction_mode: Literal["deterministic", "external"] = Field(
+        default="deterministic",
+        alias="KNOWLEDGE_EXTRACTION_MODE",
+        description=(
+            "deterministic: structure-aware local classifier (CI default). "
+            "external: bounded OpenAI structured classifier for ambiguous fragments, "
+            "falling back to deterministic rules."
+        ),
+    )
+    knowledge_extraction_provider: str = Field(
+        default="openai", alias="KNOWLEDGE_EXTRACTION_PROVIDER"
+    )
+    knowledge_extraction_model: str = Field(
+        default="gpt-5.6-terra", alias="KNOWLEDGE_EXTRACTION_MODEL"
+    )
+    knowledge_extraction_api_key: str = Field(default="", alias="KNOWLEDGE_EXTRACTION_API_KEY")
+    knowledge_extraction_api_base: str = Field(
+        default="",
+        alias="KNOWLEDGE_EXTRACTION_API_BASE",
+    )
+    knowledge_extraction_max_output_tokens: int = Field(
+        default=800, alias="KNOWLEDGE_EXTRACTION_MAX_OUTPUT_TOKENS", ge=64, le=4000
+    )
+    knowledge_extraction_timeout_seconds: float = Field(
+        default=45.0, alias="KNOWLEDGE_EXTRACTION_TIMEOUT_SECONDS", gt=0
+    )
     mcp_transport: Literal["stdio", "http"] = Field(default="stdio", alias="MCP_TRANSPORT")
     mcp_max_inflight: int = Field(
         default=8,

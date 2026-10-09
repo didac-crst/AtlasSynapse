@@ -160,6 +160,16 @@ class ValidationFailedError(DomainError):
     error_code = "VALIDATION_FAILED"
 
 
+class UnsupportedSourceFormatError(DomainError):
+    error_code = "UNSUPPORTED_SOURCE_FORMAT"
+
+
+class KnowledgeExtractionConflictError(DomainError):
+    """Same candidate_key with incompatible staged payload on re-extraction."""
+
+    error_code = "KNOWLEDGE_EXTRACTION_CONFLICT"
+
+
 class OntologySeedConflictError(DomainError):
     """Existing ontology key conflicts with required seed/extension semantics."""
 

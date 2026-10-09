@@ -1,0 +1,48 @@
+# Representative AtlasSynapse strategy package fragment for Phase C extraction.
+package_id: atlas-strategy-v1
+schema_version: "1.0"
+generated_at: "2026-10-09T00:00:00Z"
+
+business_value:
+  enterprise_value:
+    - AtlasSynapse reduces repeated context reconstruction across investigations
+    - AtlasSynapse retains attributable conclusions with evidence
+
+differentiation:
+  claims:
+    - statement: AtlasSynapse differentiates through semantic governance
+      confidence: 0.82
+  rejected_or_weakened_hypotheses:
+    - Open-ended knowledge is unique
+    - hypothesis: Memory without governance is sufficient
+  active_hypotheses:
+    - Maybe AtlasSynapse can productize governed semantic memory
+
+recommended:
+  license: Apache-2.0
+  actions:
+    - AtlasSynapse should publish an open reference implementation
+
+rejected_options:
+  - AGPL
+
+recommendations:
+  - AtlasSynapse should not replace a CRM
+  - AtlasSynapse should keep ontology apply human-authorized
+
+open_questions:
+  - What recurring enterprise need would justify a commercial offering?
+  - Which license should AtlasSynapse use?
+
+examples:
+  - A company could use AtlasSynapse to track warranty information.
+  - statement: Explicit example claim should still extract when marked
+
+caveats:
+  - Large enterprises may require more governance.
+
+anti_use_cases:
+  - AtlasSynapse replaces a CRM for all account management.
+
+non_semantic:
+  formatting_helper: "===="
